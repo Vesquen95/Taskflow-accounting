@@ -35,10 +35,10 @@ describe('AuthPage: sign in (default mode)', () => {
     expect(form.checkValidity()).toBe(false)
   })
 
-  it('enforces a minimum password length of 6 via the input constraint', () => {
+  it('enforces a minimum password length of 8 via the input constraint', () => {
     render(<AuthPage />)
     const passwordInput = screen.getByLabelText('Wachtwoord') as HTMLInputElement
-    expect(passwordInput).toHaveAttribute('minLength', '6')
+    expect(passwordInput).toHaveAttribute('minLength', '8')
   })
 
   it('calls signIn with the entered credentials and shows no error on success', async () => {

@@ -59,6 +59,7 @@ export function BoardColumn({
                 setEditingName(false)
               }
             }}
+            maxLength={200}
             aria-label="Kolomnaam"
             className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm font-semibold focus:border-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           />

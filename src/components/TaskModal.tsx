@@ -170,6 +170,7 @@ export function TaskModal({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
+            maxLength={200}
             autoFocus
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           />
@@ -184,6 +185,7 @@ export function TaskModal({
             value={description ?? ''}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
+            maxLength={5000}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           />
         </div>

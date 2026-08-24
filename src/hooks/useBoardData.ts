@@ -150,9 +150,11 @@ export function useBoardData() {
       .filter((c): c is Column => c !== null)
     setColumns(updated)
     try {
-      await Promise.all(
+      const results = await Promise.all(
         updated.map((c) => supabase.from('columns').update({ position: c.position }).eq('id', c.id))
       )
+      const failed = results.find((r) => r.error)
+      if (failed?.error) throw failed.error
     } catch (err) {
       setColumns(prevColumns)
       throw err
@@ -285,7 +287,7 @@ export function useBoardData() {
 
     try {
       const toUpdate = [...reindexedDest, ...reindexedSource]
-      await Promise.all(
+      const results = await Promise.all(
         toUpdate.map((t) =>
           supabase
             .from('tasks')
@@ -293,6 +295,8 @@ export function useBoardData() {
             .eq('id', t.id)
         )
       )
+      const failed = results.find((r) => r.error)
+      if (failed?.error) throw failed.error
     } catch (err) {
       setTasks(prevTasks)
       throw err

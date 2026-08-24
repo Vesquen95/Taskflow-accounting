@@ -50,6 +50,7 @@ function EditableLabelRow({
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur()
         }}
+        maxLength={200}
         aria-label={`Naam van label ${label.name}`}
         className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       />
@@ -137,6 +138,7 @@ export function LabelManager({ labels, onClose, onCreate, onUpdate, onDelete }: 
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Naam"
+              maxLength={200}
               aria-label="Naam van nieuw label"
               className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             />

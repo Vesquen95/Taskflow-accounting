@@ -45,7 +45,11 @@ export function AuthPage() {
         <div className="mb-6 flex rounded-md bg-slate-100 p-1 text-sm">
           <button
             type="button"
-            onClick={() => setMode('signin')}
+            onClick={() => {
+              setMode('signin')
+              setError(null)
+              setInfo(null)
+            }}
             className={`flex-1 rounded py-1.5 font-medium transition ${
               mode === 'signin' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
             }`}
@@ -54,7 +58,11 @@ export function AuthPage() {
           </button>
           <button
             type="button"
-            onClick={() => setMode('signup')}
+            onClick={() => {
+              setMode('signup')
+              setError(null)
+              setInfo(null)
+            }}
             className={`flex-1 rounded py-1.5 font-medium transition ${
               mode === 'signup' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
             }`}
@@ -86,7 +94,7 @@ export function AuthPage() {
               id="password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}

@@ -243,6 +243,7 @@ export function Board() {
                         if (e.key === 'Escape') setAddingColumn(false)
                       }}
                       placeholder="Kolomnaam"
+                      maxLength={200}
                       aria-label="Naam van nieuwe kolom"
                       className="mb-2 w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                     />
