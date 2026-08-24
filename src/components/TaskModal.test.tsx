@@ -106,6 +106,54 @@ describe('TaskModal: create', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  it('caps title and description at the DB length limits (200 / 5000 chars)', () => {
+    render(
+      <TaskModal
+        mode="create"
+        columns={columns}
+        labels={labels}
+        defaultColumnId="col-todo"
+        onClose={vi.fn()}
+        onCreate={vi.fn()}
+        onUpdate={vi.fn()}
+      />
+    )
+
+    expect(screen.getByLabelText(/Titel/)).toHaveAttribute('maxLength', '200')
+    expect(screen.getByLabelText('Beschrijving')).toHaveAttribute('maxLength', '5000')
+  })
+
+  // Regression test for migration 0002's tasks_title_length check
+  // constraint: if the DB still rejects a title (e.g. a pre-existing task
+  // edited elsewhere, or a race with the maxLength cap), the existing
+  // catch-and-display path in handleSubmit must show the message rather
+  // than crash.
+  it('shows a graceful error, not a crash, when the DB rejects the title as too long', async () => {
+    const user = userEvent.setup()
+    const onCreate = vi.fn().mockRejectedValue(
+      new Error('new row for relation "tasks" violates check constraint "tasks_title_length"')
+    )
+    const onClose = vi.fn()
+
+    render(
+      <TaskModal
+        mode="create"
+        columns={columns}
+        labels={labels}
+        defaultColumnId="col-todo"
+        onClose={onClose}
+        onCreate={onCreate}
+        onUpdate={vi.fn()}
+      />
+    )
+
+    await user.type(screen.getByLabelText(/Titel/), 'Taak')
+    await user.click(screen.getByRole('button', { name: 'Aanmaken' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('tasks_title_length')
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   it('shows an error message and keeps the modal open when onCreate rejects', async () => {
     const user = userEvent.setup()
     const onCreate = vi.fn().mockRejectedValue(new Error('Server weigert dit'))

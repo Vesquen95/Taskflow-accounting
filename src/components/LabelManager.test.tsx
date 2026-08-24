@@ -23,6 +23,33 @@ describe('LabelManager', () => {
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith('Review', '#f97316'))
   })
 
+  it('caps the new-label and existing-label name inputs at the DB length limit (200 chars)', () => {
+    render(
+      <LabelManager labels={labels} onClose={vi.fn()} onCreate={vi.fn()} onUpdate={vi.fn()} onDelete={vi.fn()} />
+    )
+
+    expect(screen.getByLabelText('Naam van nieuw label')).toHaveAttribute('maxLength', '200')
+    expect(screen.getByLabelText('Naam van label Urgent')).toHaveAttribute('maxLength', '200')
+  })
+
+  // Regression test for migration 0002's labels_color_hex check constraint:
+  // even though the UI only offers preset swatch colors, a DB-level
+  // rejection (e.g. a stale/invalid value) must surface through the
+  // existing catch-and-display path rather than crash the component.
+  it('shows a graceful error, not a crash, when the DB rejects an invalid hex color', async () => {
+    const user = userEvent.setup()
+    const onCreate = vi.fn().mockRejectedValue(
+      new Error('new row for relation "labels" violates check constraint "labels_color_hex"')
+    )
+
+    render(<LabelManager labels={[]} onClose={vi.fn()} onCreate={onCreate} onUpdate={vi.fn()} onDelete={vi.fn()} />)
+
+    await user.type(screen.getByLabelText('Naam van nieuw label'), 'Review')
+    await user.click(screen.getByRole('button', { name: 'Toevoegen' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('labels_color_hex')
+  })
+
   it('disables the add button while the name field is empty', () => {
     render(<LabelManager labels={[]} onClose={vi.fn()} onCreate={vi.fn()} onUpdate={vi.fn()} onDelete={vi.fn()} />)
     expect(screen.getByRole('button', { name: 'Toevoegen' })).toBeDisabled()

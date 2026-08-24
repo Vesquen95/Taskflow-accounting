@@ -72,6 +72,36 @@ describe('Board: error state', () => {
   })
 })
 
+describe('Board: column name inputs enforce the DB length limit', () => {
+  it('caps the new-column name input at 200 characters', async () => {
+    const user = userEvent.setup()
+    handlers.boards = () => ({ data: [BOARD], error: null })
+    handlers.columns = () => ({ data: COLUMNS, error: null })
+    handlers.labels = () => ({ data: [], error: null })
+    handlers.tasks = () => ({ data: [], error: null })
+    handlers.task_labels = () => ({ data: [], error: null })
+
+    renderBoard()
+    await user.click(await screen.findByRole('button', { name: '+ Kolom toevoegen' }))
+
+    expect(screen.getByLabelText('Naam van nieuwe kolom')).toHaveAttribute('maxLength', '200')
+  })
+
+  it('caps the column rename input at 200 characters', async () => {
+    const user = userEvent.setup()
+    handlers.boards = () => ({ data: [BOARD], error: null })
+    handlers.columns = () => ({ data: COLUMNS, error: null })
+    handlers.labels = () => ({ data: [], error: null })
+    handlers.tasks = () => ({ data: [], error: null })
+    handlers.task_labels = () => ({ data: [], error: null })
+
+    renderBoard()
+    await user.click(await screen.findByRole('button', { name: /Todo/ }))
+
+    expect(screen.getByLabelText('Kolomnaam')).toHaveAttribute('maxLength', '200')
+  })
+})
+
 describe('Board: empty states', () => {
   it('shows an empty-columns prompt when the board has no columns yet', async () => {
     handlers.boards = () => ({ data: [BOARD], error: null })

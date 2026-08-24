@@ -114,6 +114,30 @@ describe('useBoardData: task CRUD', () => {
     expect(result.current.tasks[0].labels.map((l) => l.id)).toEqual(['lbl-1'])
   })
 
+  // Regression test for migration 0002's tasks_title_length check
+  // constraint: a mocked Supabase error response mimicking that constraint
+  // violation should propagate as a rejected promise with state left
+  // untouched, rather than the hook crashing or silently swallowing it.
+  it('createTask throws and leaves state untouched when the DB rejects an over-length title', async () => {
+    installDefaultHandlers([])
+
+    const { result } = renderHook(() => useBoardData(), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    handlers.tasks = () => ({
+      data: null,
+      error: new Error('new row for relation "tasks" violates check constraint "tasks_title_length"'),
+    })
+
+    await expect(
+      act(async () => {
+        await result.current.createTask({ columnId: 'col-todo', title: 'x'.repeat(201) })
+      })
+    ).rejects.toThrow('tasks_title_length')
+
+    expect(result.current.tasks).toEqual([])
+  })
+
   it('updateTask patches title/description/dueDate and refreshes labels locally', async () => {
     const label = { id: 'lbl-1', board_id: 'board-1', name: 'Urgent', color: '#ef4444', created_at: '' }
     installDefaultHandlers([makeTask({ id: 't1', title: 'Old title' })], [label])
@@ -270,6 +294,51 @@ describe('useBoardData: moveTask', () => {
   })
 })
 
+describe('useBoardData: reorderColumns', () => {
+  it('persists the new column order (optimistic update)', async () => {
+    installDefaultHandlers([])
+
+    const { result } = renderHook(() => useBoardData(), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    handlers.columns = () => ({ data: null, error: null })
+
+    await act(async () => {
+      await result.current.reorderColumns(['col-doing', 'col-todo'])
+    })
+
+    expect(result.current.columns.map((c) => c.id)).toEqual(['col-doing', 'col-todo'])
+    expect(result.current.columns.map((c) => c.position)).toEqual([0, 1])
+  })
+
+  // Regression test for the fix: reorderColumns' Promise.all previously
+  // never checked each result's `error` field (only reacted if the request
+  // itself threw), so a real Supabase error response left the optimistic
+  // reorder in place with no rollback — mirroring the bug that used to
+  // affect moveTask. This encodes the now-fixed behavior.
+  it('rolls back the optimistic reorder if persisting the new positions fails', async () => {
+    installDefaultHandlers([])
+
+    const { result } = renderHook(() => useBoardData(), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    handlers.columns = (state) => {
+      if (state.op === 'update') return { data: null, error: new Error('reorder failed') }
+      return { data: null, error: null }
+    }
+
+    await expect(
+      act(async () => {
+        await result.current.reorderColumns(['col-doing', 'col-todo'])
+      })
+    ).rejects.toThrow('reorder failed')
+
+    // State should be exactly what it was before the failed reorder.
+    expect(result.current.columns.map((c) => c.id)).toEqual(['col-todo', 'col-doing'])
+    expect(result.current.columns.map((c) => c.position)).toEqual([0, 1])
+  })
+})
+
 describe('useBoardData: labels', () => {
   it('createLabel adds the label to state', async () => {
     installDefaultHandlers([])
@@ -288,6 +357,30 @@ describe('useBoardData: labels', () => {
 
     expect(result.current.labels).toHaveLength(1)
     expect(result.current.labels[0]).toMatchObject({ name: 'Urgent', color: '#ef4444' })
+  })
+
+  // Regression test for migration 0002's labels_color_hex check constraint:
+  // a mocked Supabase error response mimicking that constraint violation
+  // should propagate as a rejected promise with state left untouched,
+  // rather than the hook crashing or silently swallowing the failure.
+  it('createLabel throws and leaves state untouched when the DB rejects an invalid hex color', async () => {
+    installDefaultHandlers([])
+
+    const { result } = renderHook(() => useBoardData(), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    handlers.labels = () => ({
+      data: null,
+      error: new Error('new row for relation "labels" violates check constraint "labels_color_hex"'),
+    })
+
+    await expect(
+      act(async () => {
+        await result.current.createLabel('Urgent', 'not-a-color')
+      })
+    ).rejects.toThrow('labels_color_hex')
+
+    expect(result.current.labels).toEqual([])
   })
 
   it('deleteLabel removes the label from state and from any tasks carrying it', async () => {
