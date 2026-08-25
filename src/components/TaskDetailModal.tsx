@@ -43,6 +43,8 @@ const EVENT_LABEL: Record<string, string> = {
   review_afgehandeld: 'Review afgehandeld',
   goedkeuring_gegeven: 'Goedgekeurd',
   goedkeuring_geweigerd: 'Goedkeuring geweigerd',
+  taak_aangemaakt: 'Taak aangemaakt',
+  taak_inhoud_gewijzigd: 'Inhoud gewijzigd',
 }
 
 export function TaskDetailModal({

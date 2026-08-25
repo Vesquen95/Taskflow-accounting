@@ -33,6 +33,10 @@ export type LogEventType =
   | 'review_afgehandeld'
   | 'goedkeuring_gegeven'
   | 'goedkeuring_geweigerd'
+  // Toegevoegd in migratie 0012: aanmaak en inhoudelijke wijziging van een
+  // taakinstantie laten voortaan ook een spoor na.
+  | 'taak_aangemaakt'
+  | 'taak_inhoud_gewijzigd'
 
 export type LogTriggerBron = 'medewerker_actie' | 'kalender_herberekening' | 'av_opvolging_automatisch'
 
@@ -165,6 +169,13 @@ export interface PublicHoliday {
   gewijzigd_door: string
   created_at: string
   updated_at: string
+  /** Append-only correctiepatroon (migratie 0011/0012): een foutieve
+   * feestdag wordt ingetrokken, nooit overschreven of verwijderd. Een
+   * ingetrokken feestdag telt niet meer mee in next_business_day(). */
+  ingetrokken: boolean
+  ingetrokken_door: string | null
+  ingetrokken_op: string | null
+  ingetrokken_reden: string | null
 }
 
 /** Urgency band used for badge colouring/sorting (client-side only, see

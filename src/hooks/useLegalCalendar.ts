@@ -20,6 +20,10 @@ export function useLegalCalendar() {
     try {
       const [entriesRes, holidaysRes] = await Promise.all([
         supabase.from('legal_calendar').select('*').order('jaar', { ascending: false }),
+        // Bewust ook de ingetrokken feestdagen: het correctiepatroon is
+        // append-only (migratie 0011/0012), dus de historie hoort zichtbaar
+        // te blijven. Het beheerscherm toont ze doorstreept met wie/wanneer/
+        // waarom; next_business_day() telt ze niet meer mee.
         supabase.from('public_holidays').select('*').order('datum', { ascending: true }),
       ])
       if (entriesRes.error) throw entriesRes.error
@@ -72,6 +76,23 @@ export function useLegalCalendar() {
     await load()
   }
 
+  /** Feestdagcorrectie (§3 punt 7): een foutieve feestdag wordt nooit
+   * overschreven of verwijderd, maar ingetrokken met een verplichte reden.
+   * De RPC is SECURITY DEFINER en doet zelf de kantoorbeheerder-check; de
+   * knop in de UI is dus een gemak, geen beveiliging. */
+  async function retractHoliday(input: { holidayId: string; reden: string }) {
+    const reden = input.reden.trim()
+    if (reden.length === 0) {
+      throw new Error('Geef een reden op bij het intrekken van een feestdag')
+    }
+    const { error: err } = await supabase.rpc('retract_public_holiday', {
+      p_holiday_id: input.holidayId,
+      p_reden: reden,
+    })
+    if (err) throw err
+    await load()
+  }
+
   async function generateTaskInstances(horizonMonths = 3, backfillMonths = 6): Promise<number> {
     const { data, error: err } = await supabase.rpc('generate_task_instances', {
       p_horizon_months: horizonMonths,
@@ -82,5 +103,5 @@ export function useLegalCalendar() {
     return (data as number) ?? 0
   }
 
-  return { entries, holidays, loading, error, reload: load, addEntry, addHoliday, generateTaskInstances }
+  return { entries, holidays, loading, error, reload: load, addEntry, addHoliday, retractHoliday, generateTaskInstances }
 }

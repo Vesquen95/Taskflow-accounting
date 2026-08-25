@@ -107,6 +107,72 @@ describe('useLegalCalendar — legal-calendar edits (§3.4 traceability)', () =>
   })
 })
 
+describe('useLegalCalendar — feestdagcorrectie (intrekken)', () => {
+  it('retractHoliday calls retract_public_holiday with the holiday id and a trimmed reason', async () => {
+    let calledFn: string | undefined
+    let calledArgs: unknown
+    install(baseHandlers, (fnName, args) => {
+      calledFn = fnName
+      calledArgs = args
+      return { data: null, error: null }
+    })
+
+    const { result } = renderHook(() => useLegalCalendar())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.retractHoliday({ holidayId: 'ph-1', reden: '  Verkeerde datum ingevoerd  ' })
+    })
+
+    expect(calledFn).toBe('retract_public_holiday')
+    expect(calledArgs).toEqual({ p_holiday_id: 'ph-1', p_reden: 'Verkeerde datum ingevoerd' })
+  })
+
+  it('refuses an empty reason without touching the database (the reason is the correction history)', async () => {
+    let called = false
+    install(baseHandlers, () => {
+      called = true
+      return { data: null, error: null }
+    })
+
+    const { result } = renderHook(() => useLegalCalendar())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await expect(result.current.retractHoliday({ holidayId: 'ph-1', reden: '   ' })).rejects.toThrow(/reden/i)
+    expect(called).toBe(false)
+  })
+
+  it('propagates the database error when a non-kantoorbeheerder tries to retract', async () => {
+    install(baseHandlers, () => ({ data: null, error: new Error('Alleen een kantoorbeheerder kan een feestdag intrekken') }))
+
+    const { result } = renderHook(() => useLegalCalendar())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await expect(result.current.retractHoliday({ holidayId: 'ph-1', reden: 'poging' })).rejects.toThrow(
+      /kantoorbeheerder/,
+    )
+  })
+
+  it('keeps retracted holidays in the list so the correction history stays visible', async () => {
+    install({
+      ...baseHandlers,
+      public_holidays: () => ({
+        data: [
+          { id: 'ph1', datum: '2027-07-21', ingetrokken: false },
+          { id: 'ph2', datum: '2027-11-11', ingetrokken: true, ingetrokken_reden: 'Verkeerde datum' },
+        ],
+        error: null,
+      }),
+    })
+
+    const { result } = renderHook(() => useLegalCalendar())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.holidays).toHaveLength(2)
+    expect(result.current.holidays[1]).toMatchObject({ id: 'ph2', ingetrokken: true })
+  })
+})
+
 describe('useLegalCalendar — generateTaskInstances (recurrence-engine trigger)', () => {
   it('calls the generate_task_instances RPC with horizon/backfill params and returns the created count', async () => {
     let calledFn: string | undefined
