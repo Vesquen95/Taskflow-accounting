@@ -44,7 +44,7 @@ describe('useObligationTypes', () => {
     const { result } = renderHook(() => useObligationTypes())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    expect(result.current.error).toBe('connection refused')
+    expect(result.current.error).toBe('Kon de verplichtingtypes niet laden: connection refused')
     expect(result.current.obligationTypes).toEqual([])
   })
 })

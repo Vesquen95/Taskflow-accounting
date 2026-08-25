@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useAuth } from '../hooks/useAuth'
+import { reportError } from '../lib/errorMessage'
 
 /** Onboarding (§6): self-serve first-user-becomes-kantoorbeheerder for a
  * brand-new firm, or "claim invite" for a colleague a kantoorbeheerder
@@ -28,7 +29,7 @@ export function OnboardingPage() {
       if (err) throw err
       await reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kantoor aanmaken is mislukt.')
+      setError(reportError(err, 'Kantoor aanmaken is mislukt'))
     } finally {
       setSubmitting(false)
     }
@@ -42,7 +43,7 @@ export function OnboardingPage() {
       if (err) throw err
       await reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Geen openstaande uitnodiging gevonden voor dit e-mailadres.')
+      setError(reportError(err, 'Uitnodiging opnemen is mislukt'))
     } finally {
       setSubmitting(false)
     }

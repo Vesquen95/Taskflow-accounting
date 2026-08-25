@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Employee, EmployeeRol } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 /** Colleagues within the current employee's firm (RLS already scopes this
  * to `firm_id = current_employee_firm_id()` — see 0005_domain_rls.sql). */
@@ -17,7 +18,7 @@ export function useEmployees() {
       if (err) throw err
       setEmployees((data ?? []) as Employee[])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kon medewerkers niet laden.')
+      setError(reportError(err, 'Kon medewerkers niet laden'))
     } finally {
       setLoading(false)
     }

@@ -89,13 +89,15 @@ describe('AdhocTaskFormModal — submit flow', () => {
 
   it('shows the returned error and keeps the modal open when onSubmit rejects', async () => {
     const user = userEvent.setup()
-    onSubmit.mockRejectedValue(new Error('Aanmaken is mislukt.'))
+    onSubmit.mockRejectedValue(new Error('Deadline ligt in het verleden.'))
     render(<AdhocTaskFormModal employees={employees} defaultAssigneeId="e1" onClose={onClose} onSubmit={onSubmit} />)
 
     await user.type(screen.getByLabelText('Titel *'), 'Bel de klant')
     await user.click(screen.getByRole('button', { name: 'Aanmaken' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Aanmaken is mislukt.')
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Aanmaken is mislukt: Deadline ligt in het verleden.'
+    )
     expect(onClose).not.toHaveBeenCalled()
   })
 

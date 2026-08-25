@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { supabase } from '../lib/supabase'
 import type { Employee } from '../types'
 import { useAuth } from './useAuth'
+import { reportError } from '../lib/errorMessage'
 
 interface CurrentEmployeeContextValue {
   /** The employees row linked to the logged-in auth user, or null when
@@ -38,7 +39,7 @@ export function CurrentEmployeeProvider({ children }: { children: ReactNode }) {
       if (err) throw err
       setEmployee((data as Employee | null) ?? null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kon medewerkersprofiel niet laden.')
+      setError(reportError(err, 'Kon medewerkersprofiel niet laden'))
     } finally {
       setLoading(false)
     }

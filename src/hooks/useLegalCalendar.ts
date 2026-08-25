@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { LegalCalendarEntry, PublicHoliday } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 /** Wettelijke-kalenderbeheer (§4 point 7): campaign deadlines +
  * feestdagen, both editable data (never hardcoded logic, per the ground
@@ -26,7 +27,7 @@ export function useLegalCalendar() {
       setEntries((entriesRes.data ?? []) as LegalCalendarEntry[])
       setHolidays((holidaysRes.data ?? []) as PublicHoliday[])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kon de wettelijke kalender niet laden.')
+      setError(reportError(err, 'Kon de wettelijke kalender niet laden'))
     } finally {
       setLoading(false)
     }

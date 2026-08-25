@@ -77,7 +77,7 @@ describe('useCurrentEmployee', () => {
     const { result } = renderHook(() => useCurrentEmployee(), { wrapper })
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    expect(result.current.error).toBe('rls policy violation')
+    expect(result.current.error).toBe('Kon medewerkersprofiel niet laden: rls policy violation')
     expect(result.current.employee).toBeNull()
   })
 

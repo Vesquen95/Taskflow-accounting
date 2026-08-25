@@ -36,7 +36,7 @@ describe('useEmployees', () => {
     const { result } = renderHook(() => useEmployees())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    expect(result.current.error).toBe('rls denied')
+    expect(result.current.error).toBe('Kon medewerkers niet laden: rls denied')
   })
 
   it('inviteEmployee calls the invite_employee RPC with the right args and reloads', async () => {

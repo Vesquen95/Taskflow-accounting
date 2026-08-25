@@ -159,4 +159,28 @@ describe('ClientFormModal — submit error handling', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Ondernemingsnummer al in gebruik.')
     expect(onClose).not.toHaveBeenCalled()
   })
+
+  // Regressie op de productiebug: bij het aanmaken van een klant weigerde RLS
+  // de insert, maar de gebruiker zag enkel "Opslaan is mislukt." omdat het
+  // PostgREST-foutobject geen `Error`-instantie is. Melding én SQLSTATE
+  // moeten nu zichtbaar zijn.
+  it('shows the RLS reason and SQLSTATE when the insert is refused by row-level security', async () => {
+    const user = userEvent.setup()
+    onSubmit.mockRejectedValue({
+      message: 'new row violates row-level security policy for table "clients"',
+      code: '42501',
+      details: null,
+      hint: null,
+    })
+    render(<ClientFormModal client={null} employees={employees} onClose={onClose} onSubmit={onSubmit} />)
+
+    await user.type(screen.getByLabelText('Naam *'), 'Acme BV')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Opslaan is mislukt: Je hebt geen rechten voor deze actie.')
+    expect(alert).toHaveTextContent('row-level security')
+    expect(alert).toHaveTextContent('code 42501')
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })

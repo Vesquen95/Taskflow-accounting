@@ -146,7 +146,7 @@ describe('useTaskInstances — error handling', () => {
     const { result } = renderHook(() => useTaskInstances())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    expect(result.current.error).toBe('network down')
+    expect(result.current.error).toBe('Kon taken niet laden: network down')
     expect(result.current.tasks).toEqual([])
   })
 })

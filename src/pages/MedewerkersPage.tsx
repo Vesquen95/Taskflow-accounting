@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useEmployees } from '../hooks/useEmployees'
 import { ErrorState } from '../components/ErrorState'
 import type { EmployeeRol } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 /** Medewerkersbeheer (§1/§5/§6, kantoorbeheerder-only): rollen,
  * goedkeuringsrecht, uitnodigen van collega's, en (de)activeren. Het
@@ -34,7 +35,7 @@ export function MedewerkersPage() {
       setRol('medewerker')
       setMagGoedkeuren(false)
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Uitnodigen is mislukt.')
+      setFormError(reportError(err, 'Uitnodigen is mislukt'))
     } finally {
       setSubmitting(false)
     }
@@ -45,7 +46,7 @@ export function MedewerkersPage() {
     try {
       await updateEmployee(id, { actief: !actief })
     } catch (err) {
-      setRowError(err instanceof Error ? err.message : 'Wijzigen is mislukt.')
+      setRowError(reportError(err, 'Wijzigen is mislukt'))
     }
   }
 
@@ -54,7 +55,7 @@ export function MedewerkersPage() {
     try {
       await updateEmployee(id, { mag_goedkeuren: !current })
     } catch (err) {
-      setRowError(err instanceof Error ? err.message : 'Wijzigen is mislukt.')
+      setRowError(reportError(err, 'Wijzigen is mislukt'))
     }
   }
 

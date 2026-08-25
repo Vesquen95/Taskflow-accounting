@@ -7,6 +7,7 @@ import {
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { reportError } from '../lib/errorMessage'
 
 interface AuthContextValue {
   session: Session | null
@@ -45,12 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return { error: error?.message ?? null }
+    return { error: error ? reportError(error, 'Inloggen is mislukt') : null }
   }
 
   async function signUp(email: string, password: string) {
     const { error } = await supabase.auth.signUp({ email, password })
-    return { error: error?.message ?? null }
+    return { error: error ? reportError(error, 'Registreren is mislukt') : null }
   }
 
   async function signOut() {

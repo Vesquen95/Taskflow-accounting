@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Modal } from './Modal'
 import type { BtwFrequentie, BtwRegime, Client, Employee } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 const RECHTSVORMEN = ['BV', 'NV', 'CommV', 'VOF', 'VZW', 'Eenmanszaak', 'Coöperatieve vennootschap', 'Andere']
 
@@ -67,7 +68,7 @@ export function ClientFormModal({
       await onSubmit(values)
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan is mislukt.')
+      setError(reportError(err, 'Opslaan is mislukt'))
     } finally {
       setSubmitting(false)
     }

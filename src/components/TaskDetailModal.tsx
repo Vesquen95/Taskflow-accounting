@@ -6,6 +6,7 @@ import { formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import type { Employee, TaskInstanceWithRelations, TaskStatus, TaskStatusLog } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 interface TaskDetailModalProps {
   task: TaskInstanceWithRelations
@@ -101,7 +102,7 @@ export function TaskDetailModal({
       await onStatusChange(task.id, status)
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Statuswijziging is mislukt.')
+      setError(reportError(err, 'Statuswijziging is mislukt'))
     } finally {
       setBusy(false)
     }
@@ -114,7 +115,7 @@ export function TaskDetailModal({
     try {
       await onReassign(task.id, reassignTo)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Herverdelen is mislukt.')
+      setError(reportError(err, 'Herverdelen is mislukt'))
     } finally {
       setBusy(false)
     }

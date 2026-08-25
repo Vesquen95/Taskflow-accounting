@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Modal } from './Modal'
 import type { Employee } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 export function AdhocTaskFormModal({
   employees,
@@ -36,7 +37,7 @@ export function AdhocTaskFormModal({
       await onSubmit({ title: title.trim(), description: description.trim() || null, due_date: dueDate, toegewezen_medewerker_id: assignee })
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Aanmaken is mislukt.')
+      setError(reportError(err, 'Aanmaken is mislukt'))
     } finally {
       setSubmitting(false)
     }

@@ -135,8 +135,32 @@ describe('useClients — error handling', () => {
     const { result } = renderHook(() => useClients())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    expect(result.current.error).toBe('boom')
+    expect(result.current.error).toBe('Kon klanten niet laden: boom')
     expect(result.current.clients).toEqual([])
+  })
+
+  // Regressie: een PostgREST-fout is niet noodzakelijk een `Error`-instantie.
+  // Het oude `err instanceof Error ? err.message : '...'`-patroon liet in dat
+  // geval enkel "Kon klanten niet laden." achter, zonder SQLSTATE.
+  it('keeps message and SQLSTATE of a non-Error PostgREST error object', async () => {
+    install({
+      clients: () => ({
+        data: null,
+        error: {
+          message: 'permission denied for table clients',
+          code: '42501',
+          details: null,
+          hint: null,
+        },
+      }),
+    })
+
+    const { result } = renderHook(() => useClients())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.error).toBe(
+      'Kon klanten niet laden: Je hebt geen rechten voor deze actie. (permission denied for table clients — code 42501)'
+    )
   })
 })
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { ObligationType } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 /** The fixed 8-row obligation-type catalogue (docs/PLAN.md §2.4/§2.5).
  * Rarely changes within a session, so this is a simple one-shot fetch. */
@@ -19,7 +20,7 @@ export function useObligationTypes() {
       .then(({ data, error: err }) => {
         if (!active) return
         if (err) {
-          setError(err.message)
+          setError(reportError(err, 'Kon de verplichtingtypes niet laden'))
         } else {
           setObligationTypes((data ?? []) as ObligationType[])
         }

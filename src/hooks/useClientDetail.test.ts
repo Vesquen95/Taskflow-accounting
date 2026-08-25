@@ -71,7 +71,7 @@ describe('useClientDetail — loading', () => {
     const { result } = renderHook(() => useClientDetail('c1'))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    expect(result.current.error).toBe('task query failed')
+    expect(result.current.error).toBe('Kon klantdossier niet laden: task query failed')
   })
 })
 

@@ -10,7 +10,9 @@ export function ErrorState({ message, onRetry }: ErrorStateProps) {
       className="flex flex-col items-center justify-center gap-3 rounded-lg border border-red-200 bg-red-50 p-8 text-center"
     >
       <p className="text-sm font-medium text-red-700">Er ging iets mis</p>
-      <p className="max-w-sm text-sm text-red-600">{message}</p>
+      {/* break-words: de melding bevat nu ook technische tekst (constraint-
+          namen, SQLSTATE) zonder spaties — die mag de kaart niet uitrekken. */}
+      <p className="max-w-sm break-words text-sm text-red-600">{message}</p>
       <button
         type="button"
         onClick={onRetry}

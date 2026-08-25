@@ -4,6 +4,7 @@ import { useObligationTypes } from '../hooks/useObligationTypes'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { ErrorState } from '../components/ErrorState'
 import { formatDate } from '../lib/urgency'
+import { reportError } from '../lib/errorMessage'
 
 /** Wettelijke-kalenderbeheer (§4 point 7, kantoorbeheerder-only): jaarlijkse
  * campagnedata + feestdagen invoeren/corrigeren, met zichtbare historie van
@@ -15,6 +16,7 @@ export function WettelijkeKalenderPage() {
   const { entries, holidays, loading, error, reload, addEntry, addHoliday, generateTaskInstances } = useLegalCalendar()
 
   const [genResult, setGenResult] = useState<string | null>(null)
+  const [genFailed, setGenFailed] = useState(false)
   const [genBusy, setGenBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -32,11 +34,13 @@ export function WettelijkeKalenderPage() {
   async function handleGenerate() {
     setGenBusy(true)
     setGenResult(null)
+    setGenFailed(false)
     try {
       const created = await generateTaskInstances()
       setGenResult(`${created} nieuwe taakinstantie(s) aangemaakt.`)
     } catch (err) {
-      setGenResult(err instanceof Error ? `Fout: ${err.message}` : 'Genereren is mislukt.')
+      setGenFailed(true)
+      setGenResult(reportError(err, 'Genereren is mislukt'))
     } finally {
       setGenBusy(false)
     }
@@ -62,7 +66,7 @@ export function WettelijkeKalenderPage() {
       setDeadline('')
       setBron('')
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Toevoegen is mislukt.')
+      setFormError(reportError(err, 'Toevoegen van de kalenderdatum is mislukt'))
     }
   }
 
@@ -78,7 +82,7 @@ export function WettelijkeKalenderPage() {
       setHolidayDatum('')
       setHolidayOmschrijving('')
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Toevoegen is mislukt.')
+      setFormError(reportError(err, 'Toevoegen van de feestdag is mislukt'))
     }
   }
 
@@ -114,7 +118,18 @@ export function WettelijkeKalenderPage() {
         >
           {genBusy ? 'Bezig…' : 'Genereer taken nu'}
         </button>
-        {genResult && <p className="mt-2 text-sm text-slate-600">{genResult}</p>}
+        {genResult && (
+          <p
+            role={genFailed ? 'alert' : undefined}
+            className={
+              genFailed
+                ? 'mt-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700'
+                : 'mt-2 text-sm text-slate-600'
+            }
+          >
+            {genResult}
+          </p>
+        )}
       </section>
 
       {formError && (

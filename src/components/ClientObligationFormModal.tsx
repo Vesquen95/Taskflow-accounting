@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Modal } from './Modal'
 import type { Employee, ObligationType } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 export function ClientObligationFormModal({
   obligationTypes,
@@ -44,7 +45,7 @@ export function ClientObligationFormModal({
       await onSubmit({ obligation_type_id: obligationTypeId, parameters, standaard_toegewezen_medewerker_id: assignee || null })
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan is mislukt.')
+      setError(reportError(err, 'Opslaan is mislukt'))
     } finally {
       setSubmitting(false)
     }

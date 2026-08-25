@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Client } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 /** Escape characters that are syntactically significant in a PostgREST
  * filter value (`,` separates or-conditions, `(`/`)` group them, and
@@ -54,7 +55,7 @@ export function useClients(initialFilters: ClientFilters = DEFAULT_FILTERS) {
       if (err) throw err
       setClients((data ?? []) as Client[])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kon klanten niet laden.')
+      setError(reportError(err, 'Kon klanten niet laden'))
     } finally {
       setLoading(false)
     }

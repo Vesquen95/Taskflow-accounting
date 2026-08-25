@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 const NOT_FINAL: TaskStatus[] = ['open', 'in_uitvoering', 'wacht_op_klant', 'wacht_op_goedkeuring']
 
@@ -67,7 +68,7 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
       }
       setTasks(rows)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kon taken niet laden.')
+      setError(reportError(err, 'Kon taken niet laden'))
     } finally {
       setLoading(false)
     }

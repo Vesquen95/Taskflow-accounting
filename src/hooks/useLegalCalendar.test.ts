@@ -48,7 +48,7 @@ describe('useLegalCalendar — loading', () => {
     const { result } = renderHook(() => useLegalCalendar())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    expect(result.current.error).toBe('holidays query failed')
+    expect(result.current.error).toBe('Kon de wettelijke kalender niet laden: holidays query failed')
   })
 })
 

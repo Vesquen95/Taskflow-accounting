@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Client, ClientObligation, ObligationType, TaskInstanceWithRelations } from '../types'
+import { reportError } from '../lib/errorMessage'
 
 export interface ClientObligationWithType extends ClientObligation {
   obligation_type: ObligationType
@@ -51,7 +52,7 @@ export function useClientDetail(clientId: string | null) {
       setObligations((obligationsRes.data ?? []) as unknown as ClientObligationWithType[])
       setTasks((tasksRes.data ?? []) as unknown as TaskInstanceWithRelations[])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kon klantdossier niet laden.')
+      setError(reportError(err, 'Kon klantdossier niet laden'))
     } finally {
       setLoading(false)
     }
