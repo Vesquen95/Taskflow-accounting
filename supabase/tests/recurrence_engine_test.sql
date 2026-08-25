@@ -434,4 +434,110 @@ begin
   perform set_config('taskflow.test_uid', v_admin_uid::text, false);
 end $$;
 
+
+-- ============================================================
+-- Sectie 6: regressie op de zelf-refererende clients-policy (0010).
+--
+-- De SELECT-policy op `clients` mag de tabel niet opnieuw bevragen om te
+-- beslissen of een rij zichtbaar is. Deed ze dat wel (via
+-- can_access_client()), dan faalde ELKE `insert ... returning` -- en dus elke
+-- klant die via de app werd aangemaakt -- met SQLSTATE 42501, omdat de
+-- subquery binnen die functie de zojuist ingevoegde rij nog niet ziet.
+-- PostgREST voegt RETURNING toe zodra de client `.insert(...).select()` doet,
+-- dus dit trof de normale gebruiksweg volledig.
+--
+-- Dit is de eerste sectie die echt onder RLS draait (de vorige testen
+-- functies/triggers als eigenaar). Vandaar de twee lokale voorbereidingen
+-- hieronder: de rol `authenticated` bestaat niet vanzelf in een kale
+-- Postgres, en de identiteit loopt lokaal via taskflow.test_uid (zie de
+-- auth.uid()-stub in 00_local_auth_stub.sql) in plaats van via een JWT.
+-- ============================================================
+
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin;
+  end if;
+end $$;
+
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+
+do $$
+declare
+  v_firm uuid; v_emp uuid; v_uid uuid := gen_random_uuid(); v_id uuid;
+  v_vertrouwelijk_id uuid; v_cnt int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 'rls-returning@test.local', now());
+  insert into public.firms (naam) values ('RLS RETURNING testkantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+  values (v_firm, v_uid, 'Tester', 'rls-returning@test.local', 'kantoorbeheerder', true, true)
+  returning id into v_emp;
+
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+
+  -- 6.1 De kern van de regressie: aanmaken MET RETURNING, zoals de app doet.
+  insert into public.clients (
+    firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+    btw_regime, btw_aangifte_frequentie, mandataris, vertrouwelijk, actief
+  ) values (
+    v_firm, 'Klant via app', 12, 31, 'periodieke_aangever', 'kwartaal', false, false, true
+  ) returning id into v_id;
+
+  if v_id is null then
+    raise exception 'FAIL 6.1: insert ... returning gaf geen id terug';
+  end if;
+  raise notice 'PASS 6.1: klant aanmaken met RETURNING werkt (geen 42501)';
+
+  -- 6.2 Ook een vertrouwelijke klant, als kantoorbeheerder, met RETURNING.
+  insert into public.clients (
+    firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+    btw_regime, mandataris, vertrouwelijk, standaard_verantwoordelijke_id, actief
+  ) values (
+    v_firm, 'Vertrouwelijke klant', 12, 31, 'geen', false, true, v_emp, true
+  ) returning id into v_vertrouwelijk_id;
+  raise notice 'PASS 6.2: vertrouwelijke klant aanmaken met RETURNING werkt';
+
+  -- 6.3/6.4 De afscherming mag door de policy-herschrijving niet verzwakt
+  -- zijn: als gewone medewerker zonder toegewezen taak blijft de
+  -- vertrouwelijke klant onzichtbaar, gewone klanten blijven zichtbaar.
+  set local role postgres;
+  update public.employees set rol = 'medewerker' where id = v_emp;
+  set local role authenticated;
+
+  select count(*) into v_cnt from public.clients where id = v_vertrouwelijk_id;
+  if v_cnt <> 0 then
+    raise exception 'FAIL 6.3: vertrouwelijke klant zichtbaar (%) voor medewerker zonder toegewezen taak', v_cnt;
+  end if;
+  raise notice 'PASS 6.3: vertrouwelijke klant blijft afgeschermd zonder toewijzing';
+
+  select count(*) into v_cnt from public.clients where id = v_id;
+  if v_cnt <> 1 then
+    raise exception 'FAIL 6.4: gewone klant niet zichtbaar voor medewerker (%)', v_cnt;
+  end if;
+  raise notice 'PASS 6.4: gewone klanten blijven zichtbaar voor een medewerker';
+
+  -- 6.5 Zodra die medewerker een taak op de vertrouwelijke klant krijgt,
+  -- hoort het dossier wel zichtbaar te worden (docs/PLAN.md 2.11).
+  set local role postgres;
+  insert into public.task_instances (
+    client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (
+    v_vertrouwelijk_id,
+    (select id from public.obligation_types where code = 'jaarafsluiting'),
+    '2026', current_date, current_date, 'open', v_emp, 'automatisch_gegenereerd', true
+  );
+  set local role authenticated;
+
+  select count(*) into v_cnt from public.clients where id = v_vertrouwelijk_id;
+  if v_cnt <> 1 then
+    raise exception 'FAIL 6.5: vertrouwelijke klant onzichtbaar (%) ondanks toegewezen taak', v_cnt;
+  end if;
+  raise notice 'PASS 6.5: toewijzing geeft toegang tot het vertrouwelijke dossier';
+
+  set local role postgres;
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
