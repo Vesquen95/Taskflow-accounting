@@ -301,3 +301,31 @@ pragmatisch en documenteer de keuze in je samenvatting).
 - Voeg wat testdata toe (een paar voorbeeldklanten met verschillende
   `btw_regime`/boekjaareinde) zodat de UI met realistische data te
   bekijken is, maar maak dit duidelijk herkenbaar als seed/demo-data.
+
+## §8 — Beslissing: single-tenant (2026-08-25)
+
+Taskflow draait voor **één kantoor** — dat van de gebruiker. Andere kantoren
+komen niet op deze instance. Meerdere *teams binnen* dat kantoor is een
+mogelijke latere uitbreiding, andere kantoren niet.
+
+Gevolgen voor het ontwerp:
+
+- Het gedeelde karakter van `legal_calendar` en `public_holidays` (§2.9/§2.10)
+  is hiermee geen risico meer: er is maar één kantoor dat ze onderhoudt. De
+  firm-scoping van die tabellen die de security-review als optie opperde,
+  wordt daarom **niet** gebouwd.
+- De voorwaarde daarvoor is wel hard: **self-serve registratie moet dicht**
+  (Supabase → Authentication → "Allow new users to sign up" uit). Zolang die
+  openstaat en de site publiek bereikbaar is, kan een buitenstaander een
+  eigen kantoor aanmaken en via de gedeelde kalender de deadlines van de
+  echte klanten verschuiven — dat is end-to-end gereproduceerd in de
+  security-review van 2026-08-25.
+- Het multi-tenant datamodel (`firms` + firm-scoped RLS) blijft staan zoals
+  het is. Het is nu effectief single-tenant, maar niets moet worden
+  afgebroken; als teams later toch een eigen afscherming nodig hebben, is de
+  bestaande firm-grens het natuurlijke aanknopingspunt.
+- De rest van de bevindingen uit die review (goedkeuringsstap omzeilbaar,
+  deadlines ongelogd wijzigbaar, feestdagcorrectie zonder herberekening,
+  ongeaudite klantwijzigingen) blijft onverminderd gelden: die gaan over de
+  eigen medewerkers en over de integriteit van het audittrail, niet over
+  vreemde kantoren.
