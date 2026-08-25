@@ -1,7 +1,9 @@
 node_modules/
 dist/
-.env
-.env.local
+# Alle .env-varianten (ook back-ups zoals .env.bak) buiten git houden;
+# enkel het voorbeeldbestand met dummy-waarden hoort erin.
+.env*
+!.env.example
 *.local
 .DS_Store
 *.tsbuildinfo
