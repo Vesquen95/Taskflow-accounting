@@ -8,13 +8,11 @@ import type { Employee } from '../types'
 // Regression coverage for the a11y label-association fix (htmlFor/id on
 // AdhocTaskFormModal, ClientFormModal, ClientObligationFormModal). Uses the
 // STANDARD screen.getByLabelText (the same resolution real assistive tech
-// relies on) instead of the getControlByLabelText workaround from
-// src/test/formHelpers.ts, so a regression back to unassociated labels
-// would fail loudly here rather than being silently absorbed by the
-// workaround. NOTE: src/test/formHelpers.ts and the existing
-// *FormModal.test.tsx files still use/document the workaround and should be
-// updated to use screen.getByLabelText directly and have their now-stale
-// "label is not associated" comments removed — see tester report.
+// relies on). The old getControlByLabelText workaround (src/test/
+// formHelpers.ts) has since been removed and the *FormModal.test.tsx files
+// converted to screen.getByLabelText directly, so a regression back to
+// unassociated labels would now fail loudly across all of them, not just
+// here.
 
 function employee(overrides: Partial<Employee> = {}): Employee {
   return {

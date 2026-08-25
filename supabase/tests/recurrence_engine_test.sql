@@ -340,4 +340,98 @@ begin
   perform pg_temp.test_assert(v_log_count >= 1, 'AV -> neerlegging: the recalculation is logged with trigger_bron = av_opvolging_automatisch');
 end $$;
 
+-- ============================================================
+-- 5. INSERT-time confidentiality guard (0009 regression test — closes the
+-- High #4 follow-up from the security re-review of 0008: the original fix
+-- only covered UPDATE of clients.vertrouwelijk/standaard_verantwoordelijke_id,
+-- not INSERT). A plain medewerker must not be able to create a client that
+-- is already vertrouwelijk=true or already has a
+-- standaard_verantwoordelijke_id in the same INSERT; a kantoorbeheerder
+-- can, and it must be logged to client_change_log same as the UPDATE path.
+-- ============================================================
+do $$
+declare
+  v_firm1 uuid := (select value from test_fixture_ids where key = 'firm1');
+  v_admin_uid uuid := (select value from test_fixture_ids where key = 'admin_uid');
+  v_admin_emp uuid := (select value from test_fixture_ids where key = 'admin_emp');
+  v_medewerker_uid uuid;
+  v_medewerker_emp uuid;
+  v_client_id uuid;
+  v_blocked boolean;
+  v_log_count int;
+begin
+  insert into auth.users (email, email_confirmed_at) values ('medewerker@test.local', now()) returning id into v_medewerker_uid;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm1, v_medewerker_uid, 'Test Medewerker', 'medewerker@test.local', 'medewerker', false, true)
+    returning id into v_medewerker_emp;
+
+  -- Act as the plain medewerker.
+  perform set_config('taskflow.test_uid', v_medewerker_uid::text, false);
+
+  -- Note: standaard_verantwoordelijke_id is filled in here purely to
+  -- satisfy the pre-existing `clients_confidential_needs_owner` CHECK
+  -- constraint (0003, vertrouwelijk=true requires a non-null owner) so
+  -- that constraint doesn't fire before our trigger does — the point of
+  -- this assertion is specifically the vertrouwelijk=true block.
+  v_blocked := false;
+  begin
+    insert into public.clients (
+      firm_id, naam, ondernemingsnummer, boekjaar_einde_maand, boekjaar_einde_dag,
+      btw_regime, vertrouwelijk, standaard_verantwoordelijke_id, actief
+    ) values (
+      v_firm1, 'Test Klant D (medewerker probeert vertrouwelijk)', 'BE0000.900.004', 12, 31, 'geen', true, v_admin_emp, true
+    );
+  exception when insufficient_privilege then
+    v_blocked := true;
+  end;
+  perform pg_temp.test_assert(v_blocked, 'INSERT guard: a plain medewerker cannot create a client with vertrouwelijk=true');
+
+  v_blocked := false;
+  begin
+    insert into public.clients (
+      firm_id, naam, ondernemingsnummer, boekjaar_einde_maand, boekjaar_einde_dag,
+      btw_regime, vertrouwelijk, standaard_verantwoordelijke_id, actief
+    ) values (
+      v_firm1, 'Test Klant E (medewerker probeert standaard_verantwoordelijke)', 'BE0000.900.005', 12, 31, 'geen', false, v_admin_emp, true
+    );
+  exception when insufficient_privilege then
+    v_blocked := true;
+  end;
+  perform pg_temp.test_assert(v_blocked, 'INSERT guard: a plain medewerker cannot set standaard_verantwoordelijke_id at creation time either');
+
+  -- A plain medewerker CAN still create a client with the safe defaults.
+  insert into public.clients (
+    firm_id, naam, ondernemingsnummer, boekjaar_einde_maand, boekjaar_einde_dag,
+    btw_regime, vertrouwelijk, actief
+  ) values (
+    v_firm1, 'Test Klant F (medewerker, normale klant)', 'BE0000.900.006', 12, 31, 'geen', false, true
+  ) returning id into v_client_id;
+  perform pg_temp.test_assert(v_client_id is not null, 'INSERT guard: a plain medewerker can still create a non-confidential client');
+
+  -- Act as the kantoorbeheerder: allowed, and audited.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, false);
+
+  insert into public.clients (
+    firm_id, naam, ondernemingsnummer, boekjaar_einde_maand, boekjaar_einde_dag,
+    btw_regime, vertrouwelijk, standaard_verantwoordelijke_id, actief
+  ) values (
+    v_firm1, 'Test Klant G (kantoorbeheerder, meteen vertrouwelijk)', 'BE0000.900.007', 12, 31, 'geen', true, v_admin_emp, true
+  ) returning id into v_client_id;
+  perform pg_temp.test_assert(v_client_id is not null, 'INSERT guard: a kantoorbeheerder CAN create a client with vertrouwelijk=true directly');
+
+  select count(*) into v_log_count
+  from public.client_change_log
+  where client_id = v_client_id and veld = 'vertrouwelijk' and oude_waarde is null and nieuwe_waarde = 'true';
+  perform pg_temp.test_assert(v_log_count = 1, 'INSERT guard: creating a confidential client is logged in client_change_log (oude_waarde null)');
+
+  select count(*) into v_log_count
+  from public.client_change_log
+  where client_id = v_client_id and veld = 'standaard_verantwoordelijke_id' and oude_waarde is null and nieuwe_waarde = v_admin_emp::text;
+  perform pg_temp.test_assert(v_log_count = 1, 'INSERT guard: setting standaard_verantwoordelijke_id at creation is also logged');
+
+  -- Restore admin as the acting session (matches the state expected by
+  -- earlier sections, in case tests are ever reordered/extended below).
+  perform set_config('taskflow.test_uid', v_admin_uid::text, false);
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

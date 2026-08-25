@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClientObligationFormModal } from './ClientObligationFormModal'
-import { getControlByLabelText } from '../test/formHelpers'
 import type { Employee, ObligationType } from '../types'
 
 function employee(overrides: Partial<Employee> = {}): Employee {
@@ -63,15 +62,15 @@ describe('ClientObligationFormModal — type-dependent parameters', () => {
 
   it('shows and submits frequentie/termijn_dagen parameters for "rapportering"', async () => {
     const user = userEvent.setup()
-    const { container } = render(
+    render(
       <ClientObligationFormModal obligationTypes={obligationTypes} employees={employees} onClose={onClose} onSubmit={onSubmit} />
     )
 
-    await user.selectOptions(getControlByLabelText(container, 'Type verplichting'), 'ot2')
+    await user.selectOptions(screen.getByLabelText('Type verplichting'), 'ot2')
     expect(screen.getByText('Frequentie')).toBeInTheDocument()
 
-    await user.selectOptions(getControlByLabelText(container, 'Frequentie'), 'maand')
-    const termijnInput = getControlByLabelText(container, 'Termijn (dagen na periode)') as HTMLInputElement
+    await user.selectOptions(screen.getByLabelText('Frequentie'), 'maand')
+    const termijnInput = screen.getByLabelText('Termijn (dagen na periode)') as HTMLInputElement
     await user.clear(termijnInput)
     await user.type(termijnInput, '15')
 
@@ -84,12 +83,12 @@ describe('ClientObligationFormModal — type-dependent parameters', () => {
 
   it('shows and submits sla_maanden for "jaarafsluiting"', async () => {
     const user = userEvent.setup()
-    const { container } = render(
+    render(
       <ClientObligationFormModal obligationTypes={obligationTypes} employees={employees} onClose={onClose} onSubmit={onSubmit} />
     )
 
-    await user.selectOptions(getControlByLabelText(container, 'Type verplichting'), 'ot3')
-    const slaInput = getControlByLabelText(container, 'Kantoor-SLA (maanden na boekjaareinde)') as HTMLInputElement
+    await user.selectOptions(screen.getByLabelText('Type verplichting'), 'ot3')
+    const slaInput = screen.getByLabelText('Kantoor-SLA (maanden na boekjaareinde)') as HTMLInputElement
     await user.clear(slaInput)
     await user.type(slaInput, '4')
 
@@ -117,11 +116,11 @@ describe('ClientObligationFormModal — assignee fallback (§2.6)', () => {
 
   it('submits the chosen employee id when an assignee is picked', async () => {
     const user = userEvent.setup()
-    const { container } = render(
+    render(
       <ClientObligationFormModal obligationTypes={obligationTypes} employees={employees} onClose={onClose} onSubmit={onSubmit} />
     )
 
-    await user.selectOptions(getControlByLabelText(container, 'Standaard toegewezen medewerker'), 'e2')
+    await user.selectOptions(screen.getByLabelText('Standaard toegewezen medewerker'), 'e2')
     await user.click(screen.getByRole('button', { name: 'Toevoegen' }))
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ standaard_toegewezen_medewerker_id: 'e2' }))
