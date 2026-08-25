@@ -71,8 +71,36 @@ export function createQueryBuilder(handlers: SupabaseHandlers, table: string) {
       state.calls.push({ method: 'eq', args })
       return builder
     }),
+    neq: vi.fn((...args: unknown[]) => {
+      state.calls.push({ method: 'neq', args })
+      return builder
+    }),
     in: vi.fn((...args: unknown[]) => {
       state.calls.push({ method: 'in', args })
+      return builder
+    }),
+    lt: vi.fn((...args: unknown[]) => {
+      state.calls.push({ method: 'lt', args })
+      return builder
+    }),
+    lte: vi.fn((...args: unknown[]) => {
+      state.calls.push({ method: 'lte', args })
+      return builder
+    }),
+    gt: vi.fn((...args: unknown[]) => {
+      state.calls.push({ method: 'gt', args })
+      return builder
+    }),
+    gte: vi.fn((...args: unknown[]) => {
+      state.calls.push({ method: 'gte', args })
+      return builder
+    }),
+    is: vi.fn((...args: unknown[]) => {
+      state.calls.push({ method: 'is', args })
+      return builder
+    }),
+    or: vi.fn((...args: unknown[]) => {
+      state.calls.push({ method: 'or', args })
       return builder
     }),
     order: vi.fn((...args: unknown[]) => {
@@ -84,6 +112,7 @@ export function createQueryBuilder(handlers: SupabaseHandlers, table: string) {
       return builder
     }),
     single: vi.fn(() => resolve()),
+    maybeSingle: vi.fn(() => resolve()),
     // Makes `await builder` work without an explicit `.single()` call.
     then: <TResult1 = HandlerResult, TResult2 = never>(
       onFulfilled?: ((value: HandlerResult) => TResult1 | PromiseLike<TResult1>) | null,
@@ -93,6 +122,8 @@ export function createQueryBuilder(handlers: SupabaseHandlers, table: string) {
 
   return builder
 }
+
+export type RpcHandler = (fnName: string, args: unknown) => HandlerResult | Promise<HandlerResult>
 
 export interface SupabaseAuthOverrides {
   getSession?: () => Promise<{ data: { session: unknown } }>
@@ -104,7 +135,11 @@ export interface SupabaseAuthOverrides {
   signOut?: () => Promise<{ error: null }>
 }
 
-export function createSupabaseMock(handlers: SupabaseHandlers, authOverrides: SupabaseAuthOverrides = {}) {
+export function createSupabaseMock(
+  handlers: SupabaseHandlers,
+  authOverrides: SupabaseAuthOverrides = {},
+  rpcHandler?: RpcHandler
+) {
   const from = vi.fn((table: string) => createQueryBuilder(handlers, table))
 
   const auth = {
@@ -116,7 +151,17 @@ export function createSupabaseMock(handlers: SupabaseHandlers, authOverrides: Su
     ...authOverrides,
   }
 
-  return { from, auth }
+  const rpc = vi.fn((fnName: string, args: unknown) => {
+    if (!rpcHandler) {
+      return Promise.resolve({
+        data: null,
+        error: new Error(`[supabaseMock] no rpc handler configured (called "${fnName}")`),
+      })
+    }
+    return Promise.resolve(rpcHandler(fnName, args))
+  })
+
+  return { from, auth, rpc }
 }
 
 /** Convenience factory for a fake Supabase session/user pair. */
