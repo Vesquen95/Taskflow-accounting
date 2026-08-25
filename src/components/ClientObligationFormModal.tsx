@@ -54,8 +54,9 @@ export function ClientObligationFormModal({
     <Modal title="Verplichting toevoegen" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3 text-sm">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Type verplichting</label>
+          <label htmlFor="obligation-type" className="mb-1 block text-xs font-medium text-slate-500">Type verplichting</label>
           <select
+            id="obligation-type"
             value={obligationTypeId}
             onChange={(e) => setObligationTypeId(e.target.value)}
             className="w-full rounded-md border border-slate-300 px-2 py-1.5"
@@ -71,16 +72,17 @@ export function ClientObligationFormModal({
         {code === 'rapportering' && (
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Frequentie</label>
-              <select value={frequentie} onChange={(e) => setFrequentie(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5">
+              <label htmlFor="obligation-frequentie" className="mb-1 block text-xs font-medium text-slate-500">Frequentie</label>
+              <select id="obligation-frequentie" value={frequentie} onChange={(e) => setFrequentie(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5">
                 <option value="maand">Maand</option>
                 <option value="kwartaal">Kwartaal</option>
                 <option value="jaar">Jaar</option>
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Termijn (dagen na periode)</label>
+              <label htmlFor="obligation-termijn" className="mb-1 block text-xs font-medium text-slate-500">Termijn (dagen na periode)</label>
               <input
+                id="obligation-termijn"
                 type="number"
                 min={1}
                 value={termijnDagen}
@@ -93,8 +95,9 @@ export function ClientObligationFormModal({
 
         {code === 'jaarafsluiting' && (
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Kantoor-SLA (maanden na boekjaareinde)</label>
+            <label htmlFor="obligation-sla" className="mb-1 block text-xs font-medium text-slate-500">Kantoor-SLA (maanden na boekjaareinde)</label>
             <input
+              id="obligation-sla"
               type="number"
               min={1}
               max={12}
@@ -106,8 +109,8 @@ export function ClientObligationFormModal({
         )}
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Standaard toegewezen medewerker</label>
-          <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5">
+          <label htmlFor="obligation-assignee" className="mb-1 block text-xs font-medium text-slate-500">Standaard toegewezen medewerker</label>
+          <select id="obligation-assignee" value={assignee} onChange={(e) => setAssignee(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5">
             <option value="">— valt terug op standaard verantwoordelijke van de klant —</option>
             {employees.map((emp) => (
               <option key={emp.id} value={emp.id}>

@@ -143,6 +143,14 @@ actor = de medewerker die de AV-taak afrondde.
 
 Door kantoorbeheerder jaarlijks aangevuld — bewust geen hardcoded lijst.
 
+**Geaccepteerd restrisico (security-review, migratie 0008):** `legal_calendar`
+en `public_holidays` zijn bewust gedeeld/niet firm-scoped — elke
+kantoorbeheerder op deze instance kan de wettelijke kalender/feestdagen
+wijzigen, met impact op de gegenereerde taakinstanties van ALLE kantoren op
+de instance, niet enkel het eigen kantoor. Dit is een bewuste ontwerpkeuze
+(gedeelde nationale referentiedata, geen concurrentiegevoelige klantdata),
+geen bug — zie ook de tabel-comments in 0008.
+
 ### 2.11 Vertrouwelijkheid & zichtbaarheid — `can_view_client()`
 
 ```sql

@@ -88,16 +88,12 @@ describe('useClients — default/explicit filters', () => {
     expect(orCall?.args[0]).toBe('naam.ilike.%acme%,ondernemingsnummer.ilike.%acme%')
   })
 
-  // BUG REGRESSION CANDIDATE: a search term containing a comma is not
-  // escaped/sanitised before being interpolated into the PostgREST `or=`
-  // filter string. PostgREST splits `or=` on top-level commas, so a term
-  // like "foo,bar" corrupts the filter into two unrelated conditions
-  // instead of searching for the literal substring "foo,bar". This test
-  // documents the current (buggy) behaviour rather than asserting the
-  // fix — see the tester's report for the recommended remediation
-  // (sanitise/escape commas and '%'/'*' before interpolating, or move to
-  // a parameterised `.or()` alternative).
-  it('KNOWN BUG: a comma in the search term is passed through unescaped into the or-filter string', async () => {
+  // REGRESSION TEST (fixed): a search term containing a comma (or other
+  // PostgREST-reserved characters: '(', ')', '%', '*') is escaped with a
+  // backslash before being interpolated into the `or=` filter string, so
+  // it can no longer split the filter into unrelated conditions or corrupt
+  // the ILIKE wildcard matching. See useClients.ts#escapePostgrestFilterValue.
+  it('escapes a comma in the search term so it cannot break the or-filter syntax', async () => {
     let capturedState: ChainState | undefined
     install({
       clients: (state) => {
@@ -110,10 +106,25 @@ describe('useClients — default/explicit filters', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     const orCall = capturedState?.calls.find((c) => c.method === 'or')
-    // This is the literal (unsafe) string sent to PostgREST today. A fix
-    // would escape the comma so this assertion should change to reflect
-    // an escaped value once addressed.
-    expect(orCall?.args[0]).toBe('naam.ilike.%foo,bar%,ondernemingsnummer.ilike.%foo,bar%')
+    expect(orCall?.args[0]).toBe('naam.ilike.%foo\\,bar%,ondernemingsnummer.ilike.%foo\\,bar%')
+  })
+
+  it('escapes parentheses, percent and asterisk characters in the search term', async () => {
+    let capturedState: ChainState | undefined
+    install({
+      clients: (state) => {
+        capturedState = state
+        return { data: [], error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useClients({ zoekterm: 'a(b)c%d*e', actief: 'alle' }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const orCall = capturedState?.calls.find((c) => c.method === 'or')
+    expect(orCall?.args[0]).toBe(
+      'naam.ilike.%a\\(b\\)c\\%d\\*e%,ondernemingsnummer.ilike.%a\\(b\\)c\\%d\\*e%'
+    )
   })
 })
 

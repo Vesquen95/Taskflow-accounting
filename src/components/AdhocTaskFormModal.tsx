@@ -46,21 +46,21 @@ export function AdhocTaskFormModal({
     <Modal title="Ad-hoc taak aanmaken" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3 text-sm">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Titel *</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5" required />
+          <label htmlFor="adhoc-title" className="mb-1 block text-xs font-medium text-slate-500">Titel *</label>
+          <input id="adhoc-title" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5" required />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Omschrijving</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-md border border-slate-300 px-2 py-1.5" />
+          <label htmlFor="adhoc-description" className="mb-1 block text-xs font-medium text-slate-500">Omschrijving</label>
+          <textarea id="adhoc-description" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-md border border-slate-300 px-2 py-1.5" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Deadline</label>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5" />
+            <label htmlFor="adhoc-due-date" className="mb-1 block text-xs font-medium text-slate-500">Deadline</label>
+            <input id="adhoc-due-date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5" />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Verantwoordelijke</label>
-            <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5">
+            <label htmlFor="adhoc-assignee" className="mb-1 block text-xs font-medium text-slate-500">Verantwoordelijke</label>
+            <select id="adhoc-assignee" value={assignee} onChange={(e) => setAssignee(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5">
               {employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.naam}

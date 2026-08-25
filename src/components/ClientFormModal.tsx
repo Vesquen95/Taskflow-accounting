@@ -77,8 +77,9 @@ export function ClientFormModal({
     <Modal title={client ? 'Klant bewerken' : 'Nieuwe klant'} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3 text-sm">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Naam *</label>
+          <label htmlFor="client-naam" className="mb-1 block text-xs font-medium text-slate-500">Naam *</label>
           <input
+            id="client-naam"
             value={values.naam}
             onChange={(e) => setValues((v) => ({ ...v, naam: e.target.value }))}
             className="w-full rounded-md border border-slate-300 px-2 py-1.5"
@@ -87,8 +88,9 @@ export function ClientFormModal({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Ondernemingsnummer</label>
+            <label htmlFor="client-ondernemingsnummer" className="mb-1 block text-xs font-medium text-slate-500">Ondernemingsnummer</label>
             <input
+              id="client-ondernemingsnummer"
               value={values.ondernemingsnummer}
               onChange={(e) => setValues((v) => ({ ...v, ondernemingsnummer: e.target.value }))}
               placeholder="BE0123.456.789"
@@ -96,8 +98,9 @@ export function ClientFormModal({
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Rechtsvorm</label>
+            <label htmlFor="client-rechtsvorm" className="mb-1 block text-xs font-medium text-slate-500">Rechtsvorm</label>
             <input
+              id="client-rechtsvorm"
               list="rechtsvormen"
               value={values.rechtsvorm}
               onChange={(e) => setValues((v) => ({ ...v, rechtsvorm: e.target.value }))}
@@ -113,8 +116,9 @@ export function ClientFormModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Boekjaareinde — maand</label>
+            <label htmlFor="client-boekjaar-maand" className="mb-1 block text-xs font-medium text-slate-500">Boekjaareinde — maand</label>
             <select
+              id="client-boekjaar-maand"
               value={values.boekjaar_einde_maand}
               onChange={(e) => setValues((v) => ({ ...v, boekjaar_einde_maand: Number(e.target.value) }))}
               className="w-full rounded-md border border-slate-300 px-2 py-1.5"
@@ -127,8 +131,9 @@ export function ClientFormModal({
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Boekjaareinde — dag</label>
+            <label htmlFor="client-boekjaar-dag" className="mb-1 block text-xs font-medium text-slate-500">Boekjaareinde — dag</label>
             <input
+              id="client-boekjaar-dag"
               type="number"
               min={1}
               max={31}
@@ -141,8 +146,9 @@ export function ClientFormModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">BTW-regime</label>
+            <label htmlFor="client-btw-regime" className="mb-1 block text-xs font-medium text-slate-500">BTW-regime</label>
             <select
+              id="client-btw-regime"
               value={values.btw_regime}
               onChange={(e) =>
                 setValues((v) => ({
@@ -160,8 +166,9 @@ export function ClientFormModal({
           </div>
           {values.btw_regime === 'periodieke_aangever' && (
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Aangiftefrequentie</label>
+              <label htmlFor="client-btw-frequentie" className="mb-1 block text-xs font-medium text-slate-500">Aangiftefrequentie</label>
               <select
+                id="client-btw-frequentie"
                 value={values.btw_aangifte_frequentie}
                 onChange={(e) => setValues((v) => ({ ...v, btw_aangifte_frequentie: e.target.value as BtwFrequentie }))}
                 className="w-full rounded-md border border-slate-300 px-2 py-1.5"
@@ -174,10 +181,11 @@ export function ClientFormModal({
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">
+          <label htmlFor="client-verantwoordelijke" className="mb-1 block text-xs font-medium text-slate-500">
             Standaard verantwoordelijke {values.vertrouwelijk && '*'}
           </label>
           <select
+            id="client-verantwoordelijke"
             value={values.standaard_verantwoordelijke_id}
             onChange={(e) => setValues((v) => ({ ...v, standaard_verantwoordelijke_id: e.target.value }))}
             className="w-full rounded-md border border-slate-300 px-2 py-1.5"

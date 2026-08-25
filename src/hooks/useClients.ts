@@ -2,6 +2,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Client } from '../types'
 
+/** Escape characters that are syntactically significant in a PostgREST
+ * filter value (`,` separates or-conditions, `(`/`)` group them, and
+ * `%`/`*` are ilike/pattern wildcards) before interpolating user input into
+ * a `.or()`/`.ilike()` filter string. Without this, a search term
+ * containing e.g. a comma silently corrupts the filter into unrelated
+ * conditions instead of matching the literal substring. */
+function escapePostgrestFilterValue(value: string): string {
+  return value.replace(/[,()%*\\]/g, (char) => `\\${char}`)
+}
+
 export interface ClientFilters {
   zoekterm?: string
   actief?: boolean | 'alle'
@@ -36,7 +46,7 @@ export function useClients(initialFilters: ClientFilters = DEFAULT_FILTERS) {
         query = query.eq('standaard_verantwoordelijke_id', filters.verantwoordelijkeId)
       }
       if (filters.zoekterm && filters.zoekterm.trim().length > 0) {
-        const term = filters.zoekterm.trim()
+        const term = escapePostgrestFilterValue(filters.zoekterm.trim())
         query = query.or(`naam.ilike.%${term}%,ondernemingsnummer.ilike.%${term}%`)
       }
 
