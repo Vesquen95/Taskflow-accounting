@@ -1,0 +1,38 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 900, "title": "Btw — hoofdscherm" },
+    { "file": "Afsluiting.dc.html", "x": 1560, "y": 0, "w": 1000, "h": 780, "title": "Afsluiting" },
+    { "file": "Vennootschapsbelasting.dc.html", "x": 1560, "y": 900, "w": 1000, "h": 640, "title": "Vennootschapsbelasting" }
+  ],
+  "annotations": [
+    {
+      "id": "note-blok",
+      "x": 0,
+      "y": -150,
+      "w": 460,
+      "text": "Werken per takenblok: één blok = één deadlinedatum binnen de stroom.\nVink aan wat je afwerkt, de bulkbalk verschijnt. Probeer het maar — de selectie werkt echt."
+    },
+    {
+      "id": "note-venster",
+      "x": 520,
+      "y": -150,
+      "w": 420,
+      "text": "Deadlinevenster i.p.v. periode: de maandaangiftes van maart (20/04) en de kwartaalaangiftes Q1 (27/04) vallen samen in april. Op periode filteren zou de helft missen."
+    },
+    {
+      "id": "note-afsluiting",
+      "x": 1560,
+      "y": -150,
+      "w": 460,
+      "text": "Niet elke stroom valt op één datum samen. De AV van alle 31/12-klanten wel (30/06), de neerlegging niet — die volgt de AV per klant. Vraag: apart blok per datum, of één blok per verplichting?"
+    },
+    {
+      "id": "note-venb",
+      "x": 1560,
+      "y": 1580,
+      "w": 460,
+      "text": "Voorafbetaling en aangifte staan in dezelfde stroom maar raken elkaar nooit in hetzelfde venster — VA per kwartaal, aangifte in september. Werkt dat voor jou, of wil je ze uit elkaar?"
+    }
+  ],
+  "launch": { "view": "focused", "file": "Main.dc.html" }
+}

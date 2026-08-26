@@ -1,0 +1,275 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    a { color: #4338ca; } a:hover { color: #3730a3; }
+    * { box-sizing: border-box; }
+    input[type="checkbox"] { width: 14px; height: 14px; accent-color: #4f46e5; cursor: pointer; margin: 0; }
+  </style>
+</helmet>
+
+<div style="display: flex; width: 1440px; height: 900px; background: #f8fafc; color: #0f172a;">
+
+  <!-- Zijbalk -->
+  <aside style="display: flex; flex-direction: column; width: 240px; flex-shrink: 0; border-right: 1px solid #e2e8f0; background: #ffffff;">
+    <div style="display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #e2e8f0; padding: 16px;">
+      <div style="display: flex; height: 32px; width: 32px; align-items: center; justify-content: center; border-radius: 6px; background: #4f46e5; font-size: 14px; font-weight: 700; color: #ffffff;">T</div>
+      <span style="font-size: 16px; font-weight: 600; color: #0f172a;">Taskflow</span>
+    </div>
+
+    <nav style="display: flex; flex-direction: column; flex: 1; padding: 12px; gap: 2px; overflow: hidden;">
+      <div style="border-radius: 6px; padding: 8px 12px; font-size: 14px; font-weight: 500; color: #475569;">Mijn taken</div>
+      <div style="border-radius: 6px; padding: 8px 12px; font-size: 14px; font-weight: 500; color: #475569;">Werklijst</div>
+
+      <div style="padding: 14px 12px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #94a3b8;">Werkstromen</div>
+
+      <sc-for list="{{streams}}" as="s" hint-placeholder-count="5">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 6px; padding: 8px 12px; font-size: 14px; font-weight: 500; background: {{s.bg}}; color: {{s.fg}};">
+          <span>{{s.label}}</span>
+          <span style="font-size: 12px; font-weight: 600; color: {{s.countFg}};">{{s.count}}</span>
+        </div>
+      </sc-for>
+
+      <div style="padding: 14px 12px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #94a3b8;">Opvolging</div>
+      <div style="border-radius: 6px; padding: 8px 12px; font-size: 14px; font-weight: 500; color: #475569;">Escalatie-queue</div>
+      <div style="border-radius: 6px; padding: 8px 12px; font-size: 14px; font-weight: 500; color: #475569;">Kalender</div>
+      <div style="border-radius: 6px; padding: 8px 12px; font-size: 14px; font-weight: 500; color: #475569;">Klanten</div>
+    </nav>
+
+    <div style="border-top: 1px solid #e2e8f0; padding: 12px;">
+      <p style="margin: 0; font-size: 14px; font-weight: 500; color: #1e293b;">Wibren Patteaux</p>
+      <p style="margin: 2px 0 0; font-size: 12px; color: #94a3b8;">Kantoorbeheerder · mag goedkeuren</p>
+    </div>
+  </aside>
+
+  <!-- Hoofdgedeelte -->
+  <main style="display: flex; flex-direction: column; min-width: 0; flex: 1; overflow: hidden;">
+
+    <div style="padding: 24px 28px 0;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;">
+        <div>
+          <h1 style="margin: 0; font-size: 20px; font-weight: 600; color: #0f172a;">Btw</h1>
+          <p style="margin: 4px 0 0; font-size: 14px; color: #64748b;">Aangiftes en klantenlisting</p>
+        </div>
+      </div>
+
+      <!-- Deadlinevenster -->
+      <div style="display: flex; align-items: center; gap: 16px; margin-top: 20px; border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff; padding: 12px 16px;">
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #94a3b8;">Deadlinevenster</span>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <button type="button" style="display: flex; height: 28px; width: 28px; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; cursor: pointer; color: #475569;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div style="min-width: 132px; text-align: center; font-size: 15px; font-weight: 600; color: #0f172a;">april 2026</div>
+          <button type="button" style="display: flex; height: 28px; width: 28px; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; cursor: pointer; color: #475569;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <span style="border-radius: 6px; background: #f1f5f9; padding: 5px 10px; font-size: 13px; font-weight: 500; color: #475569;">Deze week</span>
+          <span style="border-radius: 6px; background: #eef2ff; padding: 5px 10px; font-size: 13px; font-weight: 600; color: #3730a3;">Deze maand</span>
+          <span style="border-radius: 6px; background: #f1f5f9; padding: 5px 10px; font-size: 13px; font-weight: 500; color: #475569;">Kwartaal</span>
+        </div>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 13px; color: #64748b;">
+          <span><strong style="color: #0f172a;">37</strong> taken</span>
+          <span style="color: #cbd5e1;">|</span>
+          <span><strong style="color: #b91c1c;">2</strong> te laat</span>
+          <span style="color: #cbd5e1;">|</span>
+          <span><strong style="color: #7e22ce;">5</strong> wacht op klant</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Takenblokken -->
+    <div style="flex: 1; overflow: hidden; padding: 20px 28px 28px;">
+      <div style="display: flex; flex-direction: column; gap: 18px;">
+
+        <sc-for list="{{blocks}}" as="b" hint-placeholder-count="2">
+          <div style="border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff; overflow: hidden;">
+
+            <!-- Blokkop -->
+            <div style="display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; padding: 12px 16px;">
+              <input type="checkbox" checked="{{b.allChecked}}" onChange="{{b.toggleAll}}" />
+              <div style="display: flex; align-items: baseline; gap: 10px;">
+                <span style="font-size: 15px; font-weight: 600; color: #0f172a;">{{b.datum}}</span>
+                <span style="font-size: 14px; color: #475569;">{{b.type}}</span>
+                <span style="font-size: 13px; color: #94a3b8;">periode {{b.periode}}</span>
+              </div>
+              <sc-if value="{{b.verschoven}}" hint-placeholder-val="{{ true }}">
+                <span style="display: inline-flex; align-items: center; gap: 4px; border-radius: 9999px; border: 1px solid #cbd5e1; background: #f1f5f9; padding: 2px 8px; font-size: 11px; font-weight: 500; color: #475569;">↷ verschoven van za 25/04</span>
+              </sc-if>
+              <span style="margin-left: auto; font-size: 13px; font-weight: 500; color: #64748b;">{{b.aantal}} taken</span>
+            </div>
+
+            <!-- Bulkbalk -->
+            <sc-if value="{{b.hasSelection}}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e2e8f0; background: #eef2ff; padding: 10px 16px; font-size: 14px;">
+                <span style="font-weight: 500; color: #3730a3;">{{b.selectedCount}} geselecteerd</span>
+                <button type="button" style="border-radius: 6px; border: 1px solid #4f46e5; background: #4f46e5; padding: 5px 12px; font-size: 13px; font-weight: 500; color: #ffffff; cursor: pointer;">Markeer als ingediend</button>
+                <button type="button" style="border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; padding: 5px 12px; font-size: 13px; font-weight: 500; color: #334155; cursor: pointer;">Zet op wacht op klant</button>
+                <button type="button" style="border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; padding: 5px 12px; font-size: 13px; font-weight: 500; color: #334155; cursor: pointer;">Herverdeel…</button>
+              </div>
+            </sc-if>
+
+            <!-- Kolomkoppen -->
+            <div style="display: grid; grid-template-columns: 40px minmax(0, 1fr) 150px 140px 170px; gap: 0; border-bottom: 1px solid #e2e8f0; background: #f8fafc; padding: 8px 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b;">
+              <span></span>
+              <span>Klant</span>
+              <span>Deadline</span>
+              <span>Status</span>
+              <span>Verantwoordelijke</span>
+            </div>
+
+            <!-- Rijen -->
+            <sc-for list="{{b.rows}}" as="r" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: 40px minmax(0, 1fr) 150px 140px 170px; gap: 0; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 10px 16px; background: {{r.rowBg}};">
+                <span><input type="checkbox" checked="{{r.checked}}" onChange="{{r.toggle}}" /></span>
+                <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; color: #1e293b;">{{r.klant}}</span>
+                <span style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #334155;">
+                  {{r.deadline}}
+                  <sc-if value="{{r.urgent}}" hint-placeholder-val="{{ true }}">
+                    <span style="display: inline-flex; align-items: center; border-radius: 9999px; border: 1px solid {{r.urgentBorder}}; background: {{r.urgentBg}}; padding: 1px 8px; font-size: 11px; font-weight: 500; color: {{r.urgentFg}};">{{r.urgentLabel}}</span>
+                  </sc-if>
+                </span>
+                <span>
+                  <span style="display: inline-flex; align-items: center; white-space: nowrap; border-radius: 9999px; border: 1px solid {{r.statusBorder}}; background: {{r.statusBg}}; padding: 2px 10px; font-size: 12px; font-weight: 500; color: {{r.statusFg}};">{{r.status}}</span>
+                </span>
+                <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: #475569;">{{r.wie}}</span>
+              </div>
+            </sc-for>
+
+            <div style="padding: 10px 16px; font-size: 13px; font-weight: 500; color: #4338ca; cursor: pointer;">{{b.meer}}</div>
+          </div>
+        </sc-for>
+
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { picked: {} };
+  }
+
+  data() {
+    return [
+      {
+        key: 'a',
+        datum: 'maandag 20 april',
+        type: 'Btw-aangifte',
+        periode: '2026-03',
+        verschoven: false,
+        aantal: 14,
+        meer: '+ 9 meer tonen',
+        rows: [
+          { klant: 'Bakkerij Verhaegen BV', deadline: '20/04/2026', status: 'Open', wie: 'Wibren Patteaux', urgentLabel: 'Deze week' },
+          { klant: 'Garage De Smet NV', deadline: '20/04/2026', status: 'In uitvoering', wie: 'Wibren Patteaux', urgentLabel: 'Deze week' },
+          { klant: 'Okegem Interieur BV', deadline: '20/04/2026', status: 'Wacht op klant', wie: 'Wibren Patteaux', urgentLabel: 'Deze week' },
+          { klant: 'Vanderlinden Transport BV', deadline: '20/04/2026', status: 'Open', wie: 'Wibren Patteaux', urgentLabel: 'Deze week' },
+          { klant: 'Praktijk Dr. Maes', deadline: '20/04/2026', status: 'Ingediend/afgerond', wie: 'Wibren Patteaux', urgentLabel: '' },
+        ],
+      },
+      {
+        key: 'b',
+        datum: 'maandag 27 april',
+        type: 'Btw-aangifte',
+        periode: '2026-Q1',
+        verschoven: true,
+        aantal: 23,
+        meer: '+ 18 meer tonen',
+        rows: [
+          { klant: 'Aalst Bouwwerken BV', deadline: '27/04/2026', status: 'Open', wie: 'Wibren Patteaux', urgentLabel: 'Binnenkort' },
+          { klant: 'Coiffure Shelly', deadline: '27/04/2026', status: 'Open', wie: 'Wibren Patteaux', urgentLabel: 'Binnenkort' },
+          { klant: 'Denderland Logistiek NV', deadline: '27/04/2026', status: 'Wacht op klant', wie: 'Wibren Patteaux', urgentLabel: 'Binnenkort' },
+          { klant: 'Hoveniersbedrijf Roelandt', deadline: '27/04/2026', status: 'Open', wie: 'Wibren Patteaux', urgentLabel: 'Binnenkort' },
+          { klant: 'Ninove Sport BV', deadline: '27/04/2026', status: 'In uitvoering', wie: 'Wibren Patteaux', urgentLabel: 'Binnenkort' },
+        ],
+      },
+    ];
+  }
+
+  statusStyle(s) {
+    const map = {
+      'Open': ['#f1f5f9', '#cbd5e1', '#334155'],
+      'In uitvoering': ['#dbeafe', '#93c5fd', '#1d4ed8'],
+      'Wacht op klant': ['#f3e8ff', '#d8b4fe', '#7e22ce'],
+      'Wacht op goedkeuring': ['#fef3c7', '#fcd34d', '#92400e'],
+      'Ingediend/afgerond': ['#d1fae5', '#6ee7b7', '#047857'],
+    };
+    return map[s] || map['Open'];
+  }
+
+  urgentStyle(u) {
+    const map = {
+      'Te laat': ['#fee2e2', '#fca5a5', '#b91c1c'],
+      'Vandaag': ['#fef3c7', '#fcd34d', '#92400e'],
+      'Deze week': ['#ffedd5', '#fdba74', '#c2410c'],
+      'Binnenkort': ['#dbeafe', '#93c5fd', '#1d4ed8'],
+    };
+    return map[u] || map['Binnenkort'];
+  }
+
+  renderVals() {
+    const picked = this.state.picked;
+    const blocks = this.data().map((b) => {
+      const rows = b.rows.map((r, i) => {
+        const id = b.key + '-' + i;
+        const checked = !!picked[id];
+        const [sBg, sBorder, sFg] = this.statusStyle(r.status);
+        const [uBg, uBorder, uFg] = this.urgentStyle(r.urgentLabel);
+        return {
+          ...r,
+          checked,
+          rowBg: checked ? '#f5f3ff' : '#ffffff',
+          toggle: () => this.setState({ picked: { ...this.state.picked, [id]: !this.state.picked[id] } }),
+          statusBg: sBg, statusBorder: sBorder, statusFg: sFg,
+          urgent: !!r.urgentLabel,
+          urgentBg: uBg, urgentBorder: uBorder, urgentFg: uFg,
+        };
+      });
+      const selectedCount = rows.filter((r) => r.checked).length;
+      const allChecked = selectedCount === rows.length;
+      return {
+        ...b,
+        rows,
+        selectedCount,
+        hasSelection: selectedCount > 0,
+        allChecked,
+        toggleAll: () => {
+          const next = { ...this.state.picked };
+          b.rows.forEach((_, i) => { next[b.key + '-' + i] = !allChecked; });
+          this.setState({ picked: next });
+        },
+      };
+    });
+
+    const streams = [
+      { label: 'Btw', count: 37, active: true },
+      { label: 'Afsluiting', count: 12, active: false },
+      { label: 'Vennootschapsbelasting', count: 8, active: false },
+      { label: 'Rapportering', count: 21, active: false },
+      { label: 'Ad-hoc', count: 3, active: false },
+    ].map((s) => ({
+      ...s,
+      bg: s.active ? '#eef2ff' : 'transparent',
+      fg: s.active ? '#3730a3' : '#475569',
+      countFg: s.active ? '#4338ca' : '#94a3b8',
+    }));
+
+    return { blocks, streams };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    a { color: #4338ca; } a:hover { color: #3730a3; }
+    * { box-sizing: border-box; }
+    input[type="checkbox"] { width: 14px; height: 14px; accent-color: #4f46e5; margin: 0; }
+  </style>
+</helmet>
+
+<div style="width: 1000px; min-height: 760px; background: #f8fafc; color: #0f172a; padding: 28px;">
+
+  <h1 style="margin: 0; font-size: 20px; font-weight: 600;">Afsluiting</h1>
+  <p style="margin: 4px 0 0; font-size: 14px; color: #64748b;">Jaarafsluiting, algemene vergadering en neerlegging jaarrekening</p>
+
+  <div style="display: flex; align-items: center; gap: 16px; margin-top: 20px; border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff; padding: 12px 16px;">
+    <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #94a3b8;">Deadlinevenster</span>
+    <div style="min-width: 120px; font-size: 15px; font-weight: 600;">juni 2026</div>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 13px; color: #64748b;">
+      <span><strong style="color: #0f172a;">52</strong> taken</span>
+      <span style="color: #cbd5e1;">|</span>
+      <span><strong style="color: #92400e;">7</strong> wacht op goedkeuring</span>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 18px; margin-top: 20px;">
+
+    <!-- Blok dat wél op één datum samenvalt -->
+    <div style="border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff; overflow: hidden;">
+      <div style="display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; padding: 12px 16px;">
+        <input type="checkbox" />
+        <span style="font-size: 15px; font-weight: 600;">dinsdag 30 juni</span>
+        <span style="font-size: 14px; color: #475569;">Algemene vergadering</span>
+        <span style="font-size: 13px; color: #94a3b8;">periode 2026 · boekjaar 31/12</span>
+        <span style="margin-left: auto; font-size: 13px; font-weight: 500; color: #64748b;">41 taken</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 40px minmax(0, 1fr) 150px 190px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; padding: 8px 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b;">
+        <span></span><span>Klant</span><span>Deadline</span><span>Status</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 40px minmax(0, 1fr) 150px 190px; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 10px 16px;">
+        <span><input type="checkbox" /></span>
+        <span style="font-size: 14px; font-weight: 500; color: #1e293b;">Aalst Bouwwerken BV</span>
+        <span style="font-size: 14px; color: #334155;">30/06/2026</span>
+        <span><span style="display: inline-flex; border-radius: 9999px; border: 1px solid #cbd5e1; background: #f1f5f9; padding: 2px 10px; font-size: 12px; font-weight: 500; color: #334155;">Open</span></span>
+      </div>
+      <div style="display: grid; grid-template-columns: 40px minmax(0, 1fr) 150px 190px; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 10px 16px;">
+        <span><input type="checkbox" /></span>
+        <span style="font-size: 14px; font-weight: 500; color: #1e293b;">Denderland Logistiek NV</span>
+        <span style="font-size: 14px; color: #334155;">30/06/2026</span>
+        <span><span style="display: inline-flex; border-radius: 9999px; border: 1px solid #fcd34d; background: #fef3c7; padding: 2px 10px; font-size: 12px; font-weight: 500; color: #92400e;">Wacht op goedkeuring</span></span>
+      </div>
+      <div style="padding: 10px 16px; font-size: 13px; font-weight: 500; color: #4338ca;">+ 39 meer tonen</div>
+    </div>
+
+    <!-- Blok dat NIET op één datum samenvalt -->
+    <div style="border-radius: 8px; border: 1px solid #e2e8f0; background: #ffffff; overflow: hidden;">
+      <div style="display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; padding: 12px 16px;">
+        <input type="checkbox" />
+        <span style="font-size: 15px; font-weight: 600;">Neerlegging jaarrekening</span>
+        <span style="font-size: 13px; color: #94a3b8;">periode 2025 · gespreid over de maand</span>
+        <span style="display: inline-flex; align-items: center; border-radius: 9999px; border: 1px solid #fdba74; background: #ffedd5; padding: 2px 8px; font-size: 11px; font-weight: 500; color: #c2410c;">datum volgt de AV per klant</span>
+        <span style="margin-left: auto; font-size: 13px; font-weight: 500; color: #64748b;">11 taken</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 40px minmax(0, 1fr) 150px 190px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; padding: 8px 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b;">
+        <span></span><span>Klant</span><span>Deadline</span><span>Status</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 40px minmax(0, 1fr) 150px 190px; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 10px 16px;">
+        <span><input type="checkbox" /></span>
+        <span style="font-size: 14px; font-weight: 500; color: #1e293b;">Garage De Smet NV</span>
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #334155;">
+          08/06/2026
+          <span style="display: inline-flex; border-radius: 9999px; border: 1px solid #fdba74; background: #ffedd5; padding: 1px 8px; font-size: 11px; font-weight: 500; color: #c2410c;">Deze week</span>
+        </span>
+        <span><span style="display: inline-flex; border-radius: 9999px; border: 1px solid #93c5fd; background: #dbeafe; padding: 2px 10px; font-size: 12px; font-weight: 500; color: #1d4ed8;">In uitvoering</span></span>
+      </div>
+      <div style="display: grid; grid-template-columns: 40px minmax(0, 1fr) 150px 190px; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 10px 16px;">
+        <span><input type="checkbox" /></span>
+        <span style="font-size: 14px; font-weight: 500; color: #1e293b;">Okegem Interieur BV</span>
+        <span style="font-size: 14px; color: #334155;">17/06/2026</span>
+        <span><span style="display: inline-flex; border-radius: 9999px; border: 1px solid #cbd5e1; background: #f1f5f9; padding: 2px 10px; font-size: 12px; font-weight: 500; color: #334155;">Open</span></span>
+      </div>
+      <div style="display: grid; grid-template-columns: 40px minmax(0, 1fr) 150px 190px; align-items: center; border-bottom: 1px solid #f1f5f9; padding: 10px 16px;">
+        <span><input type="checkbox" /></span>
+        <span style="font-size: 14px; font-weight: 500; color: #1e293b;">Vanderlinden Transport BV</span>
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: #334155;">
+          25/06/2026
+          <span style="display: inline-flex; border-radius: 9999px; border: 1px solid #cbd5e1; background: #f1f5f9; padding: 1px 8px; font-size: 11px; font-weight: 500; color: #475569;">voorlopig</span>
+        </span>
+        <span><span style="display: inline-flex; border-radius: 9999px; border: 1px solid #cbd5e1; background: #f1f5f9; padding: 2px 10px; font-size: 12px; font-weight: 500; color: #334155;">Open</span></span>
+      </div>
+      <div style="padding: 10px 16px; font-size: 13px; font-weight: 500; color: #4338ca;">+ 8 meer tonen</div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

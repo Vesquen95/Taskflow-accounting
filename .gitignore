@@ -7,3 +7,8 @@ dist/
 *.local
 .DS_Store
 *.tsbuildinfo
+
+# Uitvoer van de design-canvas: ~2,4 MB gebundelde editorcode die telkens
+# opnieuw uit de bronbestanden in design/ gegenereerd wordt.
+design/*.html
+!design/*.dc.html
