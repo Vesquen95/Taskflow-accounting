@@ -2869,4 +2869,85 @@ begin
   raise notice 'PASS 23.4: toewijzen aan wie het dossier al ziet blijft vrij';
 end $$;
 
+-- ============================================================
+-- Sectie 24 (0016): grenzen op het generatievenster.
+--
+-- Vóór 0016 waren p_horizon_months en p_backfill_months onbegrensd. Geen
+-- aanvalsroute (alleen een kantoorbeheerder start de generatie), maar wel een
+-- typfout met onomkeerbare gevolgen: geen enkele domeintabel heeft een
+-- DELETE-policy, dus gegenereerde taken zijn alleen te annuleren. Eén klant
+-- met maandelijkse btw leverde bij horizon 120 honderdzeventien taken extra
+-- op; bij ~100 dossiers zijn dat duizenden onverwijderbare rijen.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_uid uuid := gen_random_uuid();
+  v_n int; v_ok boolean;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's24@test.local', now());
+  insert into public.firms (naam) values ('Sectie 24 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S24 Beheerder', 's24@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  insert into public.clients (
+    firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+    btw_regime, btw_aangifte_frequentie, actief
+  ) values (v_firm, 'S24 Klant', 12, 31, 'periodieke_aangever', 'maand', true);
+
+  -- 24.1 Op de grens werkt het gewoon.
+  v_n := public.generate_task_instances(36, 24);
+  if v_n <= 0 then
+    raise exception 'FAIL 24.1: generatie op de grens (36/24) leverde niets op (%)', v_n;
+  end if;
+  raise notice 'PASS 24.1: 36 vooruit / 24 terug werkt (% taken)', v_n;
+
+  -- 24.2 Eén maand te ver vooruit wordt geweigerd.
+  v_ok := false;
+  begin
+    perform public.generate_task_instances(37, 24);
+  exception when check_violation then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 24.2: horizon 37 werd aanvaard';
+  end if;
+
+  -- 24.3 Eén maand te ver terug ook.
+  v_ok := false;
+  begin
+    perform public.generate_task_instances(36, 25);
+  exception when check_violation then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 24.3: inhaalvenster 25 werd aanvaard';
+  end if;
+
+  -- 24.4 En de typfout waar het om begonnen was.
+  v_ok := false;
+  begin
+    perform public.generate_task_instances(120, 6);
+  exception when check_violation then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 24.4: horizon 120 werd aanvaard';
+  end if;
+  raise notice 'PASS 24.2-24.4: 37 vooruit, 25 terug en 120 worden geweigerd';
+
+  -- 24.5 Negatieve waarden leverden voorheen stil nul taken op; nu weigeren
+  -- ze, zodat verkeerde invoer altijd zichtbaar is.
+  v_ok := false;
+  begin
+    perform public.generate_task_instances(-12, -6);
+  exception when check_violation then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 24.5: een negatief venster werd stil aanvaard';
+  end if;
+  raise notice 'PASS 24.5: een negatief venster wordt geweigerd i.p.v. stil genegeerd';
+
+  -- 24.6 De standaardwaarden van de app blijven binnen de grenzen.
+  perform public.generate_task_instances(3, 6);
+  raise notice 'PASS 24.6: de standaardaanroep van de app (3/6) blijft toegelaten';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
