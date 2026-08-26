@@ -2990,6 +2990,13 @@ begin
     values (v_dec, v_ot_va, true, date '2000-01-01', v_admin),
            (v_maa, v_ot_va, true, date '2000-01-01', v_admin);
 
+  -- De btw-verplichtingen komen van de sync-trigger op clients en krijgen
+  -- geldig_vanaf = vandaag. Sinds 0018 snijdt dat alles uit het verleden weg,
+  -- terwijl deze sectie juist een afgelopen kwartaal nodig heeft. Dit zijn
+  -- dossiers die het kantoor al jaren doet, dus zetten we dat ook zo.
+  update public.client_obligations set geldig_vanaf = date '2000-01-01'
+  where client_id in (v_kw, v_mnd);
+
   perform public.generate_task_instances(36, 24);
 
   -- 25.1 Kwartaalaangifte: de 25ste van de maand na het kwartaal.
@@ -3082,6 +3089,107 @@ begin
     raise exception 'FAIL 25.5: de wettelijke datum van 2026-Q1 werd meeverschoven (%)', v_due;
   end if;
   raise notice 'PASS 25.5: de werkdagverschuiving geldt ook voor de kwartaalaangifte';
+end $$;
+
+-- ============================================================
+-- Sectie 26 (0018): geen taken met een deadline in het verleden.
+--
+-- Gemeten voor 0018, op een klant die vandaag wordt aangemaakt met de
+-- standaardaanroep van de app (3 vooruit, 6 terug): 10 taken, waarvan 8 met
+-- een deadline die al gepasseerd was. Bij ~100 dossiers honderden regels ruis.
+-- De ondergrens is nu per verplichting greatest(venster, geldig_vanaf).
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_uid uuid := gen_random_uuid();
+  v_nieuw uuid; v_bestaand uuid; v_grens uuid;
+  v_totaal int; v_verleden int; v_ot_btw uuid; v_grensdatum date;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's26@test.local', now());
+  insert into public.firms (naam) values ('Sectie 26 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S26 Beheerder', 's26@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+
+  -- 26.1 Een klant die vandaag wordt aangemaakt krijgt uitsluitend toekomst.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S26 Nieuw vandaag', 12, 31, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_nieuw;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+  select v_nieuw, id, true, current_date, v_admin
+  from public.obligation_types where code in ('va_venb', 'jaarafsluiting', 'algemene_vergadering');
+
+  perform public.generate_task_instances(3, 6);
+
+  select count(*), count(*) filter (where due_date < current_date)
+    into v_totaal, v_verleden
+  from public.task_instances where client_id = v_nieuw;
+
+  if v_verleden <> 0 then
+    raise exception 'FAIL 26.1: nieuwe klant kreeg % taken met een deadline in het verleden (van de % in totaal)',
+      v_verleden, v_totaal;
+  end if;
+  if v_totaal = 0 then
+    raise exception 'FAIL 26.1: nieuwe klant kreeg helemaal geen taken -- de ondergrens snijdt te veel weg';
+  end if;
+  raise notice 'PASS 26.1: nieuwe klant krijgt % taken, geen enkele in het verleden', v_totaal;
+
+  -- 26.2 Een dossier dat het kantoor al langer doet houdt zijn terugkijkvenster:
+  -- geldig_vanaf ligt daar ver genoeg terug, dus het globale venster telt weer.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S26 Al twee jaar klant', 12, 31, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_bestaand;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+  select v_bestaand, id, true, (current_date - interval '2 years')::date, v_admin
+  from public.obligation_types where code in ('va_venb', 'jaarafsluiting', 'algemene_vergadering');
+
+  perform public.generate_task_instances(3, 6);
+
+  select count(*) filter (where due_date < current_date) into v_verleden
+  from public.task_instances where client_id = v_bestaand;
+  if v_verleden = 0 then
+    raise exception 'FAIL 26.2: een bestaand dossier kreeg geen enkele taak uit het terugkijkvenster meer';
+  end if;
+  raise notice 'PASS 26.2: een bestaand dossier houdt zijn terugkijkvenster (% taken)', v_verleden;
+
+  -- 26.3 De grens ligt op de DEADLINE, niet op de periode. Neem je een dossier
+  -- over op dag X, dan hoort een periode die vóór X afliep er nog bij zolang de
+  -- indieningsdatum ná X valt -- die aangifte moet het kantoor nog doen.
+  --
+  -- De grensdatum wordt hier op de 6de van deze maand gelegd. Voor een
+  -- maandaangever betekent dat: de vorige maand is afgelopen (periode-einde
+  -- vóór de 6de) terwijl haar deadline pas op de 20ste van deze maand valt,
+  -- dus ná de grens. Onafhankelijk van welke dag het vandaag is.
+  select id into v_ot_btw from public.obligation_types where code = 'btw_aangifte';
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S26 Grensgeval', 12, 31, 'periodieke_aangever', 'maand', true)
+    returning id into v_grens;
+
+  v_grensdatum := date_trunc('month', current_date)::date + 5;
+  update public.client_obligations set geldig_vanaf = v_grensdatum where client_id = v_grens;
+
+  perform public.generate_task_instances(3, 6);
+
+  select count(*) into v_totaal
+  from public.task_instances ti
+  where ti.client_id = v_grens and ti.obligation_type_id = v_ot_btw
+    and ti.periode_eind < v_grensdatum
+    and ti.due_date >= v_grensdatum;
+  if v_totaal = 0 then
+    raise exception 'FAIL 26.3: een periode die vóór de grens afliep maar pas erna moet ingediend worden, werd weggesneden';
+  end if;
+
+  select count(*) into v_verleden
+  from public.task_instances ti
+  where ti.client_id = v_grens and ti.due_date < v_grensdatum;
+  if v_verleden <> 0 then
+    raise exception 'FAIL 26.3: % taken met een deadline vóór de grensdatum werden toch aangemaakt', v_verleden;
+  end if;
+  raise notice 'PASS 26.3: de grens ligt op de deadline, niet op de periode (% taak/taken behouden)', v_totaal;
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

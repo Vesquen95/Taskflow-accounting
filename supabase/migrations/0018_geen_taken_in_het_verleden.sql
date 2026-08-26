@@ -1,36 +1,38 @@
--- Taskflow v1 — twee correcties aan de deadlineberekening, bevestigd door het
--- kantoor.
+-- Taskflow v1 -- geen taken meer met een deadline in het verleden.
 --
--- 1. BTW-kwartaalaangifte lag vijf dagen te vroeg. Beide takken van de
---    btw-generatie rekenden `+ 19` (de 20ste van de maand na de periode). Dat
---    klopt voor de maandaangifte, maar de kwartaalaangifte valt op de 25ste.
---    Gevolg: elke kwartaaldeadline in het systeem stond op de 20ste, dus het
---    kantoor joeg klanten vijf dagen te vroeg op en de werklastverdeling
---    klopte niet.
+-- Aanleiding: het kantoor. Bij het aanmaken van een nieuwe klant liepen de
+-- lijsten meteen vol met werk dat al gepasseerd was. Gemeten op een klant die
+-- vandaag wordt aangemaakt, met de standaardaanroep van de app (3 vooruit,
+-- 6 terug):
 --
--- 2. Voorafbetalingen worden nu vanaf het boekjaarEINDE gerekend. De oude
---    formule ankerde op het boekjaarbegin (afgeleid als einde - 1 jaar + 1
---    dag) en veronderstelde dus altijd een boekjaar van exact twaalf maanden.
---    Bij een eerste, laatste of verlengd boekjaar liep het schema daardoor
---    scheep. Voor een gewoon boekjaar verandert er niets: 31/12 geeft nog
---    steeds 10/4, 10/7, 10/10 en 20/12; bij 31/3, 30/6 of 30/9 schuift het
---    hele schema mee.
+--   Taken aangemaakt voor deze nieuwe klant: 10
+--   Daarvan met een deadline in het VERLEDEN:  8
 --
--- Uitdrukkelijke keuze van het kantoor, hier vastgelegd zodat een latere
--- lezer ze niet per ongeluk terugdraait:
---   * De verschuiving naar de eerstvolgende werkdag blijft voor ALLE
---     btw-aangiften gelden, maand zowel als kwartaal. De maand/kwartaal-
---     splitsing en de overgangsregels uit de hervorming van de btw-ketting
---     worden bewust NIET gemodelleerd ("hou geen rekening met speciale
---     maatregelen"). Eenmalige verlengingen horen in legal_calendar als
---     override, niet in deze formule.
---   * Er is geen vijfde voorafbetaling. VA1-VA4 is volledig.
---   * De btw-klantenlisting geldt ook voor de vrijgestelde kleine onderneming
---     (art. 56bis), die haar omzet via de listing moet doorgeven. De
---     bestaande regel btw_regime <> 'geen' is dus correct en blijft.
+--     31/03/2026  Jaarafsluiting              2025
+--     31/03/2026  BTW-klantenlisting          2025
+--     10/04/2026  Voorafbetaling              VA1-2026
+--     27/04/2026  BTW-aangifte                2026-Q1
+--     30/06/2026  Algemene vergadering        2025
+--     10/07/2026  Voorafbetaling              VA2-2026
+--     27/07/2026  BTW-aangifte                2026-Q2
+--     30/07/2026  Neerlegging jaarrekening    2025
 --
--- Additief: 0003-0016 zijn al toegepast en worden NIET gewijzigd. De functie
--- hieronder is de versie uit 0016, ongewijzigd op de twee blokken hierboven na.
+-- Bij ~100 dossiers zijn dat honderden regels ruis waar het kantoor doorheen
+-- moet om bij het echte werk te komen.
+--
+-- Oorzaak: de motor begrensde elke deadline met een GLOBAAL venster
+-- (vandaag - backfill), identiek voor een dossier van tien jaar oud en een van
+-- vanmorgen. Het veld dat dit hoort te regelen -- client_obligations.geldig_vanaf
+-- -- bestond al, maar werd uitsluitend gebruikt om te bepalen OF een
+-- verplichting meetelt, nooit VANAF WANNEER.
+--
+-- Fix: de ondergrens wordt per verplichting greatest(venster, geldig_vanaf).
+-- Een klant die je vandaag aanmaakt krijgt dus alleen toekomst. Neem je een
+-- dossier over inclusief lopend werk, dan zet je geldig_vanaf bewust eerder en
+-- krijg je dat werk wel.
+--
+-- Additief: 0003-0017 zijn al toegepast en worden NIET gewijzigd. De functie
+-- hieronder is de versie uit 0017, ongewijzigd op de drie punten hierboven na.
 
 CREATE OR REPLACE FUNCTION public.generate_task_instances(p_horizon_months integer DEFAULT 3, p_backfill_months integer DEFAULT 6)
  RETURNS integer
@@ -49,6 +51,7 @@ declare
 
   r_co record;
   v_default_employee uuid;
+  v_ondergrens date;
 
   v_ot_neerlegging uuid;
 
@@ -95,7 +98,7 @@ begin
   for r_co in
     select
       co.id as client_obligation_id, co.client_id, co.parameters,
-      co.standaard_toegewezen_medewerker_id,
+      co.standaard_toegewezen_medewerker_id, co.geldig_vanaf,
       c.firm_id, c.actief as client_actief,
       c.btw_regime, c.btw_aangifte_frequentie,
       c.boekjaar_einde_maand, c.boekjaar_einde_dag,
@@ -110,6 +113,10 @@ begin
       and co.geldig_vanaf <= current_date
       and (co.geldig_tot is null or co.geldig_tot >= current_date)
   loop
+    -- De ondergrens is de datum waarop deze verplichting begon te lopen, niet
+    -- het globale terugkijkvenster.
+    v_ondergrens := greatest(v_window_start, r_co.geldig_vanaf);
+
     select coalesce(
       r_co.standaard_toegewezen_medewerker_id,
       r_co.standaard_verantwoordelijke_id,
@@ -136,7 +143,7 @@ begin
           loop
             v_period_eind := (v_period_start + interval '1 month' - interval '1 day')::date;
             v_due_raw := (date_trunc('month', v_period_eind) + interval '1 month')::date + 19;
-            continue when v_due_raw < v_window_start or v_due_raw > v_window_end;
+            continue when v_due_raw < v_ondergrens or v_due_raw > v_window_end;
             v_label := to_char(v_period_start, 'YYYY-MM');
             v_new_id := public.upsert_generated_task(
               r_co.client_id, r_co.obligation_type_id, r_co.client_obligation_id,
@@ -150,7 +157,7 @@ begin
             v_period_eind := (v_period_start + interval '3 months' - interval '1 day')::date;
             -- Kwartaalaangifte: de 25ste van de maand na het kwartaal.
             v_due_raw := (date_trunc('month', v_period_eind) + interval '1 month')::date + 24;
-            continue when v_due_raw < v_window_start or v_due_raw > v_window_end;
+            continue when v_due_raw < v_ondergrens or v_due_raw > v_window_end;
             v_label := to_char(v_period_start, 'YYYY') || '-Q' || to_char(v_period_start, 'Q');
             v_new_id := public.upsert_generated_task(
               r_co.client_id, r_co.obligation_type_id, r_co.client_obligation_id,
@@ -171,7 +178,7 @@ begin
           v_month_offset := case v_i when 1 then -8 when 2 then -5 when 3 then -2 else 0 end;
           v_day := case v_i when 4 then 20 else 10 end;
           v_due_raw := (date_trunc('month', v_be) + (v_month_offset || ' months')::interval)::date + (v_day - 1);
-          continue when v_due_raw < v_window_start or v_due_raw > v_window_end;
+          continue when v_due_raw < v_ondergrens or v_due_raw > v_window_end;
           v_label := 'VA' || v_i || '-' || to_char(v_be, 'YYYY');
           v_new_id := public.upsert_generated_task(
             r_co.client_id, r_co.obligation_type_id, r_co.client_obligation_id,
@@ -188,7 +195,7 @@ begin
         v_be := public.fiscal_year_end(r_co.boekjaar_einde_maand, r_co.boekjaar_einde_dag, v_year);
         v_bstart := (v_be - interval '1 year' + interval '1 day')::date;
         v_due_raw := (v_be + (v_sla_maanden || ' months')::interval)::date;
-        continue when v_due_raw < v_window_start or v_due_raw > v_window_end;
+        continue when v_due_raw < v_ondergrens or v_due_raw > v_window_end;
         v_label := to_char(v_be, 'YYYY');
         v_new_id := public.upsert_generated_task(
           r_co.client_id, r_co.obligation_type_id, r_co.client_obligation_id,
@@ -203,7 +210,7 @@ begin
         v_be := public.fiscal_year_end(r_co.boekjaar_einde_maand, r_co.boekjaar_einde_dag, v_year);
         v_bstart := (v_be - interval '1 year' + interval '1 day')::date;
         v_due_raw := (v_be + interval '6 months')::date;
-        continue when v_due_raw < v_window_start or v_due_raw > v_window_end;
+        continue when v_due_raw < v_ondergrens or v_due_raw > v_window_end;
         v_label := to_char(v_be, 'YYYY');
 
         v_av_id := public.upsert_generated_task(
@@ -247,7 +254,7 @@ begin
         continue when v_lc_date is null;
 
         v_due_raw := v_lc_date;
-        continue when v_due_raw < v_window_start or v_due_raw > v_window_end;
+        continue when v_due_raw < v_ondergrens or v_due_raw > v_window_end;
         v_be := public.fiscal_year_end(r_co.boekjaar_einde_maand, r_co.boekjaar_einde_dag, v_year);
         v_bstart := (v_be - interval '1 year' + interval '1 day')::date;
         v_label := to_char(v_be, 'YYYY');
@@ -266,7 +273,7 @@ begin
         loop
           v_period_eind := (v_period_start + interval '1 month' - interval '1 day')::date;
           v_due_raw := v_period_eind + v_termijn_dagen;
-          continue when v_due_raw < v_window_start or v_due_raw > v_window_end;
+          continue when v_due_raw < v_ondergrens or v_due_raw > v_window_end;
           v_label := to_char(v_period_start, 'YYYY-MM');
           v_new_id := public.upsert_generated_task(
             r_co.client_id, r_co.obligation_type_id, r_co.client_obligation_id,
@@ -280,7 +287,7 @@ begin
           v_period_start := make_date(v_year, 1, 1);
           v_period_eind := make_date(v_year, 12, 31);
           v_due_raw := v_period_eind + v_termijn_dagen;
-          continue when v_due_raw < v_window_start or v_due_raw > v_window_end;
+          continue when v_due_raw < v_ondergrens or v_due_raw > v_window_end;
           v_label := v_year::text;
           v_new_id := public.upsert_generated_task(
             r_co.client_id, r_co.obligation_type_id, r_co.client_obligation_id,
@@ -293,7 +300,7 @@ begin
         loop
           v_period_eind := (v_period_start + interval '3 months' - interval '1 day')::date;
           v_due_raw := v_period_eind + v_termijn_dagen;
-          continue when v_due_raw < v_window_start or v_due_raw > v_window_end;
+          continue when v_due_raw < v_ondergrens or v_due_raw > v_window_end;
           v_label := to_char(v_period_start, 'YYYY') || '-Q' || to_char(v_period_start, 'Q');
           v_new_id := public.upsert_generated_task(
             r_co.client_id, r_co.obligation_type_id, r_co.client_obligation_id,
@@ -308,7 +315,7 @@ begin
           extract(year from v_gen_from)::int .. extract(year from v_window_end)::int
         loop
           v_due_raw := make_date(v_year + 1, 3, 31);
-          continue when v_due_raw < v_window_start or v_due_raw > v_window_end;
+          continue when v_due_raw < v_ondergrens or v_due_raw > v_window_end;
           v_new_id := public.upsert_generated_task(
             r_co.client_id, r_co.obligation_type_id, r_co.client_obligation_id,
             v_year::text, make_date(v_year, 1, 1), make_date(v_year, 12, 31),
@@ -325,76 +332,3 @@ end;
 $function$;
 
 revoke execute on function public.generate_task_instances(int, int) from public, anon;
-
--- ============================================================
--- Herstel van de reeds gegenereerde rijen.
---
--- De functiewijziging hierboven repareert niets uit het verleden:
--- upsert_generated_task() doet `on conflict do nothing`, dus bestaande taken
--- houden hun oude datum. Elke al gegenereerde kwartaalaangifte staat dus nog
--- op de 20ste.
---
--- Alleen open, gegenereerde kwartaalaangiften worden bijgewerkt. Afgeronde of
--- geannuleerde taken blijven staan zoals ze waren — die zijn geschiedenis. De
--- update loopt door de pijplijnvlag van 0012, want due_date_wettelijk is
--- sinds 0013 bevroren voor alles buiten de kalenderpijplijn.
---
--- Een handmatig afgesproken deadline (due_date_handmatig_op) wordt niet
--- overschreven: daar verschuift alleen het wettelijke ijkpunt en gaat de taak
--- naar review, precies zoals de M-1-regel uit 0013/0014 voorschrijft.
--- ============================================================
-do $$
-declare
-  r record;
-  v_nieuw_wettelijk date;
-  v_actor uuid;
-  v_aantal int := 0;
-begin
-  for r in
-    select ti.id, ti.due_date, ti.due_date_wettelijk, ti.due_date_handmatig_op,
-           ti.review_vereist, ti.periode_eind, ti.toegewezen_medewerker_id
-    from public.task_instances ti
-    join public.obligation_types ot on ot.id = ti.obligation_type_id
-    join public.clients c on c.id = ti.client_id
-    where ot.code = 'btw_aangifte'
-      and c.btw_aangifte_frequentie = 'kwartaal'
-      and ti.bron_type = 'automatisch_gegenereerd'
-      and ti.status = 'open'
-      and ti.due_date_wettelijk
-          = (date_trunc('month', ti.periode_eind) + interval '1 month')::date + 19
-  loop
-    v_nieuw_wettelijk := (date_trunc('month', r.periode_eind) + interval '1 month')::date + 24;
-    v_actor := r.toegewezen_medewerker_id;
-
-    perform set_config('taskflow.pipeline_task_id', r.id::text, true);
-
-    if r.due_date_handmatig_op is not null then
-      update public.task_instances
-      set due_date_wettelijk = v_nieuw_wettelijk,
-          review_vereist = true,
-          review_reden = coalesce(review_reden || ' — ', '') ||
-            'De wettelijke datum van de kwartaalaangifte is gecorrigeerd naar de 25ste; ' ||
-            'deze taak heeft een handmatig afgesproken deadline. Controleer of die afspraak nog klopt.'
-      where id = r.id;
-    else
-      update public.task_instances
-      set due_date_wettelijk = v_nieuw_wettelijk,
-          due_date = public.next_business_day(v_nieuw_wettelijk)
-      where id = r.id;
-    end if;
-
-    insert into public.task_status_log (
-      task_instance_id, event_type, oude_due_date, nieuwe_due_date,
-      actor_employee_id, trigger_bron, notitie
-    ) values (
-      r.id, 'due_date_herberekend', r.due_date, public.next_business_day(v_nieuw_wettelijk),
-      v_actor, 'kalender_herberekening',
-      'Correctie: de btw-kwartaalaangifte valt op de 25ste, niet op de 20ste (migratie 0017).'
-    );
-
-    perform set_config('taskflow.pipeline_task_id', '', true);
-    v_aantal := v_aantal + 1;
-  end loop;
-
-  raise notice 'Migratie 0017: % kwartaalaangiften gecorrigeerd naar de 25ste.', v_aantal;
-end $$;
