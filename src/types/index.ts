@@ -107,6 +107,9 @@ export interface TaskInstance {
   due_date: string
   due_date_wettelijk: string
   due_date_verschoven: boolean
+  /** Gezet zodra iemand de deadline handmatig verzet; de kalenderpijplijn
+   *  overschrijft zo'n afspraak niet meer stil (migratie 0013). */
+  due_date_handmatig_op: string | null
   status: TaskStatus
   toegewezen_medewerker_id: string
   voorloper_taak_id: string | null

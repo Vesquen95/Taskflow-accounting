@@ -3,14 +3,14 @@ import { supabase } from '../lib/supabase'
 import type { Client } from '../types'
 import { reportError } from '../lib/errorMessage'
 
-/** Escape characters that are syntactically significant in a PostgREST
- * filter value (`,` separates or-conditions, `(`/`)` group them, and
- * `%`/`*` are ilike/pattern wildcards) before interpolating user input into
- * a `.or()`/`.ilike()` filter string. Without this, a search term
- * containing e.g. a comma silently corrupts the filter into unrelated
- * conditions instead of matching the literal substring. */
-function escapePostgrestFilterValue(value: string): string {
-  return value.replace(/[,()%*\\]/g, (char) => `\\${char}`)
+/** Quote and escape a user-supplied value for use inside a PostgREST
+ * `.or()` filter string. PostgREST honours backslash-escaping only inside
+ * double quotes, so the value is wrapped in quotes and `"` / `\\` are escaped
+ * within it. Without this, a search term containing a comma silently
+ * corrupts the filter into unrelated conditions instead of matching the
+ * literal substring, and a double quote produces a malformed query. */
+function quotePostgrestFilterValue(value: string): string {
+  return `"${value.replace(/["\\]/g, (char) => `\\${char}`)}"`
 }
 
 export interface ClientFilters {
@@ -47,8 +47,8 @@ export function useClients(initialFilters: ClientFilters = DEFAULT_FILTERS) {
         query = query.eq('standaard_verantwoordelijke_id', filters.verantwoordelijkeId)
       }
       if (filters.zoekterm && filters.zoekterm.trim().length > 0) {
-        const term = escapePostgrestFilterValue(filters.zoekterm.trim())
-        query = query.or(`naam.ilike.%${term}%,ondernemingsnummer.ilike.%${term}%`)
+        const term = quotePostgrestFilterValue(`%${filters.zoekterm.trim()}%`)
+        query = query.or(`naam.ilike.${term},ondernemingsnummer.ilike.${term}`)
       }
 
       const { data, error: err } = await query

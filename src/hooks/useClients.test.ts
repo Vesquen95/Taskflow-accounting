@@ -85,15 +85,14 @@ describe('useClients — default/explicit filters', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     const orCall = capturedState?.calls.find((c) => c.method === 'or')
-    expect(orCall?.args[0]).toBe('naam.ilike.%acme%,ondernemingsnummer.ilike.%acme%')
+    expect(orCall?.args[0]).toBe('naam.ilike."%acme%",ondernemingsnummer.ilike."%acme%"')
   })
 
-  // REGRESSION TEST (fixed): a search term containing a comma (or other
-  // PostgREST-reserved characters: '(', ')', '%', '*') is escaped with a
-  // backslash before being interpolated into the `or=` filter string, so
-  // it can no longer split the filter into unrelated conditions or corrupt
-  // the ILIKE wildcard matching. See useClients.ts#escapePostgrestFilterValue.
-  it('escapes a comma in the search term so it cannot break the or-filter syntax', async () => {
+  // REGRESSION TEST (fixed): a search term containing a comma would split
+  // the `or=` filter into unrelated conditions. The value is now wrapped in
+  // double quotes, which is the form in which PostgREST treats reserved
+  // characters as literal text. See useClients.ts#quotePostgrestFilterValue.
+  it('quotes the search term so a comma cannot break the or-filter syntax', async () => {
     let capturedState: ChainState | undefined
     install({
       clients: (state) => {
@@ -106,10 +105,10 @@ describe('useClients — default/explicit filters', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     const orCall = capturedState?.calls.find((c) => c.method === 'or')
-    expect(orCall?.args[0]).toBe('naam.ilike.%foo\\,bar%,ondernemingsnummer.ilike.%foo\\,bar%')
+    expect(orCall?.args[0]).toBe('naam.ilike."%foo,bar%",ondernemingsnummer.ilike."%foo,bar%"')
   })
 
-  it('escapes parentheses, percent and asterisk characters in the search term', async () => {
+  it('escapes a double quote and a backslash inside the quoted search term', async () => {
     let capturedState: ChainState | undefined
     install({
       clients: (state) => {
@@ -118,12 +117,14 @@ describe('useClients — default/explicit filters', () => {
       },
     })
 
-    const { result } = renderHook(() => useClients({ zoekterm: 'a(b)c%d*e', actief: 'alle' }))
+    const { result } = renderHook(() => useClients({ zoekterm: 'a(b)c"d\\e', actief: 'alle' }))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     const orCall = capturedState?.calls.find((c) => c.method === 'or')
+    // Parentheses need no escaping inside quotes; the quote and the
+    // backslash do, otherwise the quoted string ends early.
     expect(orCall?.args[0]).toBe(
-      'naam.ilike.%a\\(b\\)c\\%d\\*e%,ondernemingsnummer.ilike.%a\\(b\\)c\\%d\\*e%'
+      'naam.ilike."%a(b)c\\"d\\\\e%",ondernemingsnummer.ilike."%a(b)c\\"d\\\\e%"'
     )
   })
 })

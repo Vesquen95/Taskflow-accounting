@@ -527,6 +527,8 @@ begin
   -- 6.5 Zodra die medewerker een taak op de vertrouwelijke klant krijgt,
   -- hoort het dossier wel zichtbaar te worden (docs/PLAN.md 2.11).
   set local role postgres;
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
@@ -535,6 +537,7 @@ begin
     (select id from public.obligation_types where code = 'jaarafsluiting'),
     '2026', current_date, current_date, 'open', v_emp, 'automatisch_gegenereerd', true
   );
+  perform set_config('taskflow.generating', 'off', true);
   set local role authenticated;
 
   select count(*) into v_cnt from public.clients where id = v_vertrouwelijk_id;
@@ -611,6 +614,8 @@ begin
   insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
     values (v_client, v_ot, true, current_date, v_mw) returning id into v_co;
 
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, client_obligation_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
@@ -618,6 +623,7 @@ begin
     v_client, v_ot, v_co, '2029', current_date + 30, current_date + 30,
     'open', v_mw, 'automatisch_gegenereerd', true
   ) returning id into v_task;
+  perform set_config('taskflow.generating', 'off', true);
 
   -- Vanaf hier: de medewerker zonder goedkeuringsrecht, onder RLS.
   perform set_config('taskflow.test_uid', v_mw_uid::text, true);
@@ -750,6 +756,8 @@ begin
   insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, vertrouwelijk, actief)
     values (v_firm, 'F4 Klant', 12, 31, 'geen', false, true) returning id into v_client;
   select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
@@ -757,6 +765,7 @@ begin
     v_client, v_ot, '2030', date '2030-04-15', date '2030-04-15',
     'open', v_emp, 'automatisch_gegenereerd', true
   ) returning id into v_task;
+  perform set_config('taskflow.generating', 'off', true);
   v_oude := date '2030-04-15';
 
   set local role authenticated;
@@ -826,12 +835,15 @@ begin
   insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, vertrouwelijk, actief)
     values (v_firm, 'F5 Klant', 12, 31, 'geen', false, true) returning id into v_client;
   select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
   ) values (
     v_client, v_ot, '2031', v_woensdag, v_woensdag, 'open', v_admin, 'automatisch_gegenereerd', true
   ) returning id into v_task;
+  perform set_config('taskflow.generating', 'off', true);
 
   set local role authenticated;
 
@@ -1081,6 +1093,8 @@ begin
   -- 12.1 Aanmaken met een medewerker van het andere kantoor.
   v_ok := false;
   begin
+    -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+    perform set_config('taskflow.generating', 'on', true);
     insert into public.task_instances (
       client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
       status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
@@ -1088,6 +1102,7 @@ begin
       v_client, v_ot, '2032-x', current_date + 10, current_date + 10,
       'open', v_emp_b, 'automatisch_gegenereerd', true
     );
+    perform set_config('taskflow.generating', 'off', true);
   exception when others then v_ok := true;
   end;
   if not v_ok then
@@ -1096,6 +1111,8 @@ begin
   raise notice 'PASS 12.1: taak aanmaken over de kantoorgrens heen wordt geweigerd';
 
   -- 12.2 Herverdelen naar het andere kantoor.
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
@@ -1103,6 +1120,7 @@ begin
     v_client, v_ot, '2032', current_date + 10, current_date + 10,
     'open', v_emp_a, 'automatisch_gegenereerd', true
   ) returning id into v_task;
+  perform set_config('taskflow.generating', 'off', true);
 
   v_ok := false;
   begin
@@ -1187,17 +1205,23 @@ begin
     values (v_firm, 'F1 Andere vertrouwelijke klant', 12, 31, 'geen', true, v_admin, true) returning id into v_client2;
   select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
 
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
   ) values (v_client, v_ot, '2033-a', current_date + 20, current_date + 20, 'open', v_mw, 'automatisch_gegenereerd', true)
   returning id into v_t1;
+  perform set_config('taskflow.generating', 'off', true);
 
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
   ) values (v_client, v_ot, '2033-b', current_date + 25, current_date + 25, 'open', v_admin, 'automatisch_gegenereerd', true)
   returning id into v_t2;
+  perform set_config('taskflow.generating', 'off', true);
 
   perform set_config('taskflow.test_uid', v_mw_uid::text, true);
   set local role authenticated;
@@ -1229,11 +1253,14 @@ begin
   -- toewijzen op een vertrouwelijke klant die hij niet mag zien.
   v_ok := false;
   begin
+    -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+    perform set_config('taskflow.generating', 'on', true);
     insert into public.task_instances (
       client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
       status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
     ) values (v_client2, v_ot, '2033-c', current_date + 30, current_date + 30, 'open', v_mw, 'automatisch_gegenereerd', true)
     returning id into v_new;
+    perform set_config('taskflow.generating', 'off', true);
   exception when others then v_ok := true; v_state := sqlstate;
   end;
   if not v_ok then
@@ -1357,6 +1384,8 @@ begin
   select id into v_ot_neer from public.obligation_types where code = 'neerlegging_jaarrekening';
 
   -- De échte keten van de collega: AV-taak + gekoppelde neerlegging.
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, periode_start, periode_eind,
     due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
@@ -1364,7 +1393,10 @@ begin
     v_client, v_ot_av, '2044', date '2043-12-31', date '2043-12-31',
     v_av_due, v_av_due, 'open', v_admin, 'automatisch_gegenereerd', true
   ) returning id into v_av_echt;
+  perform set_config('taskflow.generating', 'off', true);
 
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, periode_start, periode_eind,
     due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type,
@@ -1373,12 +1405,15 @@ begin
     v_client, v_ot_neer, '2044', date '2043-12-31', date '2043-12-31',
     v_neer_due, v_neer_due, 'open', v_admin, 'automatisch_gegenereerd', true, true, v_av_echt
   ) returning id into v_neerlegging;
+  perform set_config('taskflow.generating', 'off', true);
 
   -- Vanaf hier: de aanvaller is een gewone medewerker onder RLS.
   perform set_config('taskflow.test_uid', v_mw_uid::text, true);
   set local role authenticated;
 
   -- 15.1 Een eigen AV-taak aanmaken mag gewoon (dat is de opstap).
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
@@ -1386,15 +1421,25 @@ begin
     v_client, v_ot_av, '2044-eigen', current_date + 5, current_date + 5,
     'open', v_mw, 'automatisch_gegenereerd', false
   ) returning id into v_av_aanvaller;
+  perform set_config('taskflow.generating', 'off', true);
   raise notice 'PASS 15.1: eigen AV-taak aanmaken blijft mogelijk (opstap van de aanval)';
 
   -- 15.2 De voorloper van de taak van een collega kapen moet onmogelijk zijn.
-  update public.task_instances set voorloper_taak_id = v_av_aanvaller where id = v_neerlegging;
+  -- Sinds 0013 wordt dat luid geweigerd i.p.v. stil teruggedraaid: een
+  -- stille reset laat de gebruiker denken dat de wijziging bewaard is.
+  v_ok := false;
+  begin
+    update public.task_instances set voorloper_taak_id = v_av_aanvaller where id = v_neerlegging;
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 15.2: het herkoppelen van voorloper_taak_id werd niet geweigerd';
+  end if;
   select voorloper_taak_id into v_voorloper from public.task_instances where id = v_neerlegging;
   if v_voorloper is distinct from v_av_echt then
     raise exception 'FAIL 15.2: voorloper_taak_id was herkoppelbaar (% i.p.v. %)', v_voorloper, v_av_echt;
   end if;
-  raise notice 'PASS 15.2: voorloper_taak_id is bevroren';
+  raise notice 'PASS 15.2: voorloper_taak_id is bevroren (luide weigering)';
 
   -- 15.3 De eigen AV afronden mag de collega-taak niet verplaatsen — niet
   -- rechtstreeks, en ook niet via de goedkeuringsroute.
@@ -1430,6 +1475,8 @@ begin
   perform set_config('taskflow.test_uid', v_mw_uid::text, true);
   v_ok := false;
   begin
+    -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+    perform set_config('taskflow.generating', 'on', true);
     insert into public.task_instances (
       client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
       status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring, voorloper_taak_id
@@ -1437,6 +1484,7 @@ begin
       v_client2, v_ot_neer, '2044-cross', current_date + 40, current_date + 40,
       'open', v_mw, 'automatisch_gegenereerd', true, v_av_echt
     );
+    perform set_config('taskflow.generating', 'off', true);
   exception when others then v_ok := true;
   end;
   if not v_ok then
@@ -1531,6 +1579,8 @@ begin
   select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
   insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
     values (v_client, v_ot, true, current_date, v_mw) returning id into v_co;
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, client_obligation_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
@@ -1538,6 +1588,7 @@ begin
     v_client, v_ot, v_co, '2027', current_date + 60, current_date + 60,
     'open', v_mw, 'automatisch_gegenereerd', true
   ) returning id into v_task;
+  perform set_config('taskflow.generating', 'off', true);
 
   perform set_config('taskflow.test_uid', v_mw_uid::text, true);
   set local role authenticated;
@@ -1554,6 +1605,8 @@ begin
 
   -- 16.2 De vervanger krijgt zijn goedkeuringsplicht uit de catalogus, niet
   -- uit de payload — en start open, niet afgerond.
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, client_obligation_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring,
@@ -1563,6 +1616,7 @@ begin
     'ingediend_afgerond', v_mw, 'automatisch_gegenereerd', false,
     v_mw, now(), now()
   ) returning id into v_vervanger;
+  perform set_config('taskflow.generating', 'off', true);
 
   select vereist_goedkeuring, status, goedgekeurd_door, afgerond_op
     into v_vereist, v_status, v_gd, v_ao
@@ -1759,7 +1813,7 @@ declare
   v_firm uuid; v_uid uuid := gen_random_uuid(); v_emp uuid;
   v_client uuid; v_ot uuid; v_task uuid; v_nieuw_id uuid := gen_random_uuid();
   v_ps date; v_pe date; v_created timestamptz; v_created_voor timestamptz;
-  v_voorlopig boolean; v_title text; v_cnt int; v_notitie text;
+  v_voorlopig boolean; v_title text; v_cnt int; v_notitie text; v_ok boolean;
 begin
   insert into auth.users (id, email, email_confirmed_at) values (v_uid, 'b5@test.local', now());
   insert into public.firms (naam) values ('B5 kantoor') returning id into v_firm;
@@ -1770,6 +1824,8 @@ begin
   insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, vertrouwelijk, actief)
     values (v_firm, 'B5 Klant', 12, 31, 'geen', false, true) returning id into v_client;
   select id into v_ot from public.obligation_types where code = 'aangifte_venb_pb';
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, periode_start, periode_eind,
     due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type,
@@ -1779,16 +1835,46 @@ begin
     date '2036-09-30', date '2036-09-30', 'open', v_emp, 'automatisch_gegenereerd',
     true, true, 'Aangifte VenB 2035', 'Originele omschrijving'
   ) returning id into v_task;
+  perform set_config('taskflow.generating', 'off', true);
   select created_at into v_created_voor from public.task_instances where id = v_task;
 
   set local role authenticated;
 
-  -- 18.1 Eén PATCH met alles erin, precies zoals de review deed.
+  -- 18.0 Eén PATCH met alles erin, precies zoals de review deed. Sinds 0013
+  -- struikelt die op voorlopige_datum: dat is geen stille reset meer maar
+  -- een luide weigering, en de hele PATCH gaat mee onderuit.
+  v_ok := false;
+  begin
+    update public.task_instances
+    set periode_start = date '1999-01-01',
+        periode_eind = date '1999-12-31',
+        created_at = now() - interval '5 years',
+        voorlopige_datum = false,
+        title = 'Gemanipuleerde titel',
+        description = 'Gemanipuleerde omschrijving',
+        review_reden = 'Verzonnen reden'
+    where id = v_task;
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 18.0: een medewerker kon voorlopige_datum uitzetten zonder weigering';
+  end if;
+  select voorlopige_datum, title into v_voorlopig, v_title
+  from public.task_instances where id = v_task;
+  if v_voorlopig is not true then
+    raise exception 'FAIL 18.0: voorlopige_datum werd toch uitgezet';
+  end if;
+  if v_title <> 'Aangifte VenB 2035' then
+    raise exception 'FAIL 18.0: de geweigerde PATCH liet toch een titelwijziging achter (%)', v_title;
+  end if;
+  raise notice 'PASS 18.0: de alles-in-één PATCH wordt luid geweigerd op voorlopige_datum';
+
+  -- 18.1 Dezelfde PATCH zonder voorlopige_datum: de structuurvelden worden
+  -- stil bevroren, de inhoudelijke velden gaan door (en worden gelogd).
   update public.task_instances
   set periode_start = date '1999-01-01',
       periode_eind = date '1999-12-31',
       created_at = now() - interval '5 years',
-      voorlopige_datum = false,
       title = 'Gemanipuleerde titel',
       description = 'Gemanipuleerde omschrijving',
       review_reden = 'Verzonnen reden'
@@ -1807,7 +1893,7 @@ begin
   if v_voorlopig is not true then
     raise exception 'FAIL 18.1: voorlopige_datum was door een medewerker te zetten';
   end if;
-  raise notice 'PASS 18.1: periode_start/periode_eind/created_at/voorlopige_datum zijn bevroren';
+  raise notice 'PASS 18.1: periode_start/periode_eind/created_at zijn bevroren';
 
   -- 18.2 Titel/omschrijving/review_reden mogen wél wijzigen, maar nooit stil.
   if v_title <> 'Gemanipuleerde titel' then
@@ -1868,12 +1954,15 @@ begin
   insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, vertrouwelijk, actief)
     values (v_firm, 'B7 Klant', 12, 31, 'geen', false, true) returning id into v_client;
   select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
+  -- Fixture maakt engine-output na; sinds 0013 mag alleen de engine dat.
+  perform set_config('taskflow.generating', 'on', true);
   insert into public.task_instances (
     client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
   ) values (
     v_client, v_ot, '2033', v_woensdag, v_woensdag, 'open', v_emp, 'automatisch_gegenereerd', true
   ) returning id into v_task;
+  perform set_config('taskflow.generating', 'off', true);
 
   -- 19.2 B-7: jaar moet bij datum horen.
   v_ok := false;
@@ -1920,6 +2009,291 @@ begin
     raise exception 'FAIL 19.4: een niet-relevante feestdag raakte de taak toch (%, %)', v_due, v_cnt;
   end if;
   raise notice 'PASS 19.4: feestdagen buiten bereik laten de deadline ongemoeid';
+end $$;
+
+
+-- ============================================================
+-- Sectie 20 (0013): herkomst van gegenereerde taken (H-1), herstelbaarheid
+-- van de neerleggingsdatum (H-2), bescherming van handmatige
+-- deadline-afspraken (M-1) en zichtbaar maken van toegangverlening op een
+-- vertrouwelijk dossier (M-3).
+-- ============================================================
+
+do $$
+declare
+  v_firm uuid;
+  v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_mw uuid;    v_mw_uid uuid := gen_random_uuid();
+  v_mw2 uuid;   v_mw2_uid uuid := gen_random_uuid();
+  v_client uuid; v_vertr uuid;
+  v_ot_av uuid; v_ot_neer uuid; v_ot_btw uuid;
+  v_av uuid; v_av2 uuid; v_neer uuid; v_taak uuid;
+  v_cnt int; v_err text; v_state text;
+  v_voorlopig boolean; v_wettelijk date; v_due date; v_handmatig timestamptz;
+begin
+  select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
+  select id into v_ot_neer from public.obligation_types where code = 'neerlegging_jaarrekening';
+  select id into v_ot_btw from public.obligation_types where code = 'btw_aangifte';
+
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's20-admin@test.local', now()),
+    (v_mw_uid, 's20-mw@test.local', now()),
+    (v_mw2_uid, 's20-mw2@test.local', now());
+  insert into public.firms (naam) values ('Sectie 20 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S20 Beheerder', 's20-admin@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_mw_uid, 'S20 Medewerker', 's20-mw@test.local', 'medewerker', false, true)
+    returning id into v_mw;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_mw2_uid, 'S20 Collega', 's20-mw2@test.local', 'medewerker', false, true)
+    returning id into v_mw2;
+
+  -- Expliciet als kantoorbeheerder: standaard_verantwoordelijke_id zetten bij
+  -- aanmaak is sinds 0009 voorbehouden aan die rol. Niet op restanten uit
+  -- eerdere secties leunen — sectie 20 moet los draaibaar zijn.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (
+    firm_id, naam, ondernemingsnummer, boekjaar_einde_maand, boekjaar_einde_dag,
+    btw_regime, btw_aangifte_frequentie, vertrouwelijk, standaard_verantwoordelijke_id, actief
+  ) values (
+    v_firm, 'S20 Klant', 'BE0000.920.001', 12, 31, 'periodieke_aangever', 'maand',
+    false, v_mw, true
+  ) returning id into v_client;
+
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+    values (v_client, v_ot_av, true, date '2000-01-01', v_mw);
+
+  -- ---------- H-1 ----------
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+
+  -- 20.1 Een medewerker kan geen engine-output namaken: bron_type wordt naar
+  -- handmatig_adhoc geduwd, en de adhoc-vormconstraint verbiedt dan een
+  -- obligation_type_id. Zonder die duw kon de medewerker het periode-slot
+  -- bezetten en de echte wettelijke verplichting permanent onderdrukken.
+  begin
+    insert into public.task_instances (
+      client_id, obligation_type_id, periode_label, periode_start, periode_eind,
+      due_date, due_date_wettelijk, toegewezen_medewerker_id, bron_type, title
+    ) values (
+      v_client, v_ot_btw, '2099-Q1', date '2099-01-01', date '2099-03-31',
+      date '2099-12-31', date '2099-12-31', v_mw, 'automatisch_gegenereerd', 'nep'
+    );
+    raise exception 'FAIL 20.1: een medewerker kon nog steeds engine-output namaken';
+  exception
+    when check_violation then
+      raise notice 'PASS 20.1: engine-output namaken wordt geweigerd (adhoc-vorm afgedwongen)';
+    when others then
+      get stacked diagnostics v_err = message_text, v_state = returned_sqlstate;
+      if v_state = 'P0001' and v_err like 'FAIL 20.1%' then raise; end if;
+      raise notice 'PASS 20.1: engine-output namaken wordt geweigerd (%)' , v_state;
+  end;
+
+  -- 20.2 Een echte ad-hoc taak (zonder verplichtingtype) blijft gewoon werken.
+  insert into public.task_instances (
+    client_id, due_date, due_date_wettelijk, toegewezen_medewerker_id, bron_type, title
+  ) values (
+    v_client, current_date + 5, current_date + 5, v_mw, 'handmatig_adhoc', 'S20 ad-hoc'
+  ) returning id into v_taak;
+  select bron_type::text into v_err from public.task_instances where id = v_taak;
+  if v_err <> 'handmatig_adhoc' then
+    raise exception 'FAIL 20.2: ad-hoc taak kreeg bron_type % ', v_err;
+  end if;
+  raise notice 'PASS 20.2: ad-hoc taken blijven normaal aanmaakbaar';
+
+  -- 20.3 De engine mag het wel.
+  set local role postgres;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  perform public.generate_task_instances(3, 6);
+
+  select count(*) into v_cnt from public.task_instances
+  where client_id = v_client and bron_type = 'automatisch_gegenereerd';
+  if v_cnt = 0 then
+    raise exception 'FAIL 20.3: de engine genereerde niets meer';
+  end if;
+  raise notice 'PASS 20.3: de engine maakt nog steeds engine-output (% rijen)', v_cnt;
+
+  -- ---------- H-2 ----------
+  select id into v_av from public.task_instances
+  where client_id = v_client and obligation_type_id = v_ot_av and status = 'open' limit 1;
+  select id into v_neer from public.task_instances
+  where client_id = v_client and obligation_type_id = v_ot_neer limit 1;
+
+  if v_av is null or v_neer is null then
+    raise exception 'FAIL 20.4: AV/neerlegging-fixture ontbreekt (av=%, neerlegging=%)', v_av, v_neer;
+  end if;
+
+  -- 20.4 Annuleer de AV en laat de engine opnieuw lopen: de neerlegging mag
+  -- niet aan de geannuleerde AV blijven hangen, anders vuurt de
+  -- +30-dagenberekening nooit meer.
+  update public.task_instances set status = 'geannuleerd' where id = v_av;
+  perform public.generate_task_instances(3, 6);
+
+  select id into v_av2 from public.task_instances
+  where client_id = v_client and obligation_type_id = v_ot_av and status = 'open' limit 1;
+  if v_av2 is null or v_av2 = v_av then
+    raise exception 'FAIL 20.4: de engine maakte geen nieuwe AV aan na annulering';
+  end if;
+
+  select voorloper_taak_id into v_taak from public.task_instances where id = v_neer;
+  if v_taak is distinct from v_av2 then
+    raise exception 'FAIL 20.4: de neerlegging hangt nog aan de geannuleerde AV (% i.p.v. %)', v_taak, v_av2;
+  end if;
+  raise notice 'PASS 20.4: de engine herkoppelt de neerlegging aan de nieuwe AV';
+
+  -- 20.5 En de definitieve datum komt er nu wel degelijk.
+  update public.task_instances set status = 'in_uitvoering' where id = v_av2;
+  update public.task_instances set status = 'wacht_op_goedkeuring' where id = v_av2;
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_av2;
+
+  select voorlopige_datum, due_date_wettelijk into v_voorlopig, v_wettelijk
+  from public.task_instances where id = v_neer;
+  if v_voorlopig then
+    raise exception 'FAIL 20.5: de neerlegging staat nog altijd op een voorlopige datum';
+  end if;
+  if v_wettelijk <> current_date + 30 then
+    raise exception 'FAIL 20.5: neerleggingsdatum % i.p.v. %', v_wettelijk, current_date + 30;
+  end if;
+  raise notice 'PASS 20.5: afronden van de nieuwe AV levert een definitieve neerleggingsdatum';
+
+  -- 20.6 Het handmatig herkoppelen van een voorloper weigert nu luidruchtig
+  -- i.p.v. stil terug te zetten (een stille 200 was misleidend).
+  begin
+    update public.task_instances set voorloper_taak_id = v_av where id = v_neer;
+    raise exception 'FAIL 20.6: voorloper_taak_id was handmatig te wijzigen';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS 20.6: handmatig herkoppelen van een voorloper wordt geweigerd';
+    when others then
+      get stacked diagnostics v_err = message_text, v_state = returned_sqlstate;
+      if v_state = 'P0001' and v_err like 'FAIL 20.6%' then raise; end if;
+      raise;
+  end;
+
+  -- 20.7 Een blijven-hangen "voorlopige" markering is door een
+  -- kantoorbeheerder recht te zetten, en door een medewerker niet.
+  set local role postgres;
+  -- De markering terugzetten is een pijplijnhandeling; alleen zo kan de
+  -- fixture de "blijven hangen"-situatie nabootsen.
+  perform set_config('taskflow.pipeline_task_id', v_neer::text, true);
+  update public.task_instances set voorlopige_datum = true where id = v_neer;
+  perform set_config('taskflow.pipeline_task_id', '', true);
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  begin
+    update public.task_instances set voorlopige_datum = false where id = v_neer;
+    raise exception 'FAIL 20.7: een gewone medewerker kon de datum definitief verklaren';
+  exception
+    when insufficient_privilege then
+      raise notice 'PASS 20.7a: een medewerker kan de voorlopige markering niet zelf wegnemen';
+    when others then
+      get stacked diagnostics v_err = message_text, v_state = returned_sqlstate;
+      if v_state = 'P0001' and v_err like 'FAIL 20.7%' then raise; end if;
+      raise;
+  end;
+
+  set local role postgres;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  update public.task_instances set voorlopige_datum = false where id = v_neer;
+  select voorlopige_datum into v_voorlopig from public.task_instances where id = v_neer;
+  if v_voorlopig then
+    raise exception 'FAIL 20.7: de kantoorbeheerder kon de datum niet definitief verklaren';
+  end if;
+  select count(*) into v_cnt from public.task_status_log
+  where task_instance_id = v_neer and event_type = 'taak_inhoud_gewijzigd'
+    and notitie like '%definitief%';
+  if v_cnt < 1 then
+    raise exception 'FAIL 20.7: het definitief verklaren werd niet gelogd';
+  end if;
+  raise notice 'PASS 20.7b: een kantoorbeheerder kan de datum definitief verklaren, en dat wordt gelogd';
+
+  -- ---------- M-1 ----------
+  -- 20.8 Een handmatig afgesproken deadline wordt niet meer stil
+  -- overschreven door een nieuwe feestdag; de taak wordt gemarkeerd voor
+  -- review zodat het kantoor zelf beslist.
+  select id, due_date_wettelijk into v_taak, v_wettelijk from public.task_instances
+  where client_id = v_client and obligation_type_id = v_ot_btw and status = 'open'
+    and due_date_wettelijk > current_date
+  order by due_date_wettelijk limit 1;
+
+  if v_taak is null then
+    raise exception 'FAIL 20.8: geen open BTW-taak met een toekomstige deadline gevonden';
+  end if;
+
+  update public.task_instances set due_date = v_wettelijk + 30 where id = v_taak;
+  select due_date_handmatig_op, due_date into v_handmatig, v_due
+  from public.task_instances where id = v_taak;
+  if v_handmatig is null then
+    raise exception 'FAIL 20.8: een handmatige deadline-wijziging werd niet gemarkeerd';
+  end if;
+
+  -- Feestdag exact op de wettelijke datum: zonder de M-1-fix zou due_date
+  -- terugspringen naar de eerstvolgende werkdag en de afspraak verdwijnen.
+  insert into public.public_holidays (jaar, datum, omschrijving, aangemaakt_door, gewijzigd_door)
+  values (extract(year from v_wettelijk)::int, v_wettelijk, 'S20 testfeestdag', v_admin, v_admin);
+
+  select due_date, review_vereist into v_due, v_voorlopig from public.task_instances where id = v_taak;
+  if v_due <> v_wettelijk + 30 then
+    raise exception 'FAIL 20.8: de handmatige afspraak werd overschreven (% i.p.v. %)', v_due, v_wettelijk + 30;
+  end if;
+  if not v_voorlopig then
+    raise exception 'FAIL 20.8: de taak werd niet gemarkeerd voor review na de kalenderwijziging';
+  end if;
+  raise notice 'PASS 20.8: een handmatige deadline blijft staan en wordt gemarkeerd voor review';
+
+  -- ---------- M-3 ----------
+  -- 20.9 Toewijzing op een vertrouwelijke klant is een toegangsbeslissing en
+  -- hoort herkenbaar in het log, niet verstopt als gewone herverdeling.
+  set local role postgres;
+  insert into public.clients (
+    firm_id, naam, ondernemingsnummer, boekjaar_einde_maand, boekjaar_einde_dag,
+    btw_regime, vertrouwelijk, standaard_verantwoordelijke_id, actief
+  ) values (
+    v_firm, 'S20 Vertrouwelijk', 'BE0000.920.002', 12, 31, 'geen', true, v_mw, true
+  ) returning id into v_vertr;
+  insert into public.task_instances (
+    client_id, due_date, due_date_wettelijk, toegewezen_medewerker_id, bron_type, title
+  ) values (
+    v_vertr, current_date + 10, current_date + 10, v_mw, 'handmatig_adhoc', 'S20 vertrouwelijke taak'
+  ) returning id into v_taak;
+
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+
+  if public.can_view_client(v_vertr, v_mw2) then
+    raise exception 'FAIL 20.9: de collega zag het vertrouwelijke dossier al voor de toewijzing';
+  end if;
+
+  update public.task_instances set toegewezen_medewerker_id = v_mw2 where id = v_taak;
+  get diagnostics v_cnt = row_count;
+  if v_cnt <> 1 then
+    raise exception 'FAIL 20.9: de toewijzing zelf ging niet door (% rijen)', v_cnt;
+  end if;
+
+  -- Het audittrail nakijken gebeurt buiten RLS: door de toewijzing is het
+  -- dossier voor de toewijzer zelf niet langer zichtbaar, dus onder RLS zou
+  -- de assertie leeg lijken terwijl het log wel degelijk geschreven is.
+  set local role postgres;
+  select count(*) into v_cnt from public.task_status_log
+  where task_instance_id = v_taak and event_type = 'taak_inhoud_gewijzigd'
+    and notitie like 'Toegang tot vertrouwelijk dossier verleend%';
+  if v_cnt <> 1 then
+    raise exception 'FAIL 20.9: toegangverlening niet herkenbaar gelogd (%)', v_cnt;
+  end if;
+
+  select count(*) into v_cnt from public.client_change_log
+  where client_id = v_vertr and veld = 'toegang_vertrouwelijk_verleend';
+  if v_cnt <> 1 then
+    raise exception 'FAIL 20.9: toegangverlening niet in client_change_log (%)', v_cnt;
+  end if;
+  raise notice 'PASS 20.9: toegang verlenen tot een vertrouwelijk dossier is herkenbaar geaudit';
+
+  set local role postgres;
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
