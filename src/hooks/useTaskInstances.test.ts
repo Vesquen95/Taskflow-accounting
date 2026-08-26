@@ -22,6 +22,7 @@ function task(overrides: Partial<TaskInstanceWithRelations> = {}): TaskInstanceW
     due_date: '2026-07-20',
     due_date_wettelijk: '2026-07-20',
     due_date_verschoven: false,
+    due_date_handmatig_op: null,
     status: 'open',
     toegewezen_medewerker_id: 'e1',
     voorloper_taak_id: null,
