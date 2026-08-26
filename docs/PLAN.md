@@ -360,3 +360,108 @@ volledig.
 **BTW-klantenlisting.** Ook de vrijgestelde kleine onderneming (art. 56bis)
 moet haar klantenlisting doorsturen, met vermelding van de omzet. De regel
 `btw_regime <> 'geen'` is dus correct en blijft.
+
+## §10 — Werkstromen en taakgeneratie (beslist met het kantoor, augustus 2026)
+
+### Werkstromen
+
+Taken worden gegroepeerd in vijf werkstromen. Het kantoor werkt per blok, niet
+per klant: "deze week alle btw-aangiftes". De stroom is een kolom op
+`obligation_types`, niet iets in de schermcode, zodat een nieuw
+verplichtingstype vanzelf ergens thuishoort.
+
+| Werkstroom | Verplichtingstypes |
+|---|---|
+| Btw | btw_aangifte, btw_klantenlisting |
+| Afsluiting | jaarafsluiting, algemene_vergadering, neerlegging_jaarrekening |
+| Vennootschapsbelasting | va_venb, aangifte_venb_pb |
+| Rapportering | rapportering |
+| Ad-hoc | taken zonder verplichtingstype |
+
+Rapportering staat bewust apart en niet bij Afsluiting: het is het enige type
+met categorie `service`, zonder wettelijke deadline en zonder goedkeuringsstap.
+Het samenvoegen zou de emmer vervuilen waar het kantoor juist op wil kunnen
+vertrouwen.
+
+**Filteren gebeurt op deadlinevenster, niet op periode.** De maandaangifte van
+maart (20/04) en de kwartaalaangifte Q1 (27/04) zijn één campagne in dezelfde
+week, maar dragen verschillende periodelabels. Op periode filteren zou de helft
+van de stapel verbergen.
+
+### Kalenderjaar versus boekjaar
+
+Btw loopt per kalenderjaar, de rest per boekjaar. Verwarrend maar zo is het, en
+zo staat het in de motor:
+
+| Loopt op | Verplichtingen |
+|---|---|
+| kalendermaand / -kwartaal / -jaar | btw_aangifte, btw_klantenlisting, rapportering |
+| boekjaar | va_venb, jaarafsluiting, algemene_vergadering, neerlegging_jaarrekening, aangifte_venb_pb |
+
+### Rekenregels
+
+| Verplichting | Regel |
+|---|---|
+| Btw-aangifte | maand: de 20ste; kwartaal: de 25ste van de maand na de periode |
+| Btw-klantenlisting | 31/03 van het volgende kalenderjaar, ook voor art. 56bis |
+| Voorafbetaling | teruggerekend vanaf de maand van het boekjaareinde: −8, −5, −2 en 0 maanden, dagen 10/10/10/20 |
+| Aangifte VenB/PB | laatste dag van de 7de maand na het boekjaareinde |
+| Jaarafsluiting | boekjaareinde + `sla_maanden` (standaard 3), per klant aanpasbaar |
+| Algemene vergadering | de statutaire datum, per klant ingevuld (zie hieronder) |
+| Neerlegging jaarrekening | AV + 30 dagen |
+| Rapportering | per periode + `termijn_dagen` (standaard 10), per klant aanpasbaar |
+
+De wettelijke kalender is voor de aangifte VenB/PB een **override**, geen
+voorwaarde. Vóór deze beslissing werd de datum uitsluitend daar opgezocht: geen
+kalenderrij betekende geen taak, zonder enige melding — een deadline die
+nergens bestond. Nu rekent de motor zelf en wint een ingevulde campagnedatum.
+
+### De algemene vergadering
+
+De AV-datum staat in de statuten en wordt per klant ingevuld. Twee vormen, beide
+komen voor:
+
+* een **vaste datum** — "1 april"
+* een **n-de weekdag** — "de eerste maandag van april"
+
+De datum wordt gelezen als de eerstvolgende gelegenheid ná het boekjaareinde, en
+moet binnen zes maanden daarna vallen. Een combinatie die daarbuiten valt wordt
+geweigerd bij het invullen, niet stilzwijgend tot een onwettige datum verwerkt.
+
+Wijzigen de statuten, dan **schuift alles mee**: de open toekomstige AV-taken en
+de neerleggingen die eraan hangen worden herrekend. Dat is een zeldzame,
+eenmalige handeling en mag dus zwaar zijn.
+
+### Geen taken in het verleden
+
+Bij het aanmaken van een klant werden acht van de tien taken met een deadline in
+het verleden aangemaakt: de motor begrensde alles met één globaal venster
+(`vandaag − backfill`), gelijk voor een dossier van tien jaar oud en een van
+vanmorgen. Bij ~100 dossiers is dat honderden regels ruis.
+
+De ondergrens wordt `client_obligations.geldig_vanaf`. **De grens ligt op de
+deadline, niet op de periode**: neem je een klant over op 20 juli, dan valt de
+btw-aangifte van Q2 (deadline 27/07) er nog binnen — die moet het kantoor
+indienen, ook al ligt de periode zelf achter ons. Blijkt zo'n grensgeval toch
+niet nodig, dan wordt hij geannuleerd.
+
+### Verplichtingen wijzigen
+
+Verplichtingen bij- of afzetten gebeurt bij het **opslaan van de klant**, niet
+via een aparte generatieknop. Een verplichting toevoegen maakt meteen haar
+toekomstige taken aan; een verplichting afsluiten annuleert haar open,
+toekomstige taken. Wat in uitvoering of ingediend is blijft staan — dat is werk
+dat gebeurd is.
+
+Verwijderen bestaat niet en komt er niet: annuleren haalt de taak uit alle
+lijsten en houdt hem in de geschiedenis van het dossier.
+
+De batchgeneratie blijft bestaan voor één doel: de horizon opschuiven wanneer er
+een nieuw kwartaal bijkomt. Dat heeft niets met een klantwijziging te maken.
+
+### Buiten scope voor nu
+
+Eenmanszaken (enkel personenbelasting, geen AV, geen neerlegging). De
+voorafbetalingen voor starters blijven wél gegenereerd, ook al zijn kleine
+vennootschappen de eerste drie boekjaren niet verplicht: ze zijn een aanleiding
+om erover na te denken.
