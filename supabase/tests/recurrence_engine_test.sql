@@ -3192,4 +3192,98 @@ begin
   raise notice 'PASS 26.3: de grens ligt op de deadline, niet op de periode (% taak/taken behouden)', v_totaal;
 end $$;
 
+-- ============================================================
+-- Sectie 27 (0019): de aangifte VenB/PB wordt berekend, en de wettelijke
+-- kalender is een echte override.
+--
+-- Vóór 0019 maakte de motor nul aangiftetaken aan: de datum werd uitsluitend
+-- opgezocht in legal_calendar per boekjaarcohort, en zonder rij werd de
+-- periode overgeslagen -- geen taak, geen melding. En een override die je
+-- daarna wél invulde verzette bestaande taken niet, omdat de scope als
+-- tekstfragment van het periodelabel gematcht werd ('2026' ilike
+-- '%boekjaar_12%' is nooit waar).
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_uid uuid := gen_random_uuid();
+  v_ot_aang uuid; v_klant uuid; v_n int; v_due date;
+  v_maand int; v_verwacht date;
+  v_gevallen int[][] := array[[12,31],[6,30],[9,30],[3,31]];
+  v_i int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's27@test.local', now());
+  insert into public.firms (naam) values ('Sectie 27 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S27 Beheerder', 's27@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select id into v_ot_aang from public.obligation_types where code = 'aangifte_venb_pb';
+
+  for v_i in 1..4 loop
+    insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+      values (v_firm, 'S27 sluit maand ' || v_gevallen[v_i][1], v_gevallen[v_i][1], v_gevallen[v_i][2], 'geen', true)
+      returning id into v_klant;
+    insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+      values (v_klant, v_ot_aang, true, date '2000-01-01', v_admin);
+  end loop;
+
+  perform public.generate_task_instances(36, 24);
+
+  -- 27.1 Er komen überhaupt aangiftetaken, zonder één kalenderrij.
+  select count(*) into v_n from public.task_instances where obligation_type_id = v_ot_aang;
+  if v_n = 0 then
+    raise exception 'FAIL 27.1: de motor maakte geen enkele aangiftetaak aan';
+  end if;
+  -- Bewijzen dat de datums van 2026 uit de formule komen en niet uit een
+  -- kalenderrij. Andere secties zetten rijen voor andere jaren; alleen 2026
+  -- telt hier.
+  select count(*) into v_n from public.legal_calendar
+  where obligation_type_id = v_ot_aang and jaar = 2026;
+  if v_n <> 0 then
+    raise exception 'FAIL 27.1: er stond al een kalenderrij voor 2026; de test bewijst dan niets';
+  end if;
+  raise notice 'PASS 27.1: aangiftetaken worden aangemaakt zonder kalenderrij';
+
+  -- 27.2 De laatste dag van de zevende maand na het boekjaareinde, per cohort.
+  for v_i in 1..4 loop
+    v_maand := v_gevallen[v_i][1];
+    select ti.due_date_wettelijk into v_due
+    from public.task_instances ti join public.clients c on c.id = ti.client_id
+    where ti.obligation_type_id = v_ot_aang and ti.periode_label = '2026'
+      and c.boekjaar_einde_maand = v_maand;
+    v_verwacht := (date_trunc('month', make_date(2026, v_maand, v_gevallen[v_i][2]))
+                   + interval '8 months' - interval '1 day')::date;
+    if v_due is distinct from v_verwacht then
+      raise exception 'FAIL 27.2: boekjaareinde maand % gaf % i.p.v. %', v_maand, v_due, v_verwacht;
+    end if;
+  end loop;
+  select ti.due_date_wettelijk into v_due
+  from public.task_instances ti join public.clients c on c.id = ti.client_id
+  where ti.obligation_type_id = v_ot_aang and ti.periode_label = '2026' and c.boekjaar_einde_maand = 6;
+  if v_due is distinct from date '2027-01-31' then
+    raise exception 'FAIL 27.2: een 30/06-dossier moet indienen voor 31/01/2027, kreeg %', v_due;
+  end if;
+  raise notice 'PASS 27.2: 31/12->31/07, 30/06->31/01, 30/09->30/04, 31/03->31/10';
+
+  -- 27.3 Een aangekondigde campagnedatum wint, ook van een taak die al bestaat.
+  insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, aangemaakt_door, gewijzigd_door)
+  values (v_ot_aang, 2026, 'boekjaar_12', date '2027-09-30', true, v_admin, v_admin);
+
+  select ti.due_date_wettelijk into v_due
+  from public.task_instances ti join public.clients c on c.id = ti.client_id
+  where ti.obligation_type_id = v_ot_aang and ti.periode_label = '2026' and c.boekjaar_einde_maand = 12;
+  if v_due is distinct from date '2027-09-30' then
+    raise exception 'FAIL 27.3: de override verzette de bestaande taak niet (% i.p.v. 30/09/2027)', v_due;
+  end if;
+
+  -- en raakt alleen het cohort dat ze noemt.
+  select ti.due_date_wettelijk into v_due
+  from public.task_instances ti join public.clients c on c.id = ti.client_id
+  where ti.obligation_type_id = v_ot_aang and ti.periode_label = '2026' and c.boekjaar_einde_maand = 6;
+  if v_due is distinct from date '2027-01-31' then
+    raise exception 'FAIL 27.3: de override van het 31/12-cohort raakte ook het 30/06-cohort (%)', v_due;
+  end if;
+  raise notice 'PASS 27.3: de override verzet bestaande taken, en enkel het genoemde cohort';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
