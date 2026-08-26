@@ -329,3 +329,34 @@ Gevolgen voor het ontwerp:
   ongeaudite klantwijzigingen) blijft onverminderd gelden: die gaan over de
   eigen medewerkers en over de integriteit van het audittrail, niet over
   vreemde kantoren.
+
+## §9 — Bevestigde fiscale regels (door het kantoor, augustus 2026)
+
+Deze punten stonden als aanname in de motor en zijn nu bevestigd of
+gecorrigeerd door Wibren. Ze staan hier zodat een latere lezer ze niet per
+ongeluk terugdraait.
+
+**BTW-aangifte.** Maandaangifte: de 20ste van de maand na de periode.
+Kwartaalaangifte: de 25ste van de maand na het kwartaal. De motor rekende voor
+beide de 20ste — gecorrigeerd in migratie 0017, inclusief herstel van de al
+gegenereerde rijen.
+
+**Werkdagverschuiving.** Een btw-deadline die op een zaterdag, zondag of
+feestdag valt, schuift door naar de eerstvolgende werkdag. Dat geldt voor
+maand- én kwartaalaangiften. De maand/kwartaal-splitsing en de
+overgangsregelingen uit de hervorming van de btw-ketting worden bewust NIET
+gemodelleerd: "hou geen rekening met speciale maatregelen". Eenmalige
+verlengingen (zoals de listing over 2025 tot 30 april 2026) horen in
+`legal_calendar` als override, niet in de formule.
+
+**Voorafbetalingen.** 10/4, 10/7, 10/10 en 20/12 bij een afsluiting per 31/12,
+en meeschuivend wanneer het boekjaar op 31/3, 30/6 of 30/9 eindigt. De motor
+rekent sinds 0017 terug vanaf de maand van het boekjaareinde (−8, −5, −2 en 0
+maanden) in plaats van vooruit vanaf het begin; voor een boekjaar van twaalf
+maanden levert dat identieke data op, maar het blijft ook kloppen als het
+boekjaar dat niet is. **Er is geen vijfde voorafbetaling** — VA1–VA4 is
+volledig.
+
+**BTW-klantenlisting.** Ook de vrijgestelde kleine onderneming (art. 56bis)
+moet haar klantenlisting doorsturen, met vermelding van de omzet. De regel
+`btw_regime <> 'geen'` is dus correct en blijft.

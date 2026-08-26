@@ -2950,4 +2950,138 @@ begin
   raise notice 'PASS 24.6: de standaardaanroep van de app (3/6) blijft toegelaten';
 end $$;
 
+-- ============================================================
+-- Sectie 25 (0017): btw-kwartaaltermijn en de voorafbetalingen.
+--
+-- Beide bevestigd door het kantoor:
+--   * maandaangifte de 20ste, kwartaalaangifte de 25ste. De kwartaaltak
+--     rekende + 19 (de 20ste) en lag dus vijf dagen te vroeg.
+--   * voorafbetalingen 10/4, 10/7, 10/10 en 20/12 bij een afsluiting per
+--     31/12, en meeschuivend wanneer het boekjaar op 31/3, 30/6 of 30/9
+--     eindigt. De oude formule ankerde op het boekjaarbegin.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_uid uuid := gen_random_uuid();
+  v_kw uuid; v_mnd uuid; v_dec uuid; v_maa uuid; v_ot_va uuid;
+  v_due date; v_cnt int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's25@test.local', now());
+  insert into public.firms (naam) values ('Sectie 25 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S25 Beheerder', 's25@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select id into v_ot_va from public.obligation_types where code = 'va_venb';
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S25 Kwartaalaangever', 12, 31, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_kw;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S25 Maandaangever', 12, 31, 'periodieke_aangever', 'maand', true)
+    returning id into v_mnd;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S25 Boekjaar 31-12', 12, 31, 'geen', true) returning id into v_dec;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S25 Boekjaar 31-03', 3, 31, 'geen', true) returning id into v_maa;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+    values (v_dec, v_ot_va, true, date '2000-01-01', v_admin),
+           (v_maa, v_ot_va, true, date '2000-01-01', v_admin);
+
+  perform public.generate_task_instances(36, 24);
+
+  -- 25.1 Kwartaalaangifte: de 25ste van de maand na het kwartaal.
+  select count(*) into v_cnt
+  from public.task_instances ti join public.obligation_types ot on ot.id = ti.obligation_type_id
+  where ti.client_id = v_kw and ot.code = 'btw_aangifte'
+    and extract(day from ti.due_date_wettelijk) <> 25;
+  if v_cnt <> 0 then
+    raise exception 'FAIL 25.1: % kwartaalaangiften staan niet op de 25ste', v_cnt;
+  end if;
+  select count(*) into v_cnt
+  from public.task_instances ti join public.obligation_types ot on ot.id = ti.obligation_type_id
+  where ti.client_id = v_kw and ot.code = 'btw_aangifte';
+  if v_cnt = 0 then
+    raise exception 'FAIL 25.1: er werden helemaal geen kwartaalaangiften gegenereerd';
+  end if;
+  raise notice 'PASS 25.1: alle % kwartaalaangiften staan op de 25ste', v_cnt;
+
+  -- 25.2 Maandaangifte blijft op de 20ste.
+  select count(*) into v_cnt
+  from public.task_instances ti join public.obligation_types ot on ot.id = ti.obligation_type_id
+  where ti.client_id = v_mnd and ot.code = 'btw_aangifte'
+    and extract(day from ti.due_date_wettelijk) <> 20;
+  if v_cnt <> 0 then
+    raise exception 'FAIL 25.2: % maandaangiften staan niet op de 20ste', v_cnt;
+  end if;
+  raise notice 'PASS 25.2: de maandaangifte blijft op de 20ste';
+
+  -- 25.3 Voorafbetalingen bij een afsluiting per 31/12.
+  select due_date_wettelijk into v_due from public.task_instances
+  where client_id = v_dec and periode_label = 'VA1-2026';
+  if v_due is distinct from date '2026-04-10' then
+    raise exception 'FAIL 25.3: VA1-2026 staat op % i.p.v. 10/04/2026', v_due;
+  end if;
+  select due_date_wettelijk into v_due from public.task_instances
+  where client_id = v_dec and periode_label = 'VA2-2026';
+  if v_due is distinct from date '2026-07-10' then
+    raise exception 'FAIL 25.3: VA2-2026 staat op % i.p.v. 10/07/2026', v_due;
+  end if;
+  select due_date_wettelijk into v_due from public.task_instances
+  where client_id = v_dec and periode_label = 'VA3-2026';
+  if v_due is distinct from date '2026-10-10' then
+    raise exception 'FAIL 25.3: VA3-2026 staat op % i.p.v. 10/10/2026', v_due;
+  end if;
+  select due_date_wettelijk into v_due from public.task_instances
+  where client_id = v_dec and periode_label = 'VA4-2026';
+  if v_due is distinct from date '2026-12-20' then
+    raise exception 'FAIL 25.3: VA4-2026 staat op % i.p.v. 20/12/2026', v_due;
+  end if;
+  raise notice 'PASS 25.3: bij 31/12 staan de VA op 10/4, 10/7, 10/10 en 20/12';
+
+  -- 25.4 En bij een boekjaar dat op 31/03 eindigt schuift het schema mee:
+  -- de vierde valt op de 20ste van de laatste maand van het boekjaar.
+  select due_date_wettelijk into v_due from public.task_instances
+  where client_id = v_maa and periode_label = 'VA1-2026';
+  if v_due is distinct from date '2025-07-10' then
+    raise exception 'FAIL 25.4: VA1 bij boekjaar 31/03/2026 staat op % i.p.v. 10/07/2025', v_due;
+  end if;
+  select due_date_wettelijk into v_due from public.task_instances
+  where client_id = v_maa and periode_label = 'VA2-2026';
+  if v_due is distinct from date '2025-10-10' then
+    raise exception 'FAIL 25.4: VA2 bij boekjaar 31/03/2026 staat op % i.p.v. 10/10/2025', v_due;
+  end if;
+  select due_date_wettelijk into v_due from public.task_instances
+  where client_id = v_maa and periode_label = 'VA3-2026';
+  if v_due is distinct from date '2026-01-10' then
+    raise exception 'FAIL 25.4: VA3 bij boekjaar 31/03/2026 staat op % i.p.v. 10/01/2026', v_due;
+  end if;
+  select due_date_wettelijk into v_due from public.task_instances
+  where client_id = v_maa and periode_label = 'VA4-2026';
+  if v_due is distinct from date '2026-03-20' then
+    raise exception 'FAIL 25.4: VA4 bij boekjaar 31/03/2026 staat op % i.p.v. 20/03/2026', v_due;
+  end if;
+  raise notice 'PASS 25.4: bij boekjaar 31/03 schuift het VA-schema correct mee';
+
+  -- 25.5 De keuze van het kantoor: de verschuiving naar de eerstvolgende
+  -- werkdag geldt voor ALLE btw-aangiften, ook de kwartaalaangifte. 25/04/2026
+  -- is een zaterdag, dus de effectieve datum moet maandag 27/04 zijn terwijl
+  -- de wettelijke datum op 25/04 blijft staan.
+  select due_date into v_due from public.task_instances ti
+  join public.obligation_types ot on ot.id = ti.obligation_type_id
+  where ti.client_id = v_kw and ot.code = 'btw_aangifte' and ti.periode_label = '2026-Q1';
+  if v_due is distinct from date '2026-04-27' then
+    raise exception 'FAIL 25.5: de kwartaaldeadline van 2026-Q1 schoof naar % i.p.v. 27/04/2026', v_due;
+  end if;
+  select due_date_wettelijk into v_due from public.task_instances ti
+  join public.obligation_types ot on ot.id = ti.obligation_type_id
+  where ti.client_id = v_kw and ot.code = 'btw_aangifte' and ti.periode_label = '2026-Q1';
+  if v_due is distinct from date '2026-04-25' then
+    raise exception 'FAIL 25.5: de wettelijke datum van 2026-Q1 werd meeverschoven (%)', v_due;
+  end if;
+  raise notice 'PASS 25.5: de werkdagverschuiving geldt ook voor de kwartaalaangifte';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
