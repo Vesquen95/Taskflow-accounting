@@ -2736,4 +2736,137 @@ begin
   raise notice 'PASS 22.2: de voorloper-herkoppeling staat in het audittrail';
 end $$;
 
+-- ============================================================
+-- Sectie 23 (0015): toegang tot een vertrouwelijk dossier is ook via de
+-- verplichting een kantoorbeheerdersbeslissing.
+--
+-- Gereproduceerd vóór 0015: een medewerker met toegang tot het dossier zette
+-- de standaard-toegewezene van de verplichting op een collega, raakte zelf
+-- geen enkele taak aan (dus de controle uit 0014 vuurde niet), en de
+-- eerstvolgende generatieronde van de kantoorbeheerder maakte 2 taken op naam
+-- van die collega. can_view_client() verleent toegang zodra iemand één
+-- niet-geannuleerde taak op het dossier heeft: de collega zat binnen, zonder
+-- één auditregel.
+-- ============================================================
+do $$
+declare
+  v_firm uuid;
+  v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_mw uuid;    v_mw_uid uuid := gen_random_uuid();
+  v_mw2 uuid;   v_mw2_uid uuid := gen_random_uuid();
+  v_vertr uuid; v_gewoon uuid; v_ot uuid; v_co uuid;
+  v_cnt int; v_ok boolean; v_wie uuid;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's23-admin@test.local', now()),
+    (v_mw_uid, 's23-mw@test.local', now()),
+    (v_mw2_uid, 's23-mw2@test.local', now());
+  insert into public.firms (naam) values ('Sectie 23 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S23 Beheerder', 's23-admin@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_mw_uid, 'S23 Medewerker', 's23-mw@test.local', 'medewerker', false, true)
+    returning id into v_mw;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_mw2_uid, 'S23 Collega', 's23-mw2@test.local', 'medewerker', false, true)
+    returning id into v_mw2;
+
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  insert into public.clients (
+    firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime,
+    vertrouwelijk, standaard_verantwoordelijke_id, actief
+  ) values (v_firm, 'S23 Vertrouwelijk', 12, 31, 'geen', true, v_mw, true)
+  returning id into v_vertr;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, vertrouwelijk, actief)
+    values (v_firm, 'S23 Gewoon', 12, 31, 'geen', false, true) returning id into v_gewoon;
+
+  select id into v_ot from public.obligation_types where code = 'algemene_vergadering';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+    values (v_vertr, v_ot, true, date '2000-01-01', v_mw) returning id into v_co;
+
+  -- De medewerker krijgt echte taken op het dossier en dus toegang.
+  perform public.generate_task_instances(24, 12);
+  if not public.can_view_client(v_vertr, v_mw) then
+    raise exception 'FAIL 23.0: fixture gaf de medewerker geen toegang tot het vertrouwelijke dossier';
+  end if;
+  if public.can_view_client(v_vertr, v_mw2) then
+    raise exception 'FAIL 23.0: de collega had al toegang voor de aanval';
+  end if;
+  raise notice 'PASS 23.0: fixture staat klaar (medewerker binnen, collega buiten)';
+
+  -- 23.1 De aanval: de verplichting omzetten naar de collega.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  v_ok := false;
+  begin
+    update public.client_obligations set standaard_toegewezen_medewerker_id = v_mw2 where id = v_co;
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  set local role postgres;
+  if not v_ok then
+    raise exception 'FAIL 23.1: een medewerker kon de verplichting op een collega zonder toegang zetten';
+  end if;
+
+  -- En de generatieronde van de kantoorbeheerder mag de collega dus ook niet
+  -- alsnog binnenlaten.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  perform public.generate_task_instances(36, 12);
+  select count(*) into v_cnt from public.task_instances
+  where client_id = v_vertr and toegewezen_medewerker_id = v_mw2 and status <> 'geannuleerd';
+  if v_cnt <> 0 then
+    raise exception 'FAIL 23.1: de generator maakte alsnog % taken op naam van de collega', v_cnt;
+  end if;
+  if public.can_view_client(v_vertr, v_mw2) then
+    raise exception 'FAIL 23.1: de collega ziet het vertrouwelijke dossier na de generatieronde';
+  end if;
+  raise notice 'PASS 23.1: de verplichtingsroute naar een vertrouwelijk dossier is dicht';
+
+  -- 23.2 Gewone werkverdeling blijft gewoon werken: op een niet-vertrouwelijke
+  -- klant mag een medewerker de verplichting toewijzen aan wie hij wil.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+    values (v_gewoon, v_ot, true, date '2000-01-01', v_mw2);
+  get diagnostics v_cnt = row_count;
+  set local role postgres;
+  if v_cnt <> 1 then
+    raise exception 'FAIL 23.2: toewijzen op een gewone klant werd geblokkeerd';
+  end if;
+  raise notice 'PASS 23.2: op een niet-vertrouwelijke klant blijft toewijzen vrij';
+
+  -- 23.3 De kantoorbeheerder mag het wél, en dat komt in het audittrail — op
+  -- dezelfde plek als de toewijzingsroute uit 0014.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  update public.client_obligations set standaard_toegewezen_medewerker_id = v_mw2 where id = v_co;
+  set local role postgres;
+  select standaard_toegewezen_medewerker_id into v_wie from public.client_obligations where id = v_co;
+  if v_wie is distinct from v_mw2 then
+    raise exception 'FAIL 23.3: de kantoorbeheerder kon de verplichting niet omzetten (%)', v_wie;
+  end if;
+  -- Op de naam van de collega, specifiek. (Het aanmaken van de verplichting in
+  -- de fixture leverde al een eerste regel op: ook toen kon de aangewezen
+  -- medewerker het dossier nog niet zien, dus ook dat wás een toegangsbeslissing.)
+  select count(*) into v_cnt from public.client_change_log
+  where client_id = v_vertr and veld = 'toegang_vertrouwelijk_verleend'
+    and nieuwe_waarde = v_mw2::text;
+  if v_cnt <> 1 then
+    raise exception 'FAIL 23.3: de toegangverlening via de verplichting werd niet geaudit (%)', v_cnt;
+  end if;
+  raise notice 'PASS 23.3: de kantoorbeheerder-route werkt en wordt geaudit';
+
+  -- 23.4 Herverdelen naar iemand die het dossier al kan zien blijft dagelijks
+  -- werk, ook voor een gewone medewerker.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  update public.client_obligations set standaard_toegewezen_medewerker_id = v_mw where id = v_co;
+  get diagnostics v_cnt = row_count;
+  set local role postgres;
+  if v_cnt <> 1 then
+    raise exception 'FAIL 23.4: terugzetten naar iemand mét toegang werd geblokkeerd';
+  end if;
+  raise notice 'PASS 23.4: toewijzen aan wie het dossier al ziet blijft vrij';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
