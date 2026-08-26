@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Client, ClientObligation, ObligationType, TaskInstanceWithRelations } from '../types'
+import type {
+  Client,
+  ClientChangeLogEntry,
+  ClientObligation,
+  ObligationType,
+  TaskInstanceWithRelations,
+} from '../types'
 import { reportError } from '../lib/errorMessage'
 
 export interface ClientObligationWithType extends ClientObligation {
@@ -14,6 +20,7 @@ export function useClientDetail(clientId: string | null) {
   const [client, setClient] = useState<Client | null>(null)
   const [obligations, setObligations] = useState<ClientObligationWithType[]>([])
   const [tasks, setTasks] = useState<TaskInstanceWithRelations[]>([])
+  const [changeLog, setChangeLog] = useState<ClientChangeLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -22,13 +29,14 @@ export function useClientDetail(clientId: string | null) {
       setClient(null)
       setObligations([])
       setTasks([])
+      setChangeLog([])
       setLoading(false)
       return
     }
     setLoading(true)
     setError(null)
     try {
-      const [clientRes, obligationsRes, tasksRes] = await Promise.all([
+      const [clientRes, obligationsRes, tasksRes, changeLogRes] = await Promise.all([
         supabase.from('clients').select('*').eq('id', clientId).single(),
         supabase
           .from('client_obligations')
@@ -42,15 +50,26 @@ export function useClientDetail(clientId: string | null) {
           )
           .eq('client_id', clientId)
           .order('due_date', { ascending: false }),
+        // Het wijzigingslog van het dossier zelf: vertrouwelijkheid, btw-regime,
+        // boekjaareinde, verantwoordelijke, en toegangverlening op een
+        // vertrouwelijk dossier. Zonder dit blijft dat allemaal onzichtbaar.
+        supabase
+          .from('client_change_log')
+          .select('*, actor:employees!client_change_log_actor_employee_id_fkey(id,naam)')
+          .eq('client_id', clientId)
+          .order('created_at', { ascending: false })
+          .limit(50),
       ])
 
       if (clientRes.error) throw clientRes.error
       if (obligationsRes.error) throw obligationsRes.error
       if (tasksRes.error) throw tasksRes.error
+      if (changeLogRes.error) throw changeLogRes.error
 
       setClient(clientRes.data as Client)
       setObligations((obligationsRes.data ?? []) as unknown as ClientObligationWithType[])
       setTasks((tasksRes.data ?? []) as unknown as TaskInstanceWithRelations[])
+      setChangeLog((changeLogRes.data ?? []) as unknown as ClientChangeLogEntry[])
     } catch (err) {
       setError(reportError(err, 'Kon klantdossier niet laden'))
     } finally {
@@ -140,6 +159,7 @@ export function useClientDetail(clientId: string | null) {
     client,
     obligations,
     tasks,
+    changeLog,
     loading,
     error,
     reload: load,

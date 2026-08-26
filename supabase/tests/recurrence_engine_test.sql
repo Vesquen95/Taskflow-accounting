@@ -468,6 +468,13 @@ end $$;
 
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
+-- Supabase geeft anon/authenticated standaard rechten op alles in `public`;
+-- die twee regels bootsen dat na. In productie loopt migratie 0014 dáárna en
+-- trekt de rechten op de dode kanban-tabellen weer in — hier moeten we die
+-- volgorde met de hand herstellen, anders test sectie 21.9 een toestand die
+-- alleen lokaal bestaat.
+revoke all on public.boards, public.columns, public.labels, public.tasks, public.task_labels
+  from anon, authenticated;
 
 do $$
 declare
@@ -573,6 +580,13 @@ end $$;
 
 grant usage on schema public to authenticated, anon;
 grant select, insert, update, delete on all tables in schema public to authenticated;
+-- Supabase geeft anon/authenticated standaard rechten op alles in `public`;
+-- die twee regels bootsen dat na. In productie loopt migratie 0014 dáárna en
+-- trekt de rechten op de dode kanban-tabellen weer in — hier moeten we die
+-- volgorde met de hand herstellen, anders test sectie 21.9 een toestand die
+-- alleen lokaal bestaat.
+revoke all on public.boards, public.columns, public.labels, public.tasks, public.task_labels
+  from anon, authenticated;
 
 -- ============================================================
 -- Sectie 7 (F-3): de goedkeuringsstap is niet te omzeilen en
@@ -2262,7 +2276,11 @@ begin
     v_vertr, current_date + 10, current_date + 10, v_mw, 'handmatig_adhoc', 'S20 vertrouwelijke taak'
   ) returning id into v_taak;
 
-  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  -- Sinds 0014 (bevinding C) is toegang verlenen tot een vertrouwelijk
+  -- dossier een kantoorbeheerdersbeslissing; sectie 21.5 bewaakt de weigering
+  -- voor een gewone medewerker. Hier gaat het om het audittrail van de
+  -- toegestane route.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
   set local role authenticated;
 
   if public.can_view_client(v_vertr, v_mw2) then
@@ -2294,6 +2312,428 @@ begin
   raise notice 'PASS 20.9: toegang verlenen tot een vertrouwelijk dossier is herkenbaar geaudit';
 
   set local role postgres;
+end $$;
+
+-- ============================================================
+-- Sectie 21 (0014): single-tenant-slot (A), bevriezing van
+-- due_date_handmatig_op (B), autorisatie van toegangverlening op een
+-- vertrouwelijk dossier (C), bevriezing + audit van employees (D), de
+-- review_reden-tekstbug (F), de dode kanban-tabellen (H) en het spoor van
+-- de voorloper-herkoppeling (J).
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_firm2 uuid;
+  v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_mw uuid;    v_mw_uid uuid := gen_random_uuid();
+  v_mw2 uuid;   v_mw2_uid uuid := gen_random_uuid();
+  v_vreemde_uid uuid := gen_random_uuid();
+  v_admin2 uuid; v_admin2_uid uuid := gen_random_uuid();
+  v_client uuid; v_client2 uuid; v_vertr uuid;
+  v_ot uuid; v_taak uuid; v_taak2 uuid;
+  v_due date; v_wettelijk date; v_handmatig timestamptz;
+  v_cnt int; v_ok boolean; v_reden text; v_uid uuid;
+begin
+  select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
+
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's21-admin@test.local', now()),
+    (v_mw_uid, 's21-mw@test.local', now()),
+    (v_mw2_uid, 's21-mw2@test.local', now()),
+    (v_vreemde_uid, 's21-vreemde@test.local', now()),
+    (v_admin2_uid, 's21-admin2@test.local', now());
+
+  insert into public.firms (naam) values ('Sectie 21 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S21 Beheerder', 's21-admin@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_mw_uid, 'S21 Medewerker', 's21-mw@test.local', 'medewerker', false, true)
+    returning id into v_mw;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_mw2_uid, 'S21 Collega', 's21-mw2@test.local', 'medewerker', false, true)
+    returning id into v_mw2;
+
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, vertrouwelijk, actief)
+    values (v_firm, 'S21 Klant', 12, 31, 'geen', false, true) returning id into v_client;
+
+  -- ---------- A ----------
+  -- 21.1 De publieke onboarding-RPC weigert een tweede kantoor. Vóór 0014
+  -- werd een wildvreemde hiermee kantoorbeheerder van een eigen "kantoor" en
+  -- kreeg daarmee schrijfrecht op de GEDEELDE wettelijke kalender.
+  perform set_config('taskflow.test_uid', v_vreemde_uid::text, true);
+  set local role authenticated;
+  v_ok := false;
+  begin
+    perform public.create_firm_and_admin('Aanvaller BV', 'Mallory');
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  set local role postgres;
+  if not v_ok then
+    raise exception 'FAIL 21.1: een buitenstaander kon een tweede kantoor aanmaken';
+  end if;
+  if exists (select 1 from public.employees where auth_user_id = v_vreemde_uid) then
+    raise exception 'FAIL 21.1: de buitenstaander kreeg toch een medewerkersprofiel';
+  end if;
+  raise notice 'PASS 21.1: het single-tenant-slot weigert een tweede kantoor';
+
+  -- 21.2 Diepteverdediging: bestaat er tóch een tweede kantoor (bewust
+  -- aangemaakt), dan raakt zijn feestdag de deadlines van kantoor 1 niet.
+  insert into public.firms (naam) values ('S21 Tweede kantoor') returning id into v_firm2;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm2, v_admin2_uid, 'S21 Beheerder 2', 's21-admin2@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin2;
+  perform set_config('taskflow.test_uid', v_admin2_uid::text, true);
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, vertrouwelijk, actief)
+    values (v_firm2, 'S21 Klant kantoor 2', 12, 31, 'geen', false, true) returning id into v_client2;
+
+  -- Een taak in elk kantoor, met dezelfde (werkdag-)deadline.
+  v_due := date_trunc('week', date '2038-03-08')::date + 2;  -- woensdag
+  perform set_config('taskflow.generating', 'on', true);
+  insert into public.task_instances (
+    client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (v_client, v_ot, '2038', v_due, v_due, 'open', v_admin, 'automatisch_gegenereerd', true)
+  returning id into v_taak;
+  insert into public.task_instances (
+    client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (v_client2, v_ot, '2038', v_due, v_due, 'open', v_admin2, 'automatisch_gegenereerd', true)
+  returning id into v_taak2;
+  perform set_config('taskflow.generating', 'off', true);
+
+  -- Beheerder van kantoor 2 voert een feestdag in op die datum.
+  insert into public.public_holidays (jaar, datum, omschrijving, aangemaakt_door, gewijzigd_door)
+  values (2038, v_due, 'S21 feestdag kantoor 2', v_admin2, v_admin2);
+
+  select due_date into v_due from public.task_instances where id = v_taak2;
+  if v_due <> date_trunc('week', date '2038-03-08')::date + 3 then
+    raise exception 'FAIL 21.2: de eigen taak van kantoor 2 verschoof niet (%)', v_due;
+  end if;
+  select due_date into v_due from public.task_instances where id = v_taak;
+  if v_due <> date_trunc('week', date '2038-03-08')::date + 2 then
+    raise exception 'FAIL 21.2: de feestdag van kantoor 2 verzette de deadline van kantoor 1 (%)', v_due;
+  end if;
+  raise notice 'PASS 21.2: een feestdag van een ander kantoor raakt onze deadlines niet';
+
+  -- ---------- B ----------
+  -- 21.3 De markering wissen kan niet meer. Vóór 0014 werd de handmatige
+  -- afspraak daarna alsnog stil overschreven door de kalenderpijplijn.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  update public.task_instances set toegewezen_medewerker_id = v_mw where id = v_taak;
+  update public.task_instances set due_date = due_date + 14 where id = v_taak;
+  select due_date_handmatig_op into v_handmatig from public.task_instances where id = v_taak;
+  if v_handmatig is null then
+    raise exception 'FAIL 21.3: een handmatige deadline werd niet gemarkeerd';
+  end if;
+
+  update public.task_instances set due_date_handmatig_op = null where id = v_taak;
+  select due_date_handmatig_op into v_handmatig from public.task_instances where id = v_taak;
+  if v_handmatig is null then
+    raise exception 'FAIL 21.3: de markering was te wissen door een medewerker';
+  end if;
+  raise notice 'PASS 21.3: due_date_handmatig_op is niet te wissen';
+
+  -- 21.4 En ook niet te zetten zonder de due_date aan te raken — anders maak
+  -- je een taak immuun voor de kalenderpijplijn en zet je een wettelijke
+  -- deadline vast op een feestdag.
+  -- Een verse taak van het eigen kantoor: v_taak2 hoort bij kantoor 2 en zou
+  -- al op de kantoorgrens stranden, waardoor deze assertie niets zou bewijzen.
+  set local role postgres;
+  perform set_config('taskflow.generating', 'on', true);
+  insert into public.task_instances (
+    client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (
+    v_client, v_ot, '2039', date '2039-06-30', date '2039-06-30',
+    'open', v_mw, 'automatisch_gegenereerd', true
+  ) returning id into v_taak2;
+  perform set_config('taskflow.generating', 'off', true);
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+
+  update public.task_instances set due_date_handmatig_op = now() where id = v_taak2;
+  get diagnostics v_cnt = row_count;
+  if v_cnt <> 1 then
+    raise exception 'FAIL 21.4: de update raakte geen rij (%), de assertie bewijst dan niets', v_cnt;
+  end if;
+  select due_date_handmatig_op into v_handmatig from public.task_instances where id = v_taak2;
+  if v_handmatig is not null then
+    raise exception 'FAIL 21.4: de markering was te zetten zonder de deadline te wijzigen';
+  end if;
+  raise notice 'PASS 21.4: due_date_handmatig_op is niet los te zetten';
+
+  -- ---------- C ----------
+  -- 21.5 Een gewone medewerker kan geen toegang tot een vertrouwelijk dossier
+  -- weggeven; een kantoorbeheerder wel, en dat wordt geaudit.
+  set local role postgres;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  insert into public.clients (
+    firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime,
+    vertrouwelijk, standaard_verantwoordelijke_id, actief
+  ) values (v_firm, 'S21 Vertrouwelijk', 12, 31, 'geen', true, v_mw, true)
+  returning id into v_vertr;
+  insert into public.task_instances (
+    client_id, due_date, due_date_wettelijk, toegewezen_medewerker_id, bron_type, title
+  ) values (v_vertr, current_date + 10, current_date + 10, v_mw, 'handmatig_adhoc', 'S21 vertrouwelijke taak')
+  returning id into v_taak;
+
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  v_ok := false;
+  begin
+    update public.task_instances set toegewezen_medewerker_id = v_mw2 where id = v_taak;
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 21.5: een medewerker kon toegang tot een vertrouwelijk dossier weggeven';
+  end if;
+
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  update public.task_instances set toegewezen_medewerker_id = v_mw2 where id = v_taak;
+  set local role postgres;
+  select count(*) into v_cnt from public.client_change_log
+  where client_id = v_vertr and veld = 'toegang_vertrouwelijk_verleend';
+  if v_cnt <> 1 then
+    raise exception 'FAIL 21.5: de kantoorbeheerder-route werd niet geaudit (%)', v_cnt;
+  end if;
+  raise notice 'PASS 21.5: enkel een kantoorbeheerder kan toegang tot een vertrouwelijk dossier verlenen';
+
+  -- ---------- D ----------
+  -- 21.6 Identiteitskolommen van een medewerker liggen vast, ook voor een
+  -- kantoorbeheerder. Vóór 0014 sloot één PATCH een collega buiten of nam via
+  -- een gewijzigd e-mailadres + claim_invite() diens identiteit over.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+
+  v_ok := false;
+  begin
+    update public.employees set auth_user_id = null where id = v_mw2;
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 21.6: auth_user_id was te ontkoppelen';
+  end if;
+
+  v_ok := false;
+  begin
+    update public.employees set email = 'aanvaller@elders.be' where id = v_mw2;
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 21.6: het e-mailadres van een gekoppelde medewerker was te wijzigen';
+  end if;
+
+  v_ok := false;
+  begin
+    update public.employees set firm_id = v_firm2 where id = v_mw2;
+  exception when others then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 21.6: firm_id was te wijzigen';
+  end if;
+
+  set local role postgres;
+  select auth_user_id, email into v_uid, v_reden from public.employees where id = v_mw2;
+  if v_uid is distinct from v_mw2_uid or v_reden <> 's21-mw2@test.local' then
+    raise exception 'FAIL 21.6: de identiteit van de collega is toch gewijzigd (%, %)', v_uid, v_reden;
+  end if;
+  raise notice 'PASS 21.6: auth_user_id, email en firm_id van een gekoppelde medewerker liggen vast';
+
+  -- 21.6b Een openstaande uitnodiging blijft wel corrigeerbaar.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  perform public.invite_employee('S21 Uitgenodigd', 's21-typfout@test.local', 'medewerker'::public.employee_rol, false);
+  update public.employees set email = 's21-correct@test.local'
+  where firm_id = v_firm and email = 's21-typfout@test.local';
+  set local role postgres;
+  if not exists (select 1 from public.employees where email = 's21-correct@test.local') then
+    raise exception 'FAIL 21.6b: een typfout in een openstaande uitnodiging was niet te corrigeren';
+  end if;
+  raise notice 'PASS 21.6b: een openstaande uitnodiging blijft corrigeerbaar';
+
+  -- 21.7 Rol, goedkeuringsrecht en actief blijven wijzigbaar, maar niet meer
+  -- stilzwijgend: vóór 0014 bestond er geen enkel audittrail op employees.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  update public.employees set mag_goedkeuren = true, rol = 'kantoorbeheerder' where id = v_mw2;
+  set local role postgres;
+  select count(*) into v_cnt from public.employee_change_log
+  where employee_id = v_mw2 and veld in ('rol', 'mag_goedkeuren');
+  if v_cnt <> 2 then
+    raise exception 'FAIL 21.7: rol/goedkeuringsrecht werden niet geaudit (% regels)', v_cnt;
+  end if;
+  select actor_employee_id into v_uid from public.employee_change_log
+  where employee_id = v_mw2 and veld = 'rol' limit 1;
+  if v_uid is distinct from v_admin then
+    raise exception 'FAIL 21.7: de actor staat niet in het audittrail (%)', v_uid;
+  end if;
+  raise notice 'PASS 21.7: rol/goedkeuringsrecht/actief staan in employee_change_log';
+
+  -- 21.8 Het audittrail van medewerkers is niet manipuleerbaar.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  delete from public.employee_change_log where employee_id = v_mw2;
+  get diagnostics v_cnt = row_count;
+  if v_cnt <> 0 then
+    raise exception 'FAIL 21.8: employee_change_log-regels waren te verwijderen (%)', v_cnt;
+  end if;
+  update public.employee_change_log set nieuwe_waarde = 'medewerker' where employee_id = v_mw2;
+  get diagnostics v_cnt = row_count;
+  if v_cnt <> 0 then
+    raise exception 'FAIL 21.8: employee_change_log-regels waren te wijzigen (%)', v_cnt;
+  end if;
+  raise notice 'PASS 21.8: employee_change_log is append-only';
+
+  -- ---------- H ----------
+  -- 21.9 De dode kanban-tabellen zijn niet meer bereikbaar via PostgREST.
+  set local role postgres;
+  if has_table_privilege('authenticated', 'public.tasks', 'insert')
+     or has_table_privilege('authenticated', 'public.boards', 'insert')
+     or has_table_privilege('anon', 'public.tasks', 'select') then
+    raise exception 'FAIL 21.9: de dode kanban-tabellen zijn nog schrijf-/leesbaar';
+  end if;
+  raise notice 'PASS 21.9: de dode kanban-tabellen zijn afgesloten';
+
+  raise notice 'PASS 21: sectie 21 volledig';
+end $$;
+
+-- ============================================================
+-- Sectie 22 (0014): de review_reden-tekstbug (F) en het spoor van de
+-- voorloper-herkoppeling (J). Aparte sectie: deze hebben een eigen fixture
+-- met een override-kalenderrij en een AV-keten nodig.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_client uuid; v_ot uuid; v_ot_av uuid; v_ot_neer uuid;
+  v_taak uuid; v_av uuid; v_neer uuid; v_av2 uuid;
+  v_reden text; v_cnt int; v_due date; v_review boolean;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's22@test.local', now());
+  insert into public.firms (naam) values ('Sectie 22 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S22 Beheerder', 's22@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, vertrouwelijk, actief)
+    values (v_firm, 'S22 Klant', 12, 31, 'geen', false, true) returning id into v_client;
+
+  select id into v_ot from public.obligation_types where code = 'aangifte_venb_pb';
+  select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
+  select id into v_ot_neer from public.obligation_types where code = 'neerlegging_jaarrekening';
+
+  -- ---------- F ----------
+  -- 22.1 Een taak met een handmatig afgesproken deadline én een bestaande
+  -- reviewreden. Vóór 0014 kreeg review_reden letterlijk 'false' als
+  -- voorvoegsel en werd de bestaande reden weggegooid.
+  perform set_config('taskflow.generating', 'on', true);
+  insert into public.task_instances (
+    client_id, obligation_type_id, periode_label, periode_start, periode_eind,
+    due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (
+    v_client, v_ot, '2039', date '2039-01-01', date '2039-12-31',
+    date '2040-09-28', date '2040-09-28', 'open', v_admin, 'automatisch_gegenereerd', true
+  ) returning id into v_taak;
+  perform set_config('taskflow.generating', 'off', true);
+
+  set local role authenticated;
+  update public.task_instances set due_date = date '2040-10-31' where id = v_taak;
+  update public.task_instances set review_vereist = true, review_reden = 'Wacht op stukken van de klant'
+  where id = v_taak;
+  set local role postgres;
+
+  insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, aangemaakt_door, gewijzigd_door)
+  values (v_ot, 2040, null, date '2040-10-15', true, v_admin, v_admin);
+
+  select review_reden into v_reden from public.task_instances where id = v_taak;
+  if v_reden like 'false%' then
+    raise exception 'FAIL 22.1: review_reden begint nog met de tekst "false" (%)', v_reden;
+  end if;
+  if v_reden not like 'Wacht op stukken van de klant%' then
+    raise exception 'FAIL 22.1: de bestaande reviewreden werd weggegooid (%)', v_reden;
+  end if;
+  if v_reden not like '%campagnedatum%' then
+    raise exception 'FAIL 22.1: de nieuwe reden werd niet toegevoegd (%)', v_reden;
+  end if;
+  select due_date into v_due from public.task_instances where id = v_taak;
+  if v_due <> date '2040-10-31' then
+    raise exception 'FAIL 22.1: de handmatige afspraak werd overschreven (%)', v_due;
+  end if;
+  raise notice 'PASS 22.1: review_reden bewaart de oude reden en krijgt geen "false"-voorvoegsel (%)', left(v_reden, 60);
+
+  -- 22.1b Dezelfde correctie op een taak zónder openstaande review. Dit is de
+  -- tak die vóór 0014 letterlijk 'false' vooraan zette: nullif(false, 'true')
+  -- levert de string 'false' i.p.v. null.
+  perform set_config('taskflow.generating', 'on', true);
+  insert into public.task_instances (
+    client_id, obligation_type_id, periode_label, periode_start, periode_eind,
+    due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (
+    v_client, v_ot, '2041', date '2041-01-01', date '2041-12-31',
+    date '2042-09-30', date '2042-09-30', 'open', v_admin, 'automatisch_gegenereerd', true
+  ) returning id into v_taak;
+  perform set_config('taskflow.generating', 'off', true);
+
+  set local role authenticated;
+  update public.task_instances set due_date = date '2042-11-28' where id = v_taak;
+  set local role postgres;
+
+  insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, aangemaakt_door, gewijzigd_door)
+  values (v_ot, 2042, null, date '2042-10-15', true, v_admin, v_admin);
+
+  select review_reden, review_vereist into v_reden, v_review from public.task_instances where id = v_taak;
+  if not v_review then
+    raise exception 'FAIL 22.1b: de taak werd niet gemarkeerd voor review';
+  end if;
+  if v_reden like 'false%' then
+    raise exception 'FAIL 22.1b: review_reden begint met de letterlijke tekst "false" (%)', v_reden;
+  end if;
+  if v_reden not like 'De wettelijke campagnedatum%' then
+    raise exception 'FAIL 22.1b: onverwachte reviewreden (%)', v_reden;
+  end if;
+  raise notice 'PASS 22.1b: zonder openstaande review begint de reden gewoon bij de tekst zelf';
+
+  -- ---------- J ----------
+  -- 22.2 De engine herkoppelt een verweesde voorloper (0013, H-2) en laat daar
+  -- sinds 0014 een spoor van na — de neerleggingsdeadline hangt eraan.
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+    values (v_client, v_ot_av, true, date '2000-01-01', v_admin),
+           (v_client, v_ot_neer, true, date '2000-01-01', v_admin);
+
+  perform public.generate_task_instances(24, 12);
+
+  select id into v_av from public.task_instances
+  where client_id = v_client and obligation_type_id = v_ot_av and status <> 'geannuleerd'
+  order by due_date limit 1;
+  select id into v_neer from public.task_instances
+  where client_id = v_client and obligation_type_id = v_ot_neer and voorloper_taak_id = v_av
+  limit 1;
+  if v_av is null or v_neer is null then
+    raise exception 'FAIL 22.2: fixture leverde geen AV -> neerlegging-keten';
+  end if;
+
+  set local role authenticated;
+  update public.task_instances set status = 'geannuleerd' where id = v_av;
+  set local role postgres;
+
+  perform public.generate_task_instances(24, 12);
+
+  select voorloper_taak_id into v_av2 from public.task_instances where id = v_neer;
+  if v_av2 is null or v_av2 = v_av then
+    raise exception 'FAIL 22.2: de neerlegging werd niet herkoppeld (%)', v_av2;
+  end if;
+
+  select count(*) into v_cnt from public.task_status_log
+  where task_instance_id = v_neer
+    and trigger_bron = 'av_opvolging_automatisch'
+    and notitie like 'Voorloper hergekoppeld%';
+  if v_cnt < 1 then
+    raise exception 'FAIL 22.2: de herkoppeling liet geen spoor na in het audittrail';
+  end if;
+  raise notice 'PASS 22.2: de voorloper-herkoppeling staat in het audittrail';
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

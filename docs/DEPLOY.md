@@ -35,17 +35,31 @@ hash-router, dus er is geen SPA-rewrite/404-fallback nodig.
 
 ## Aandachtspunt: de site is publiek
 
-Een Pages-site is voor iedereen bereikbaar, en de registratieflow is
-self-serve — wie zich registreert maakt een eigen kantoor aan op hetzelfde
-Supabase-project. Klantdata blijft afgeschermd door RLS (niemand ziet
-andermans kantoor), maar vreemden kunnen wél kantoren aanmaken op jouw
-instance, en de demo-seed draait bij elke nieuwe registratie.
+Een Pages-site is voor iedereen bereikbaar. Sinds migratie 0014 is het
+kantoor in de database op slot: `create_firm_and_admin()` weigert zodra er
+één kantoor bestaat, dus een wildvreemde die zich registreert kan géén tweede
+kantoor meer aanmaken en wordt dus ook nooit kantoorbeheerder.
 
-Zodra je zelf geregistreerd bent, zet je dit dicht in het Supabase-dashboard:
-Authentication → Sign In / Providers → **Allow new users to sign up** uit.
-Bestaande gebruikers kunnen dan gewoon inloggen; nieuwe registraties niet meer.
-Collega's voeg je nadien toe via het medewerkersscherm (uitnodiging) plus een
-handmatig aangemaakte gebruiker in het Supabase-dashboard.
+Dat slot is er niet voor niets. Vóór 0014 kon een wildvreemde met één
+registratie kantoorbeheerder van een eigen "kantoor" worden, en daarmee
+schrijfrecht krijgen op de **gedeelde** wettelijke kalender
+(`legal_calendar`, `public_holidays`). Eén request herschreef zo de
+neerleggings- en aangiftedatum van élk dossier van het echte kantoor,
+geboekt als vertrouwd systeemevent. Klantdata lekte daarbij niet — RLS hield
+stand — maar de kalenderintegriteit wel. Het risico was dus niet "vreemden
+maken een kantoor aan", maar "vreemden verzetten jouw wettelijke deadlines".
+De kalenderherberekening is daarnaast per kantoor gescoped, zodat dit ook
+standhoudt als er ooit bewust een tweede kantoor bijkomt.
+
+Zet zelfregistratie daarnaast alsnog uit in het Supabase-dashboard —
+Authentication → Sign In / Providers → **Allow new users to sign up** uit —
+zodat er ook geen losse `auth.users`-rijen meer bijkomen. Bestaande
+gebruikers kunnen gewoon inloggen. Collega's voeg je toe via het
+medewerkersscherm (uitnodiging) plus een handmatig aangemaakte gebruiker in
+het Supabase-dashboard.
+
+Zet ook **Leaked password protection** aan (Authentication → Password): dat
+toetst wachtwoorden bij registratie en wijziging af tegen HaveIBeenPwned.
 
 Let ook op: sinds de security-fix vereist `create_firm_and_admin()` een
 **bevestigd** e-mailadres. Zet Authentication → *Confirm email* aan, anders

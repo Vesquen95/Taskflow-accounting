@@ -9,14 +9,27 @@ import { TaskDetailModal } from '../components/TaskDetailModal'
 import { ClientFormModal, type ClientFormValues } from '../components/ClientFormModal'
 import { ClientObligationFormModal } from '../components/ClientObligationFormModal'
 import { AdhocTaskFormModal } from '../components/AdhocTaskFormModal'
-import { formatDate } from '../lib/urgency'
+import { formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
+
+/** Leesbare namen voor client_change_log.veld — het log slaat kolomnamen op,
+ *  het kantoor leest liever Nederlands. */
+const CHANGE_FIELD_LABEL: Record<string, string> = {
+  vertrouwelijk: 'Vertrouwelijk',
+  standaard_verantwoordelijke_id: 'Standaard verantwoordelijke',
+  toegang_vertrouwelijk_verleend: 'Toegang tot dit vertrouwelijke dossier verleend',
+  boekjaar_einde_maand: 'Boekjaareinde (maand)',
+  boekjaar_einde_dag: 'Boekjaareinde (dag)',
+  btw_regime: 'Btw-regime',
+  btw_aangifte_frequentie: 'Btw-aangiftefrequentie',
+  actief: 'Actief',
+}
 
 /** Klantdossier (§4 point 3): alle verplichtingen, status/historiek,
  * komende deadlines, verantwoordelijke, notities per klant. */
 export function KlantDossierPage({ clientId, navigate }: { clientId: string; navigate: (view: string, param?: string) => void }) {
-  const { client, obligations, tasks, loading, error, reload, addObligation, deactivateObligation, createAdhocTask } =
+  const { client, obligations, tasks, changeLog, loading, error, reload, addObligation, deactivateObligation, createAdhocTask } =
     useClientDetail(clientId)
   const { employees } = useEmployees()
   const { obligationTypes } = useObligationTypes()
@@ -267,6 +280,30 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           </div>
         </section>
       )}
+
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-slate-700">Wijzigingshistoriek dossier</h2>
+        {changeLog.length === 0 ? (
+          <p className="text-sm text-slate-400">
+            Nog geen wijzigingen aan de vertrouwelijkheid, de verantwoordelijke of de toegang van dit dossier.
+          </p>
+        ) : (
+          <ul className="space-y-1.5 text-sm text-slate-600">
+            {changeLog.map((entry) => (
+              <li key={entry.id} className="border-b border-slate-100 pb-1.5 last:border-0">
+                <span className="font-medium text-slate-700">{CHANGE_FIELD_LABEL[entry.veld] ?? entry.veld}</span>
+                <span>
+                  {': '}
+                  {entry.oude_waarde ?? '—'} → {entry.nieuwe_waarde ?? '—'}
+                </span>
+                <span className="ml-1 text-slate-400">
+                  ({entry.actor?.naam ?? 'onbekende medewerker'}, {formatDateTime(entry.created_at)})
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {openTask && (
         <TaskDetailModal

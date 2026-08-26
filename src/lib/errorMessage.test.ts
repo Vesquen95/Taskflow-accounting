@@ -66,7 +66,10 @@ describe('normalizeError — Supabase/PostgREST-objecten die geen Error zijn', (
         details: 'Key (firm_id, ondernemingsnummer)=(f1, 0123.456.789) already exists.',
       })
     )
-    expect(klant.melding).toBe('Er bestaat al een klant met dit ondernemingsnummer.')
+    expect(klant.melding).toContain('Er bestaat al een klant met dit ondernemingsnummer.')
+    // Een vertrouwelijk dossier is onzichtbaar maar bestaat wel: de melding
+    // wijst de gebruiker door i.p.v. hem dubbel werk te laten doen.
+    expect(klant.melding).toContain('vertrouwelijk dossier')
     expect(klant.technisch).toContain('0123.456.789')
   })
 

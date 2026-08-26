@@ -47,6 +47,17 @@ const EVENT_LABEL: Record<string, string> = {
   taak_inhoud_gewijzigd: 'Inhoud gewijzigd',
 }
 
+const TRIGGER_BRON_LABEL: Record<string, string> = {
+  medewerker_actie: 'door een medewerker',
+  kalender_herberekening: 'door de wettelijke kalender',
+  av_opvolging_automatisch: 'door de AV-opvolging',
+}
+
+/** De historiek toont wie iets deed, niet alleen wat er gebeurde. */
+type TaskStatusLogWithActor = TaskStatusLog & {
+  actor: Pick<Employee, 'id' | 'naam'> | null
+}
+
 export function TaskDetailModal({
   task,
   employees,
@@ -56,7 +67,7 @@ export function TaskDetailModal({
   onMarkReviewHandled,
 }: TaskDetailModalProps) {
   const { employee } = useCurrentEmployee()
-  const [log, setLog] = useState<TaskStatusLog[]>([])
+  const [log, setLog] = useState<TaskStatusLogWithActor[]>([])
   const [logLoading, setLogLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -67,12 +78,14 @@ export function TaskDetailModal({
     setLogLoading(true)
     supabase
       .from('task_status_log')
-      .select('*')
+      // De actor en de notitie horen erbij: zonder wie en waarom beantwoordt
+      // het audittrail niet de vraag waarvoor het bestaat.
+      .select('*, actor:employees!task_status_log_actor_employee_id_fkey(id,naam)')
       .eq('task_instance_id', task.id)
       .order('created_at', { ascending: false })
       .then(({ data, error: err }) => {
         if (!active) return
-        if (!err) setLog((data ?? []) as TaskStatusLog[])
+        if (!err) setLog((data ?? []) as TaskStatusLogWithActor[])
         setLogLoading(false)
       })
     return () => {
@@ -262,10 +275,16 @@ export function TaskDetailModal({
             <ul className="max-h-40 space-y-1.5 overflow-y-auto text-xs text-slate-500">
               {log.map((entry) => (
                 <li key={entry.id} className="border-b border-slate-100 pb-1.5 last:border-0">
-                  <span className="font-medium text-slate-700">{EVENT_LABEL[entry.event_type] ?? entry.event_type}</span>
-                  {entry.nieuw_status && <span> → {STATUS_LABEL[entry.nieuw_status]}</span>}
-                  {entry.nieuwe_due_date && <span> → {formatDate(entry.nieuwe_due_date)}</span>}
-                  <span className="ml-1 text-slate-400">({formatDateTime(entry.created_at)})</span>
+                  <div>
+                    <span className="font-medium text-slate-700">{EVENT_LABEL[entry.event_type] ?? entry.event_type}</span>
+                    {entry.nieuw_status && <span> → {STATUS_LABEL[entry.nieuw_status]}</span>}
+                    {entry.nieuwe_due_date && <span> → {formatDate(entry.nieuwe_due_date)}</span>}
+                    <span className="ml-1 text-slate-400">
+                      ({entry.actor?.naam ? `${entry.actor.naam}, ` : ''}
+                      {TRIGGER_BRON_LABEL[entry.trigger_bron] ?? entry.trigger_bron}, {formatDateTime(entry.created_at)})
+                    </span>
+                  </div>
+                  {entry.notitie && <div className="mt-0.5 text-slate-500">{entry.notitie}</div>}
                 </li>
               ))}
             </ul>

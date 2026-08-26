@@ -63,7 +63,16 @@ const CODE_MELDINGEN: Record<string, string> = {
  * substring die in message/details/hint voorkomt.
  */
 const UNIQUE_VERFIJNINGEN: Array<{ patroon: string; melding: string }> = [
-  { patroon: 'ondernemingsnummer', melding: 'Er bestaat al een klant met dit ondernemingsnummer.' },
+  // Bewuste afweging: de unieke index verraadt dat er een dossier met dit
+  // nummer bestaat, ook wanneer dat vertrouwelijk is en dus onzichtbaar. Dat
+  // bestaansfeit is niet te verbergen zonder de index op te geven, dus leggen
+  // we het liever uit dan de gebruiker in het ongewisse te laten dubbel werk
+  // doen. De klantgegevens zelf blijven afgeschermd.
+  {
+    patroon: 'ondernemingsnummer',
+    melding:
+      'Er bestaat al een klant met dit ondernemingsnummer. Zie je die niet in de klantenlijst, dan gaat het om een vertrouwelijk dossier — vraag je kantoorbeheerder.',
+  },
   { patroon: 'idx_task_instances_unique_period', melding: 'Deze taak bestaat al voor deze klant en periode.' },
   { patroon: 'email', melding: 'Er bestaat al een medewerker met dit e-mailadres.' },
 ]

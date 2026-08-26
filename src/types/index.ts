@@ -148,6 +148,20 @@ export interface TaskStatusLog {
   created_at: string
 }
 
+/** client_change_log: het wijzigingslog van een klantdossier. `veld` is
+ *  vrij tekst met een vaste set waarden (zie migratie 0011/0013), inclusief
+ *  'toegang_vertrouwelijk_verleend'. */
+export interface ClientChangeLogEntry {
+  id: string
+  client_id: string
+  veld: string
+  oude_waarde: string | null
+  nieuwe_waarde: string | null
+  actor_employee_id: string
+  created_at: string
+  actor: Pick<Employee, 'id' | 'naam'> | null
+}
+
 export interface LegalCalendarEntry {
   id: string
   obligation_type_id: string

@@ -19,6 +19,7 @@ const baseHandlers: SupabaseHandlers = {
   clients: () => ({ data: { id: 'c1', naam: 'Acme BV' }, error: null }),
   client_obligations: () => ({ data: [], error: null }),
   task_instances: () => ({ data: [], error: null }),
+  client_change_log: () => ({ data: [], error: null }),
 }
 
 beforeEach(() => {
@@ -37,9 +38,10 @@ describe('useClientDetail — loading', () => {
     expect(from).not.toHaveBeenCalled()
   })
 
-  it('loads client, obligations, and tasks in parallel, scoped to the client id', async () => {
+  it('loads client, obligations, tasks and the change log in parallel, scoped to the client id', async () => {
     const obligationCalls: ChainState[] = []
     const taskCalls: ChainState[] = []
+    const logCalls: ChainState[] = []
     install({
       ...baseHandlers,
       client_obligations: (state) => {
@@ -50,6 +52,10 @@ describe('useClientDetail — loading', () => {
         taskCalls.push(state)
         return { data: [{ id: 't1' }], error: null }
       },
+      client_change_log: (state) => {
+        logCalls.push(state)
+        return { data: [{ id: 'l1', veld: 'vertrouwelijk' }], error: null }
+      },
     })
 
     const { result } = renderHook(() => useClientDetail('c1'))
@@ -58,8 +64,24 @@ describe('useClientDetail — loading', () => {
     expect(result.current.client).toEqual({ id: 'c1', naam: 'Acme BV' })
     expect(result.current.obligations).toEqual([{ id: 'co1' }])
     expect(result.current.tasks).toEqual([{ id: 't1' }])
+    expect(result.current.changeLog).toEqual([{ id: 'l1', veld: 'vertrouwelijk' }])
     expect(obligationCalls[0].calls).toContainEqual({ method: 'eq', args: ['client_id', 'c1'] })
     expect(taskCalls[0].calls).toContainEqual({ method: 'eq', args: ['client_id', 'c1'] })
+    expect(logCalls[0].calls).toContainEqual({ method: 'eq', args: ['client_id', 'c1'] })
+    // De actor moet mee opgehaald worden, anders zegt het log niet wie iets deed.
+    expect(logCalls[0].calls.find((c) => c.method === 'select')?.args[0]).toContain('actor:employees')
+  })
+
+  it('surfaces an error when the change log query fails', async () => {
+    install({
+      ...baseHandlers,
+      client_change_log: () => ({ data: null, error: new Error('log query failed') }),
+    })
+
+    const { result } = renderHook(() => useClientDetail('c1'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.error).toBeTruthy()
   })
 
   it('surfaces an error when any of the three parallel queries fails', async () => {
