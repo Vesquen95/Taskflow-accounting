@@ -190,3 +190,46 @@ describe('ClientFormModal — submit error handling', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 })
+
+describe('ClientFormModal — de catalogus komt later binnen', () => {
+  // Gevonden door de e2e-test tegen de live site op 27/08/2026: wie meteen na
+  // het openen van de klantenlijst op "Nieuwe klant" klikt, kreeg een leeg
+  // vak Verplichtingen. De beginwaarde van useState wordt maar één keer
+  // berekend, dus een catalogus die een fractie later binnenkomt haalde het
+  // scherm nooit meer in. Gevolg: je kon niets aanvinken, en de nieuwe klant
+  // kreeg alleen de btw-taken die de database zelf afleidt -- geen algemene
+  // vergadering, geen jaarafsluiting.
+  it('vult de verplichtingen alsnog aan zodra de types er zijn', async () => {
+    const { rerender } = render(
+      <ClientFormModal client={null} employees={employees} obligationTypes={[]} onClose={onClose} onSubmit={onSubmit} />
+    )
+    expect(screen.queryByRole('checkbox', { name: /Algemene vergadering/ })).not.toBeInTheDocument()
+
+    rerender(
+      <ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />
+    )
+
+    expect(await screen.findByRole('checkbox', { name: /Algemene vergadering/ })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /Jaarafsluiting/ })).toBeInTheDocument()
+  })
+
+  it('houdt vast wat de gebruiker al aanvinkte terwijl de types binnenkomen', async () => {
+    const eersteType = [obligationTypes[0]]
+    const { rerender } = render(
+      <ClientFormModal client={null} employees={employees} obligationTypes={eersteType} onClose={onClose} onSubmit={onSubmit} />
+    )
+    const vinkje = await screen.findByRole('checkbox', { name: new RegExp(eersteType[0].naam) })
+    await userEvent.click(vinkje)
+    expect(vinkje).toBeChecked()
+
+    rerender(
+      <ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />
+    )
+
+    expect(screen.getByRole('checkbox', { name: new RegExp(eersteType[0].naam) })).toBeChecked()
+    // En de types die pas later binnenkwamen staan er nu ook bij.
+    for (const type of obligationTypes.slice(1)) {
+      expect(screen.getByRole('checkbox', { name: new RegExp(type.naam) })).toBeInTheDocument()
+    }
+  })
+})

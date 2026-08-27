@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Modal } from './Modal'
 import type { BtwFrequentie, BtwRegime, Client, Employee, ObligationType } from '../types'
 import { reportError } from '../lib/errorMessage'
@@ -66,6 +66,35 @@ export function ClientFormModal({
   const [values, setValues] = useState<ClientFormValues>(
     toFormValues(client, obligationTypes, bestaandeVerplichtingen)
   )
+
+  // De catalogus wordt opgehaald terwijl het scherm al staat. Wie snel op
+  // "Nieuwe klant" klikt opent dit venster voor ze binnen is, en omdat de
+  // beginwaarde van useState maar één keer berekend wordt, bleef de lijst met
+  // verplichtingen dan voorgoed leeg -- je kon niets aanvinken en de klant
+  // kreeg alleen de btw-taken die de database zelf afleidt.
+  //
+  // Daarom vullen we de ontbrekende types alsnog aan zodra ze er zijn. Wat de
+  // gebruiker ondertussen al aanvinkte blijft staan.
+  useEffect(() => {
+    if (obligationTypes.length === 0) return
+    setValues((v) => {
+      const ontbreekt = obligationTypes.filter(
+        (t) => !v.obligations.some((o) => o.obligation_type_id === t.id)
+      )
+      if (ontbreekt.length === 0) return v
+      const aangevuld = legeSelecties(ontbreekt).map((leeg) => {
+        const bestaand = bestaandeVerplichtingen.find(
+          (b) => b.obligation_type_id === leeg.obligation_type_id
+        )
+        return bestaand ?? leeg
+      })
+      return { ...v, obligations: [...v.obligations, ...aangevuld] }
+    })
+    // bestaandeVerplichtingen is een prop-array die bij elke render een nieuwe
+    // referentie kan zijn; de types sturen deze aanvulling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [obligationTypes])
+
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 

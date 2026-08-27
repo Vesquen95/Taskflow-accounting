@@ -15,6 +15,10 @@ export default defineConfig(({ mode }) => ({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    // e2e/ draait op Playwright tegen een echte browser en een echte site;
+    // vitest zou die bestanden anders proberen te draaien en falen op de
+    // Playwright-imports.
+    exclude: ['node_modules', 'dist', 'e2e/**'],
     css: false,
   },
 }))

@@ -12,3 +12,6 @@ dist/
 # opnieuw uit de bronbestanden in design/ gegenereerd wordt.
 design/*.html
 !design/*.dc.html
+.env.e2e
+test-results/
+playwright-report/
