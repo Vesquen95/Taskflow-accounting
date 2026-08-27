@@ -103,5 +103,18 @@ export function useLegalCalendar() {
     return (data as number) ?? 0
   }
 
-  return { entries, holidays, loading, error, reload: load, addEntry, addHoliday, retractHoliday, generateTaskInstances }
+  /** Vult de ontbrekende feestdagen van een reeks jaren aan (migratie 0023).
+   *  De database rekent de bewegelijke feestdagen zelf uit vanuit Pasen, en
+   *  verzet meteen de deadlines die erop terechtgekomen waren. */
+  async function laadFeestdagen(vanJaar: number, totJaar: number): Promise<number> {
+    const { data, error: err } = await supabase.rpc('laad_feestdagen', {
+      p_van: vanJaar,
+      p_tot: totJaar,
+    })
+    if (err) throw err
+    await load()
+    return (data as number) ?? 0
+  }
+
+  return { entries, holidays, loading, error, reload: load, addEntry, addHoliday, retractHoliday, generateTaskInstances, laadFeestdagen }
 }

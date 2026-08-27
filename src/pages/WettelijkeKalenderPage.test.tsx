@@ -12,6 +12,7 @@ const retractHoliday = vi.fn()
 const addHoliday = vi.fn()
 const addEntry = vi.fn()
 const generateTaskInstances = vi.fn()
+const laadFeestdagen = vi.fn()
 
 const holidays = [
   {
@@ -57,6 +58,7 @@ vi.mock('../hooks/useLegalCalendar', () => ({
     addHoliday,
     retractHoliday,
     generateTaskInstances,
+    laadFeestdagen,
   }),
 }))
 
@@ -140,5 +142,40 @@ describe('WettelijkeKalenderPage — feestdagen', () => {
     await user.click(screen.getByRole('button', { name: 'Feestdag intrekken' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/kantoorbeheerder/)
+  })
+})
+
+describe('WettelijkeKalenderPage — dekking van de feestdagenkalender', () => {
+  // De fixture heeft alleen losse feestdagen in 2027, dus de kalender loopt
+  // sowieso achter op de horizon van 36 maanden. Precies de situatie waarin
+  // de motor stilzwijgend alleen nog op weekends verschuift, en een algemene
+  // vergadering op Nieuwjaar 2029 belandde.
+  it('waarschuwt wanneer de kalender niet tot aan de horizon loopt', () => {
+    rol = 'kantoorbeheerder'
+    render(<WettelijkeKalenderPage />)
+
+    expect(screen.getByText(/De feestdagenkalender loopt tot/)).toBeInTheDocument()
+    expect(screen.getByText(/alleen nog op weekends/)).toBeInTheDocument()
+  })
+
+  it('laat de kantoorbeheerder de ontbrekende jaren aanvullen', async () => {
+    rol = 'kantoorbeheerder'
+    laadFeestdagen.mockResolvedValue(40)
+    render(<WettelijkeKalenderPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: /Feestdagen .* aanvullen/ }))
+
+    await waitFor(() => expect(laadFeestdagen).toHaveBeenCalled())
+    const [van, tot] = laadFeestdagen.mock.calls[0]
+    expect(tot).toBeGreaterThan(van)
+    expect(await screen.findByText(/40 feestdagen toegevoegd/)).toBeInTheDocument()
+  })
+
+  it('biedt een medewerker de knop niet aan', () => {
+    rol = 'medewerker'
+    render(<WettelijkeKalenderPage />)
+
+    expect(screen.getByText(/De feestdagenkalender loopt tot/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /aanvullen/ })).not.toBeInTheDocument()
   })
 })

@@ -6,6 +6,7 @@ import { useEmployees } from '../hooks/useEmployees'
 import { ErrorState } from '../components/ErrorState'
 import { Modal } from '../components/Modal'
 import { formatDate } from '../lib/urgency'
+import { dekkingStatus } from '../lib/feestdagen'
 import { reportError } from '../lib/errorMessage'
 import type { PublicHoliday } from '../types'
 
@@ -17,7 +18,7 @@ export function WettelijkeKalenderPage() {
   const { employee } = useCurrentEmployee()
   const { obligationTypes } = useObligationTypes()
   const { employees } = useEmployees()
-  const { entries, holidays, loading, error, reload, addEntry, addHoliday, retractHoliday, generateTaskInstances } =
+  const { entries, holidays, loading, error, reload, addEntry, addHoliday, retractHoliday, generateTaskInstances, laadFeestdagen } =
     useLegalCalendar()
   const isKantoorbeheerder = employee?.rol === 'kantoorbeheerder'
 
@@ -36,6 +37,10 @@ export function WettelijkeKalenderPage() {
   const [holidayJaar, setHolidayJaar] = useState(new Date().getFullYear() + 1)
   const [holidayDatum, setHolidayDatum] = useState('')
   const [holidayOmschrijving, setHolidayOmschrijving] = useState('')
+
+  const [laadBusy, setLaadBusy] = useState(false)
+  const [laadResultaat, setLaadResultaat] = useState<string | null>(null)
+  const [laadFout, setLaadFout] = useState(false)
 
   const [retractTarget, setRetractTarget] = useState<PublicHoliday | null>(null)
   const [retractReden, setRetractReden] = useState('')
@@ -276,6 +281,33 @@ export function WettelijkeKalenderPage() {
 
       <section>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Feestdagen (public_holidays)</h2>
+
+        <FeestdagenDekking
+          holidays={holidays}
+          isKantoorbeheerder={isKantoorbeheerder}
+          busy={laadBusy}
+          resultaat={laadResultaat}
+          fout={laadFout}
+          onLaden={async (van, tot) => {
+            setLaadBusy(true)
+            setLaadFout(false)
+            setLaadResultaat(null)
+            try {
+              const n = await laadFeestdagen(van, tot)
+              setLaadResultaat(
+                n === 0
+                  ? 'De kalender was al volledig; er is niets toegevoegd.'
+                  : `${n} feestdagen toegevoegd (${van}\u2013${tot}). Deadlines die op een feestdag stonden zijn meteen verschoven.`
+              )
+            } catch (err) {
+              setLaadFout(true)
+              setLaadResultaat(reportError(err, 'De feestdagen konden niet geladen worden'))
+            } finally {
+              setLaadBusy(false)
+            }
+          }}
+        />
+
         <form onSubmit={handleAddHoliday} className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">Jaar</label>
@@ -409,6 +441,80 @@ export function WettelijkeKalenderPage() {
           </Modal>
         )}
       </section>
+    </div>
+  )
+}
+
+/**
+ * Waarschuwt wanneer de feestdagenkalender achterloopt op de generatiehorizon.
+ *
+ * Zonder dit blok is dat onzichtbaar: de motor rekent gewoon door en verschuift
+ * voorbij het laatste ingevoerde jaar alleen nog op weekends. Zo belandde een
+ * algemene vergadering op 1 januari 2029. De fout zat niet in de berekening
+ * maar in de stilte eromheen -- vandaar dat dit hier staat, en niet pas in een
+ * foutmelding achteraf.
+ */
+function FeestdagenDekking({
+  holidays,
+  isKantoorbeheerder,
+  busy,
+  resultaat,
+  fout,
+  onLaden,
+}: {
+  holidays: PublicHoliday[]
+  isKantoorbeheerder: boolean
+  busy: boolean
+  resultaat: string | null
+  fout: boolean
+  onLaden: (vanJaar: number, totJaar: number) => Promise<void>
+}) {
+  const { dekkingTot, horizonTot, tekort } = dekkingStatus(holidays)
+  const vanaf = dekkingTot > 0 ? dekkingTot + 1 : new Date().getFullYear()
+  // Ruim over de horizon heen laden, zodat dit niet elk jaar terugkomt.
+  const tot = horizonTot + 3
+
+  return (
+    <div
+      className={`mb-3 rounded-lg border p-3 text-sm ${
+        tekort > 0 ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'
+      }`}
+    >
+      {tekort > 0 ? (
+        <>
+          <p className="font-medium text-amber-900">
+            De feestdagenkalender loopt tot {dekkingTot || 'nergens'}, de taakgeneratie tot {horizonTot}.
+          </p>
+          <p className="mt-1 text-amber-800">
+            Voor de {tekort === 1 ? 'ontbrekende jaargang' : `${tekort} ontbrekende jaargangen`} verschuiven deadlines
+            alleen nog op weekends, niet op feestdagen. Een deadline kan dan op Nieuwjaar of 21 juli terechtkomen.
+          </p>
+        </>
+      ) : (
+        <p className="text-slate-600">
+          Feestdagenkalender volledig tot en met {dekkingTot}; de taakgeneratie loopt tot {horizonTot}.
+        </p>
+      )}
+
+      {isKantoorbeheerder && tekort > 0 && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void onLaden(vanaf, tot)}
+          className="mt-2 rounded-md bg-brand-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60"
+        >
+          {busy ? 'Bezig\u2026' : `Feestdagen ${vanaf}\u2013${tot} aanvullen`}
+        </button>
+      )}
+
+      {resultaat && (
+        <p
+          role={fout ? 'alert' : 'status'}
+          className={`mt-2 text-xs ${fout ? 'text-red-700' : 'text-slate-600'}`}
+        >
+          {resultaat}
+        </p>
+      )}
     </div>
   )
 }

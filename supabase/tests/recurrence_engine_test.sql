@@ -3664,4 +3664,158 @@ begin
   raise notice 'PASS 30.5: elke taak met een verplichtingstype valt in één werkstroom';
 end $$;
 
+
+-- ============================================================
+-- Sectie 31 (0023): de feestdagenkalender loopt voor op de horizon.
+--
+-- Aanleiding: de horizon ging naar 36 maanden terwijl public_holidays in 2027
+-- ophield. Voorbij dat jaar verschoof de motor alleen nog op weekends. Dat
+-- leverde in productie een AV op 1 januari 2029 op -- Nieuwjaar.
+--
+-- De vier bewegelijke feestdagen worden nu gerekend in plaats van overgetypt.
+-- Daarom staat hier de controle die ertoe doet: de gerekende Pasen naast de
+-- werkelijke data, over een reeks jaren met alle randgevallen die de computus
+-- kent (vroegste, laatste, eeuwwissel).
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid(); v_uid2 uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid; v_mw uuid;
+  v_n int; v_ok boolean; v_dekking int;
+  r record;
+begin
+  -- 31.1 Pasen, getoetst aan bekende data. Bij een fout in de computus schuift
+  -- alles mee: paasmaandag, hemelvaart en pinkstermaandag.
+  for r in
+    select * from (values
+      (2025, date '2025-04-20'), (2026, date '2026-04-05'), (2027, date '2027-03-28'),
+      (2028, date '2028-04-16'), (2029, date '2029-04-01'), (2030, date '2030-04-21'),
+      (2031, date '2031-04-13'), (2032, date '2032-03-28'), (2033, date '2033-04-17'),
+      (2034, date '2034-04-09'), (2035, date '2035-03-25'),
+      -- Randgevallen: de vroegst en laatst mogelijke paasdatum, en een
+      -- eeuwwissel waar de gregoriaanse correctie meespeelt.
+      (2038, date '2038-04-25'), (2008, date '2008-03-23'), (2000, date '2000-04-23')
+    ) as t(jaar, verwacht)
+  loop
+    if public.pasen(r.jaar) <> r.verwacht then
+      raise exception 'FAIL 31.1: pasen(%) gaf % i.p.v. %', r.jaar, public.pasen(r.jaar), r.verwacht;
+    end if;
+  end loop;
+  raise notice 'PASS 31.1: de computus klopt over 14 jaren, randgevallen inbegrepen';
+
+  -- 31.2 Tien wettelijke feestdagen per jaar, met de bewegelijke op de juiste
+  -- afstand van Pasen.
+  select count(*) into v_n from public.belgische_feestdagen(2029);
+  if v_n <> 10 then
+    raise exception 'FAIL 31.2: % feestdagen in 2029 i.p.v. 10', v_n;
+  end if;
+  if (select datum from public.belgische_feestdagen(2029) where omschrijving = 'Paasmaandag')
+     <> date '2029-04-02' then
+    raise exception 'FAIL 31.2: paasmaandag 2029 klopt niet';
+  end if;
+  if (select datum from public.belgische_feestdagen(2029) where omschrijving = 'O.-L.-H. Hemelvaart')
+     <> date '2029-05-10' then
+    raise exception 'FAIL 31.2: hemelvaart 2029 klopt niet';
+  end if;
+  if (select datum from public.belgische_feestdagen(2029) where omschrijving = 'Pinkstermaandag')
+     <> date '2029-05-21' then
+    raise exception 'FAIL 31.2: pinkstermaandag 2029 klopt niet';
+  end if;
+  -- Hemelvaart valt altijd op een donderdag, pinkstermaandag op een maandag.
+  -- Slaat dit om, dan klopt de offset niet meer.
+  for v_n in 2025 .. 2040 loop
+    if extract(dow from public.pasen(v_n) + 39) <> 4 then
+      raise exception 'FAIL 31.2: hemelvaart % valt niet op donderdag', v_n;
+    end if;
+    if extract(dow from public.pasen(v_n) + 50) <> 1 then
+      raise exception 'FAIL 31.2: pinkstermaandag % valt niet op maandag', v_n;
+    end if;
+  end loop;
+  raise notice 'PASS 31.2: tien feestdagen per jaar, bewegelijke op de juiste weekdag';
+
+  -- Vanaf hier hebben we een kantoor nodig.
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_uid, 's31-admin@test.local', now()),
+    (v_uid2, 's31-mw@test.local', now());
+  insert into public.firms (naam) values ('Sectie 31 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S31 Beheerder', 's31-admin@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid2, 'S31 Medewerker', 's31-mw@test.local', 'medewerker', false, true)
+    returning id into v_mw;
+
+  -- 31.3 Een medewerker schuift de kalender niet vooruit: dat verzet deadlines
+  -- van het hele kantoor.
+  perform set_config('taskflow.test_uid', v_uid2::text, true);
+  set local role authenticated;
+  v_ok := false;
+  begin
+    perform public.laad_feestdagen(2028, 2030);
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  set local role postgres;
+  if not v_ok then
+    raise exception 'FAIL 31.3: een medewerker kon de feestdagenkalender wijzigen';
+  end if;
+  raise notice 'PASS 31.3: vooruitschuiven is voorbehouden aan de kantoorbeheerder';
+
+  -- 31.4 De kantoorbeheerder laadt een reeks jaren, en een tweede ronde voegt
+  -- niets meer toe.
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  v_n := public.laad_feestdagen(2028, 2030);
+  set local role postgres;
+  if v_n <> 30 then
+    raise exception 'FAIL 31.4: % feestdagen geladen i.p.v. 30', v_n;
+  end if;
+
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  v_n := public.laad_feestdagen(2028, 2030);
+  set local role postgres;
+  if v_n <> 0 then
+    raise exception 'FAIL 31.4: een tweede ronde voegde % rijen toe i.p.v. 0', v_n;
+  end if;
+  raise notice 'PASS 31.4: laden is herhaalbaar zonder dubbels';
+
+  -- 31.5 Nieuwjaar 2029 staat er nu, dus 1 januari 2029 is geen werkdag meer.
+  -- Dat is de datum waar een AV in productie op terechtkwam.
+  if not exists (select 1 from public.public_holidays where datum = date '2029-01-01') then
+    raise exception 'FAIL 31.5: Nieuwjaar 2029 ontbreekt na het laden';
+  end if;
+  if public.next_business_day(date '2028-12-30') <> date '2029-01-02' then
+    raise exception 'FAIL 31.5: 30/12/2028 (zaterdag) schuift naar % i.p.v. 02/01/2029',
+      public.next_business_day(date '2028-12-30');
+  end if;
+  raise notice 'PASS 31.5: een deadline schuift over Nieuwjaar heen, niet erop';
+
+  -- 31.6 De dekking is af te lezen, en telt alleen volledige jaren: een losse
+  -- feestdag in een ver jaar mag niet doorgaan voor "dat jaar is in orde".
+  v_dekking := public.feestdagen_dekking();
+  if v_dekking < 2030 then
+    raise exception 'FAIL 31.6: dekking staat op % i.p.v. minstens 2030', v_dekking;
+  end if;
+  insert into public.public_holidays (jaar, datum, omschrijving, aangemaakt_door, gewijzigd_door)
+    values (2040, date '2040-12-25', 'Kerstmis', v_admin, v_admin);
+  if public.feestdagen_dekking() <> v_dekking then
+    raise exception 'FAIL 31.6: een losse feestdag in 2040 telde als een volledig jaar';
+  end if;
+  raise notice 'PASS 31.6: de dekking telt alleen volledige jaren (%)', v_dekking;
+
+  -- 31.7 De grens op de greep: een tikfout mag geen duizenden rijen invoegen.
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  v_ok := false;
+  begin
+    perform public.laad_feestdagen(2028, 2999);
+  exception when others then v_ok := true;
+  end;
+  set local role postgres;
+  if not v_ok then
+    raise exception 'FAIL 31.7: een greep van bijna duizend jaar werd aanvaard';
+  end if;
+  raise notice 'PASS 31.7: de greep is begrensd';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

@@ -404,6 +404,29 @@ een eigen ingang in de zijbalk, onder de kop "Werk". Per ingang:
 De brede lijsten (Werklijst, Mijn taken, Escalatie-queue, Kalender) blijven
 bestaan onder de kop "Overzicht", voor wie het geheel wil zien.
 
+### De feestdagenkalender loopt voor op de horizon
+
+De motor genereert 36 maanden vooruit. Loopt `public_holidays` korter, dan
+verschuift hij voorbij dat jaar alleen nog op weekends en niet meer op
+feestdagen. Dat is in productie gebeurd: een algemene vergadering met wettelijke
+datum 30/12/2028 (zaterdag) schoof naar **1 januari 2029** -- Nieuwjaar -- omdat
+2029 niet in de tabel stond.
+
+Beslist (migratie 0023):
+
+- De vier bewegelijke feestdagen worden **gerekend** vanuit Pasen (anonieme
+  gregoriaanse computus), niet jaar per jaar overgetypt. Een tikfout in een
+  overgetypte lijst is onzichtbaar tot er een deadline op de verkeerde dag valt.
+- `laad_feestdagen(van, tot)` schuift de kalender vooruit; voorbehouden aan de
+  kantoorbeheerder, want elke invoeging herberekent de deadlines van het hele
+  kantoor.
+- Het beheerscherm **waarschuwt** zodra de dekking onder de horizon zakt, met
+  een knop om ruim over de horizon heen aan te vullen. Bewust een waarschuwing
+  en geen blokkade op de generatie: blokkeren zou terecht zijn maar breekt het
+  werk midden in de dag, terwijl de waarschuwing komt voor het misgaat.
+- Alleen **volledige** jaargangen (tien feestdagen) tellen als gedekt. Een losse
+  feestdag in een ver jaar mag niet doorgaan voor "dat jaar is in orde".
+
 ### Kalenderjaar versus boekjaar
 
 Btw loopt per kalenderjaar, de rest per boekjaar. Verwarrend maar zo is het, en
