@@ -13,6 +13,7 @@ const obligationTypes: ObligationType[] = [
     categorie: 'wettelijk',
     deadline_mechanisme: 'boekjaar_relatief',
     standaard_periodiciteit: 'jaarlijks',
+    werkstroom: 'afsluiting',
   },
 ]
 
@@ -65,7 +66,7 @@ describe('a11y label verification (no workaround)', () => {
     render(
       <ClientObligationFormModal
         obligationTypes={[
-          { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: null },
+          { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: null, werkstroom: 'btw' },
         ]}
         employees={[employee()]}
         onClose={vi.fn()}

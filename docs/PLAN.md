@@ -388,6 +388,22 @@ maart (20/04) en de kwartaalaangifte Q1 (27/04) zijn één campagne in dezelfde
 week, maar dragen verschillende periodelabels. Op periode filteren zou de helft
 van de stapel verbergen.
 
+**Gebouwd (migratie 0022 + `src/lib/werkstromen.ts`).** Elke werkstroom heeft
+een eigen ingang in de zijbalk, onder de kop "Werk". Per ingang:
+
+- Een keuze uit vier deadlinevensters: deze week, komende twee weken, deze
+  maand, alles. Het venster heeft alleen een bovengrens — **geen** ondergrens:
+  wat te laat is hoort in élk venster thuis, anders raak je achterstand kwijt
+  zodra je inzoomt op deze week.
+- De taken staan in blokken per deadlinedatum, met de bulkacties per blok. Zo
+  doe je een hele deadlinedag in één beweging.
+- Alles wat te laat is staat als één blok bovenaan, niet uitgesmeerd over losse
+  dagen: achterstand pak je als geheel aan, en anders krijg je bij ~100
+  dossiers een lange staart van dagen met één taak.
+
+De brede lijsten (Werklijst, Mijn taken, Escalatie-queue, Kalender) blijven
+bestaan onder de kop "Overzicht", voor wie het geheel wil zien.
+
 ### Kalenderjaar versus boekjaar
 
 Btw loopt per kalenderjaar, de rest per boekjaar. Verwarrend maar zo is het, en

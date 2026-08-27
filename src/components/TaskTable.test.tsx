@@ -48,7 +48,7 @@ function task(overrides: Partial<TaskInstanceWithRelations> = {}): TaskInstanceW
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     client: { id: 'c1', naam: 'Client A', vertrouwelijk: false, actief: true },
-    obligation_type: { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk' },
+    obligation_type: { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', werkstroom: 'btw' },
     toegewezen_medewerker: { id: 'e1', naam: 'Jan Janssens' },
     ...overrides,
   }

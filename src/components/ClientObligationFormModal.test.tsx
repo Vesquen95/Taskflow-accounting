@@ -27,6 +27,7 @@ function obligationType(overrides: Partial<ObligationType> = {}): ObligationType
     categorie: 'wettelijk',
     deadline_mechanisme: 'formule',
     standaard_periodiciteit: null,
+    werkstroom: 'btw',
     ...overrides,
   }
 }

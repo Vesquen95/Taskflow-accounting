@@ -13,13 +13,27 @@ export interface TaskInstanceFilters {
   overdueOnly?: boolean
   reviewVereist?: boolean
   zoekterm?: string
+  /** Beperk tot deze verplichtingstypes -- zo staat één werkstroom op het
+   *  scherm. De indeling zelf staat in de catalogus (migratie 0022); dit
+   *  scherm krijgt alleen de ids die eruit volgen. Een lege lijst levert
+   *  bewust niets op: dat is een stroom zonder types, geen "toon alles". */
+  obligationTypeIds?: string[]
+  /** Alleen taken zonder verplichtingstype -- de ad-hoc ingang. */
+  adhocOnly?: boolean
+  /** Bovengrens van het deadlinevenster (ISO-datum, inclusief). Er is geen
+   *  ondergrens: wat te laat is hoort in elk venster thuis. */
+  dueTot?: string
+  /** Nog niet bevragen. Een scherm dat zijn filters pas kent na een eerste
+   *  ronde (de werkstromen halen hun verplichtingstypes uit de catalogus) zou
+   *  anders eerst een query afvuren die het meteen weer overdoet. */
+  paused?: boolean
   /** Include everything, including geannuleerd/ingediend_afgerond — used
    * by the Klantdossier history view. Overrides `status`. */
   includeAlles?: boolean
 }
 
 const SELECT_WITH_RELATIONS =
-  '*, client:clients(id,naam,vertrouwelijk,actief), obligation_type:obligation_types(id,code,naam,categorie), toegewezen_medewerker:employees!task_instances_toegewezen_medewerker_id_fkey(id,naam)'
+  '*, client:clients(id,naam,vertrouwelijk,actief), obligation_type:obligation_types(id,code,naam,categorie,werkstroom), toegewezen_medewerker:employees!task_instances_toegewezen_medewerker_id_fkey(id,naam)'
 
 /** Shared data source for Werklijst, Mijn taken, and de Escalatie-queue
  * (§4 points 1/2/5) — a firm-wide, cross-client list of task instances
@@ -32,6 +46,9 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
   const [filters, setFilters] = useState<TaskInstanceFilters>(initialFilters)
 
   const load = useCallback(async () => {
+    // Gepauzeerd: loading blijft staan, zodat het scherm "Laden…" toont in
+    // plaats van kort "geen taken" voor de echte filters bekend zijn.
+    if (filters.paused) return
     setLoading(true)
     setError(null)
     try {
@@ -51,6 +68,14 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
       }
       if (filters.reviewVereist) {
         query = query.eq('review_vereist', true)
+      }
+      if (filters.adhocOnly) {
+        query = query.is('obligation_type_id', null)
+      } else if (filters.obligationTypeIds) {
+        query = query.in('obligation_type_id', filters.obligationTypeIds)
+      }
+      if (filters.dueTot) {
+        query = query.lte('due_date', filters.dueTot)
       }
 
       const { data, error: err } = await query.order('due_date', { ascending: true })

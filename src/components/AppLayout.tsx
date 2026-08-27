@@ -1,32 +1,62 @@
 import type { ReactNode } from 'react'
 import type { Employee } from '../types'
 import { useAuth } from '../hooks/useAuth'
+import { INGANGEN } from '../lib/werkstromen'
 
 interface NavItem {
   view: string
+  param?: string
   label: string
   adminOnly?: boolean
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { view: 'werklijst', label: 'Werklijst' },
-  { view: 'mijn-taken', label: 'Mijn taken' },
-  { view: 'escalaties', label: 'Escalatie-queue' },
-  { view: 'kalender', label: 'Kalender' },
-  { view: 'klanten', label: 'Klanten' },
-  { view: 'workload', label: 'Workload', adminOnly: true },
-  { view: 'wettelijke-kalender', label: 'Wettelijke kalender', adminOnly: true },
-  { view: 'medewerkers', label: 'Medewerkers', adminOnly: true },
+interface NavGroep {
+  titel: string
+  items: NavItem[]
+}
+
+/** De werkstromen staan bovenaan en apart: dat is waar het kantoor zijn dag
+ *  begint ("ik wil enkel de BTW aangiftes zien"). De brede lijsten eronder
+ *  blijven bestaan voor wie het geheel wil overzien. */
+const NAV_GROEPEN: NavGroep[] = [
+  {
+    titel: 'Werk',
+    items: INGANGEN.map((ingang) => ({
+      view: 'werk',
+      param: ingang.pad,
+      label: ingang.label,
+    })),
+  },
+  {
+    titel: 'Overzicht',
+    items: [
+      { view: 'werklijst', label: 'Werklijst' },
+      { view: 'mijn-taken', label: 'Mijn taken' },
+      { view: 'escalaties', label: 'Escalatie-queue' },
+      { view: 'kalender', label: 'Kalender' },
+    ],
+  },
+  {
+    titel: 'Beheer',
+    items: [
+      { view: 'klanten', label: 'Klanten' },
+      { view: 'workload', label: 'Workload', adminOnly: true },
+      { view: 'wettelijke-kalender', label: 'Wettelijke kalender', adminOnly: true },
+      { view: 'medewerkers', label: 'Medewerkers', adminOnly: true },
+    ],
+  },
 ]
 
 export function AppLayout({
   employee,
   activeView,
+  activeParam,
   navigate,
   children,
 }: {
   employee: Employee
   activeView: string
+  activeParam?: string
   navigate: (view: string, param?: string) => void
   children: ReactNode
 }) {
@@ -39,21 +69,39 @@ export function AppLayout({
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white">T</div>
           <span className="text-base font-semibold text-slate-900">Taskflow</span>
         </div>
-        <nav className="flex-1 space-y-0.5 p-3">
-          {NAV_ITEMS.filter((item) => !item.adminOnly || employee.rol === 'kantoorbeheerder').map((item) => (
-            <button
-              key={item.view}
-              type="button"
-              onClick={() => navigate(item.view)}
-              className={`block w-full rounded-md px-3 py-2 text-left text-sm font-medium transition ${
-                activeView === item.view
-                  ? 'bg-brand-50 text-brand-700'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+        <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+          {NAV_GROEPEN.map((groep) => {
+            const items = groep.items.filter(
+              (item) => !item.adminOnly || employee.rol === 'kantoorbeheerder'
+            )
+            if (items.length === 0) return null
+            return (
+              <div key={groep.titel} className="space-y-0.5">
+                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  {groep.titel}
+                </p>
+                {items.map((item) => {
+                  const actief =
+                    activeView === item.view &&
+                    (item.param === undefined || activeParam === item.param)
+                  return (
+                    <button
+                      key={`${item.view}/${item.param ?? ''}`}
+                      type="button"
+                      onClick={() => navigate(item.view, item.param)}
+                      className={`block w-full rounded-md px-3 py-2 text-left text-sm font-medium transition ${
+                        actief
+                          ? 'bg-brand-50 text-brand-700'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
         </nav>
         <div className="border-t border-slate-200 p-3">
           <p className="truncate text-sm font-medium text-slate-800">{employee.naam}</p>

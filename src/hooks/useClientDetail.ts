@@ -46,7 +46,7 @@ export function useClientDetail(clientId: string | null) {
         supabase
           .from('task_instances')
           .select(
-            '*, client:clients(id,naam,vertrouwelijk,actief), obligation_type:obligation_types(id,code,naam,categorie), toegewezen_medewerker:employees!task_instances_toegewezen_medewerker_id_fkey(id,naam)'
+            '*, client:clients(id,naam,vertrouwelijk,actief), obligation_type:obligation_types(id,code,naam,categorie,werkstroom), toegewezen_medewerker:employees!task_instances_toegewezen_medewerker_id_fkey(id,naam)'
           )
           .eq('client_id', clientId)
           .order('due_date', { ascending: false }),

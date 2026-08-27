@@ -1,0 +1,186 @@
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Mock } from 'vitest'
+import { supabase } from '../lib/supabase'
+import { createSupabaseMock, type ChainState, type SupabaseHandlers } from '../test/supabaseMock'
+import { WerkstroomPage } from './WerkstroomPage'
+import { ingangVoorPad } from '../lib/werkstromen'
+import type { ObligationType, TaskInstanceWithRelations } from '../types'
+
+vi.mock('../lib/supabase', () => ({
+  supabase: { from: vi.fn(), rpc: vi.fn(), auth: {} },
+}))
+
+const obligationTypes: ObligationType[] = [
+  { id: 'ot-btw', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: null, werkstroom: 'btw' },
+  { id: 'ot-lst', code: 'btw_klantenlisting', naam: 'BTW-klantenlisting', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: null, werkstroom: 'btw' },
+  { id: 'ot-jaf', code: 'jaarafsluiting', naam: 'Jaarafsluiting', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: null, werkstroom: 'afsluiting' },
+]
+
+function task(overrides: Partial<TaskInstanceWithRelations> = {}): TaskInstanceWithRelations {
+  return {
+    id: 't1',
+    client_id: 'c1',
+    obligation_type_id: 'ot-btw',
+    client_obligation_id: null,
+    periode_label: '2026-Q1',
+    periode_start: null,
+    periode_eind: null,
+    due_date: '2026-09-20',
+    due_date_wettelijk: '2026-09-20',
+    due_date_verschoven: false,
+    due_date_handmatig_op: null,
+    status: 'open',
+    toegewezen_medewerker_id: 'e1',
+    voorloper_taak_id: null,
+    bron_type: 'automatisch_gegenereerd',
+    voorlopige_datum: false,
+    vereist_goedkeuring: true,
+    goedgekeurd_door: null,
+    goedgekeurd_op: null,
+    review_vereist: false,
+    review_reden: null,
+    title: null,
+    description: null,
+    afgerond_op: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    client: { id: 'c1', naam: 'Klant A', vertrouwelijk: false, actief: true },
+    obligation_type: { id: 'ot-btw', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', werkstroom: 'btw' },
+    toegewezen_medewerker: { id: 'e1', naam: 'Jan' },
+    ...overrides,
+  }
+}
+
+const taskCalls: ChainState[] = []
+
+function install(taken: TaskInstanceWithRelations[], extra: SupabaseHandlers = {}) {
+  const mock = createSupabaseMock({
+    obligation_types: () => ({ data: obligationTypes, error: null }),
+    employees: () => ({ data: [{ id: 'e1', naam: 'Jan' }], error: null }),
+    task_instances: (state) => {
+      taskCalls.push(state)
+      return { data: taken, error: null }
+    },
+    ...extra,
+  })
+  ;(supabase.from as Mock).mockImplementation(mock.from)
+  return mock
+}
+
+/** De laatste task_instances-query — daarvoor moeten de filters kloppen; de
+ *  eerdere zijn de smalle startronde en de ronde vóór de catalogus binnen was. */
+function laatsteQuery(): ChainState {
+  return taskCalls[taskCalls.length - 1]
+}
+
+function argsVan(state: ChainState, method: string, veld: string): unknown[] | undefined {
+  return state.calls.find((c) => c.method === method && c.args[0] === veld)?.args
+}
+
+const btw = ingangVoorPad('btw')!
+const adhoc = ingangVoorPad('adhoc')!
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  taskCalls.length = 0
+})
+
+describe('WerkstroomPage', () => {
+  it('vraagt enkel de verplichtingstypes van deze werkstroom op', async () => {
+    install([task()])
+    render(<WerkstroomPage ingang={btw} />)
+
+    await waitFor(() =>
+      expect(argsVan(laatsteQuery(), 'in', 'obligation_type_id')).toEqual([
+        'obligation_type_id',
+        ['ot-btw', 'ot-lst'],
+      ])
+    )
+    // De jaarafsluiting hoort in een andere ingang en mag hier niet meekomen.
+    expect(argsVan(laatsteQuery(), 'in', 'obligation_type_id')?.[1]).not.toContain('ot-jaf')
+  })
+
+  it('haalt bij het openen niet eerst alle taken van het kantoor op', async () => {
+    install([task()])
+    render(<WerkstroomPage ingang={btw} />)
+
+    // Ook de allereerste ronde is al begrensd op type én deadline.
+    await waitFor(() => expect(taskCalls.length).toBeGreaterThan(0))
+    expect(argsVan(taskCalls[0], 'in', 'obligation_type_id')).toBeDefined()
+    expect(argsVan(taskCalls[0], 'lte', 'due_date')).toBeDefined()
+  })
+
+  it('vraagt bij het openen één keer naar de taken, niet twee keer', async () => {
+    install([task()])
+    render(<WerkstroomPage ingang={btw} />)
+
+    await screen.findByText('Klant A')
+    await new Promise((r) => setTimeout(r, 50))
+    expect(taskCalls).toHaveLength(1)
+  })
+
+  it('begrenst het deadlinevenster bovenaan en verruimt het bij een andere keuze', async () => {
+    install([task()])
+    render(<WerkstroomPage ingang={btw} />)
+
+    await waitFor(() => expect(argsVan(laatsteQuery(), 'lte', 'due_date')).toBeDefined())
+    const smal = argsVan(laatsteQuery(), 'lte', 'due_date')![1] as string
+
+    await userEvent.selectOptions(screen.getByLabelText('Deadlinevenster'), 'deze_maand')
+
+    await waitFor(() => {
+      const nu = argsVan(laatsteQuery(), 'lte', 'due_date')![1] as string
+      expect(nu >= smal).toBe(true)
+    })
+  })
+
+  it('laat het venster helemaal los bij "Alles"', async () => {
+    install([task()])
+    render(<WerkstroomPage ingang={btw} />)
+    await waitFor(() => expect(argsVan(laatsteQuery(), 'lte', 'due_date')).toBeDefined())
+
+    await userEvent.selectOptions(screen.getByLabelText('Deadlinevenster'), 'alles')
+
+    await waitFor(() => expect(argsVan(laatsteQuery(), 'lte', 'due_date')).toBeUndefined())
+  })
+
+  it('vraagt voor de ad-hoc ingang de taken zonder verplichtingstype op', async () => {
+    install([task({ obligation_type_id: null, obligation_type: null, title: 'Losse taak' })])
+    render(<WerkstroomPage ingang={adhoc} />)
+
+    await waitFor(() =>
+      expect(argsVan(laatsteQuery(), 'is', 'obligation_type_id')).toEqual([
+        'obligation_type_id',
+        null,
+      ])
+    )
+    expect(argsVan(laatsteQuery(), 'in', 'obligation_type_id')).toBeUndefined()
+  })
+
+  it('toont de taken in blokken per deadline, met de achterstand vooraan', async () => {
+    const gisteren = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const overEenWeek = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+    install([
+      task({ id: 't-laat', due_date: gisteren, client: { id: 'c1', naam: 'Achterstand BV', vertrouwelijk: false, actief: true } }),
+      task({ id: 't-straks', due_date: overEenWeek, client: { id: 'c2', naam: 'Op tijd BV', vertrouwelijk: false, actief: true } }),
+    ])
+    render(<WerkstroomPage ingang={btw} />)
+
+    await screen.findByRole('heading', { name: 'Te laat' })
+    const koppen = screen.getAllByRole('heading', { level: 2 })
+    // De achterstand staat vooraan, en de rest in een eigen blok erna.
+    expect(koppen[0]).toHaveTextContent('Te laat')
+    expect(koppen.length).toBeGreaterThan(1)
+    expect(screen.getByText('Achterstand BV')).toBeInTheDocument()
+    expect(screen.getByText('Op tijd BV')).toBeInTheDocument()
+  })
+
+  it('zegt het wanneer er in dit venster niets te doen valt', async () => {
+    install([])
+    render(<WerkstroomPage ingang={btw} />)
+
+    expect(await screen.findByText(/Geen btw-taken in dit venster/)).toBeInTheDocument()
+  })
+})

@@ -10,9 +10,9 @@ vi.mock('./supabase', () => ({
 }))
 
 const types: ObligationType[] = [
-  { id: 'ot-av', code: 'algemene_vergadering', naam: 'Algemene vergadering', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: 'jaarlijks' },
-  { id: 'ot-rap', code: 'rapportering', naam: 'Rapportering', categorie: 'service', deadline_mechanisme: 'formule', standaard_periodiciteit: 'kwartaal' },
-  { id: 'ot-btw', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: 'maand_of_kwartaal' },
+  { id: 'ot-av', code: 'algemene_vergadering', naam: 'Algemene vergadering', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: 'jaarlijks', werkstroom: 'afsluiting' },
+  { id: 'ot-rap', code: 'rapportering', naam: 'Rapportering', categorie: 'service', deadline_mechanisme: 'formule', standaard_periodiciteit: 'kwartaal', werkstroom: 'rapportering' },
+  { id: 'ot-btw', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: 'maand_of_kwartaal', werkstroom: 'btw' },
 ]
 const codePerTypeId = Object.fromEntries(types.map((t) => [t.id, t.code]))
 

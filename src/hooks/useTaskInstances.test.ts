@@ -39,7 +39,7 @@ function task(overrides: Partial<TaskInstanceWithRelations> = {}): TaskInstanceW
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     client: { id: 'c1', naam: 'Client A', vertrouwelijk: false, actief: true },
-    obligation_type: { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk' },
+    obligation_type: { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', werkstroom: 'btw' },
     toegewezen_medewerker: { id: 'e1', naam: 'Jan' },
     ...overrides,
   }
@@ -100,6 +100,94 @@ describe('useTaskInstances — filter wiring', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     expect(capturedState?.calls).toContainEqual({ method: 'eq', args: ['client_id', 'client-42'] })
+  })
+
+  it('beperkt tot de verplichtingstypes van één werkstroom', async () => {
+    let capturedState: ChainState | undefined
+    install({
+      task_instances: (state) => {
+        capturedState = state
+        return { data: [], error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances({ obligationTypeIds: ['ot1', 'ot2'] }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(capturedState?.calls).toContainEqual({ method: 'in', args: ['obligation_type_id', ['ot1', 'ot2']] })
+  })
+
+  it('een lege typelijst toont niets in plaats van alles', async () => {
+    let capturedState: ChainState | undefined
+    install({
+      task_instances: (state) => {
+        capturedState = state
+        return { data: [], error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances({ obligationTypeIds: [] }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(capturedState?.calls).toContainEqual({ method: 'in', args: ['obligation_type_id', []] })
+  })
+
+  it('adhocOnly vraagt de taken zonder verplichtingstype op, en negeert de typelijst', async () => {
+    let capturedState: ChainState | undefined
+    install({
+      task_instances: (state) => {
+        capturedState = state
+        return { data: [], error: null }
+      },
+    })
+
+    const { result } = renderHook(() =>
+      useTaskInstances({ adhocOnly: true, obligationTypeIds: ['ot1'] })
+    )
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(capturedState?.calls).toContainEqual({ method: 'is', args: ['obligation_type_id', null] })
+    expect(
+      capturedState?.calls.some((c) => c.method === 'in' && c.args[0] === 'obligation_type_id')
+    ).toBe(false)
+  })
+
+  it('dueTot begrenst het deadlinevenster bovenaan, zonder ondergrens', async () => {
+    let capturedState: ChainState | undefined
+    install({
+      task_instances: (state) => {
+        capturedState = state
+        return { data: [], error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances({ dueTot: '2026-08-30' }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(capturedState?.calls).toContainEqual({ method: 'lte', args: ['due_date', '2026-08-30'] })
+    // Geen ondergrens: achterstand blijft zichtbaar, ook in een smal venster.
+    expect(capturedState?.calls.some((c) => c.method === 'gte' || c.method === 'gt')).toBe(false)
+  })
+
+  it('paused stelt de query uit tot het scherm zijn filters kent', async () => {
+    let opgevraagd = 0
+    install({
+      task_instances: () => {
+        opgevraagd++
+        return { data: [], error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances({ paused: true }))
+
+    await new Promise((r) => setTimeout(r, 20))
+    expect(opgevraagd).toBe(0)
+    // Blijft op laden staan: kort "geen taken" tonen zou liegen.
+    expect(result.current.loading).toBe(true)
+
+    act(() => result.current.setFilters((f) => ({ ...f, paused: false })))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(opgevraagd).toBe(1)
   })
 
   it('overdueOnly filters via lt(due_date, today)', async () => {
