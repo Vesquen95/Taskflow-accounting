@@ -3286,4 +3286,138 @@ begin
   raise notice 'PASS 27.3: de override verzet bestaande taken, en enkel het genoemde cohort';
 end $$;
 
+-- ============================================================
+-- Sectie 28 (0020): de algemene vergadering krijgt haar statutaire datum.
+--
+-- Vóór 0020 rekende de motor de AV op boekjaareinde + 6 maanden -- de
+-- wettelijke uiterste datum, niet de datum uit de statuten. Een klant met
+-- "de eerste maandag van april" stond op 30 juni, en omdat de neerlegging
+-- AV + 30 dagen is schoof die fout door naar de neerleggingsdatum.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_uid uuid := gen_random_uuid();
+  v_klant uuid; v_c06 uuid; v_co uuid;
+  v_ot_av uuid; v_ot_neer uuid;
+  v_av date; v_neer date; v_cnt int; v_ok boolean;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's28@test.local', now());
+  insert into public.firms (naam) values ('Sectie 28 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S28 Beheerder', 's28@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
+  select id into v_ot_neer from public.obligation_types where code = 'neerlegging_jaarrekening';
+
+  -- 28.1 De berekening zelf, beide vormen, inclusief de randgevallen.
+  if public.av_datum(date '2026-12-31', '{"av_vorm":"vaste_datum","av_maand":4,"av_dag":1}') is distinct from date '2027-04-01' then
+    raise exception 'FAIL 28.1: vaste datum 1 april na 31/12/2026';
+  end if;
+  if public.av_datum(date '2026-12-31', '{"av_vorm":"nde_weekdag","av_maand":4,"av_rang":"eerste","av_weekdag":"maandag"}') is distinct from date '2027-04-05' then
+    raise exception 'FAIL 28.1: eerste maandag van april 2027 is 05/04';
+  end if;
+  if public.av_datum(date '2026-12-31', '{"av_vorm":"nde_weekdag","av_maand":6,"av_rang":"derde","av_weekdag":"vrijdag"}') is distinct from date '2027-06-18' then
+    raise exception 'FAIL 28.1: derde vrijdag van juni 2027 is 18/06';
+  end if;
+  if public.av_datum(date '2026-12-31', '{"av_vorm":"nde_weekdag","av_maand":6,"av_rang":"laatste","av_weekdag":"vrijdag"}') is distinct from date '2027-06-25' then
+    raise exception 'FAIL 28.1: laatste vrijdag van juni 2027 is 25/06';
+  end if;
+  -- Een boekjaar dat niet op 31/12 eindigt: de eerstvolgende gelegenheid erna.
+  if public.av_datum(date '2026-06-30', '{"av_vorm":"vaste_datum","av_maand":12,"av_dag":1}') is distinct from date '2026-12-01' then
+    raise exception 'FAIL 28.1: 1 december na een boekjaar dat op 30/06/2026 sluit';
+  end if;
+  -- Onmogelijke of onvolledige statuten leveren geen datum op.
+  if public.av_datum(date '2026-12-31', '{"av_vorm":"vaste_datum","av_maand":4,"av_dag":31}') is not null then
+    raise exception 'FAIL 28.1: 31 april bestaat niet en mag geen datum opleveren';
+  end if;
+  if public.av_datum(date '2026-12-31', '{"av_vorm":"nde_weekdag","av_maand":4,"av_rang":"eerste"}') is not null then
+    raise exception 'FAIL 28.1: een ontbrekende weekdag mag geen datum opleveren';
+  end if;
+  raise notice 'PASS 28.1: beide statutaire vormen rekenen correct, ook de randgevallen';
+
+  -- 28.2 Een datum buiten de wettelijke termijn wordt geweigerd bij het invullen.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S28 Sluit 30/06', 6, 30, 'geen', true) returning id into v_c06;
+  v_ok := false;
+  begin
+    insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters, standaard_toegewezen_medewerker_id)
+    values (v_c06, v_ot_av, true, date '2000-01-01',
+            '{"av_vorm":"vaste_datum","av_maand":4,"av_dag":1}'::jsonb, v_admin);
+  exception when check_violation then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 28.2: een AV op 1 april werd aanvaard voor een boekjaar dat op 30/06 sluit';
+  end if;
+  -- Binnen de termijn mag het wel.
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters, standaard_toegewezen_medewerker_id)
+  values (v_c06, v_ot_av, true, date '2000-01-01',
+          '{"av_vorm":"vaste_datum","av_maand":12,"av_dag":1}'::jsonb, v_admin);
+  raise notice 'PASS 28.2: buiten de zesmaandentermijn wordt geweigerd, binnen aanvaard';
+
+  -- 28.3 De motor gebruikt de statutaire datum, en de neerlegging volgt.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S28 Statuten', 12, 31, 'geen', true) returning id into v_klant;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters, standaard_toegewezen_medewerker_id)
+    values (v_klant, v_ot_av, true, date '2000-01-01',
+            '{"av_vorm":"nde_weekdag","av_maand":4,"av_rang":"eerste","av_weekdag":"maandag"}'::jsonb, v_admin)
+    returning id into v_co;
+
+  perform public.generate_task_instances(36, 24);
+
+  select due_date_wettelijk into v_av from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_av and periode_label = '2026';
+  if v_av is distinct from date '2027-04-05' then
+    raise exception 'FAIL 28.3: de AV staat op % i.p.v. de statutaire 05/04/2027', v_av;
+  end if;
+  select due_date_wettelijk into v_neer from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_neer and periode_label = '2026';
+  if v_neer is distinct from date '2027-05-05' then
+    raise exception 'FAIL 28.3: de neerlegging staat op % i.p.v. AV + 30 dagen (05/05/2027)', v_neer;
+  end if;
+  raise notice 'PASS 28.3: de motor gebruikt de statutaire datum en de neerlegging volgt';
+
+  -- 28.4 Een statutenwijziging schuift alles mee, met een spoor.
+  update public.client_obligations
+  set parameters = '{"av_vorm":"nde_weekdag","av_maand":6,"av_rang":"derde","av_weekdag":"vrijdag"}'::jsonb
+  where id = v_co;
+
+  select due_date_wettelijk into v_av from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_av and periode_label = '2026';
+  if v_av is distinct from date '2027-06-18' then
+    raise exception 'FAIL 28.4: de AV schoof niet mee (% i.p.v. 18/06/2027)', v_av;
+  end if;
+  select due_date_wettelijk into v_neer from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_neer and periode_label = '2026';
+  if v_neer is distinct from date '2027-07-18' then
+    raise exception 'FAIL 28.4: de neerlegging schoof niet mee (% i.p.v. 18/07/2027)', v_neer;
+  end if;
+
+  select count(*) into v_cnt from public.task_status_log l
+  join public.task_instances t on t.id = l.task_instance_id
+  where t.client_id = v_klant and l.notitie like '%statutaire AV-datum is gewijzigd%';
+  if v_cnt = 0 then
+    raise exception 'FAIL 28.4: de verschuiving liet geen spoor na op de AV-taken';
+  end if;
+  select count(*) into v_cnt from public.client_change_log
+  where client_id = v_klant and veld = 'av_statutaire_datum';
+  if v_cnt <> 1 then
+    raise exception 'FAIL 28.4: de statutenwijziging staat niet in het klantwijzigingslog (%)', v_cnt;
+  end if;
+  raise notice 'PASS 28.4: een statutenwijziging schuift AV en neerlegging mee, en wordt geaudit';
+
+  -- 28.5 Zonder ingevulde statuten blijft de wettelijke uiterste datum gelden.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S28 Zonder statuten', 12, 31, 'geen', true) returning id into v_klant;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+    values (v_klant, v_ot_av, true, date '2000-01-01', v_admin);
+  perform public.generate_task_instances(36, 24);
+  select due_date_wettelijk into v_av from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_av and periode_label = '2026';
+  if v_av is distinct from date '2027-06-30' then
+    raise exception 'FAIL 28.5: zonder statuten hoort de wettelijke uiterste datum te gelden (% i.p.v. 30/06/2027)', v_av;
+  end if;
+  raise notice 'PASS 28.5: zonder ingevulde statuten geldt de wettelijke uiterste datum';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
