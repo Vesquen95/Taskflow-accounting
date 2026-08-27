@@ -3555,4 +3555,113 @@ begin
   raise notice 'PASS 29.6: de teller telt per kantoor, niet instance-breed';
 end $$;
 
+
+-- ============================================================
+-- Sectie 30 (0022): werkstromen -- de indeling waarin het kantoor werkt.
+--
+-- Het kantoor: "ik wil alle btw aangiftes afwerken deze week dus ik wil enkel
+-- de BTW aangiftes zien". Met ~100 dossiers is één lijst met alles onwerkbaar.
+--
+-- De indeling hoort in de catalogus en niet in de schermcode: één plek, en een
+-- nieuw verplichtingstype valt vanzelf ergens in plaats van stilzwijgend
+-- nergens. Dat "nergens" is hier het echte risico -- een type zonder werkstroom
+-- zou uit elke ingang verdwijnen en dus onzichtbaar worden.
+-- ============================================================
+do $$
+declare
+  v_zonder int; v_n int; v_ok boolean;
+  v_uid uuid := gen_random_uuid(); v_firm uuid;
+begin
+  -- 30.1 Geen enkel verplichtingstype zit zonder werkstroom.
+  select count(*) into v_zonder from public.obligation_types where werkstroom is null;
+  if v_zonder > 0 then
+    raise exception 'FAIL 30.1: % verplichtingstype(s) zonder werkstroom', v_zonder;
+  end if;
+  raise notice 'PASS 30.1: elk verplichtingstype heeft een werkstroom';
+
+  -- 30.2 De indeling is die van het kantoor (docs/PLAN.md §10), type per type.
+  select count(*) into v_n from public.obligation_types
+   where werkstroom = 'btw' and code in ('btw_aangifte', 'btw_klantenlisting');
+  if v_n <> 2 then
+    raise exception 'FAIL 30.2: btw telt % types i.p.v. 2', v_n;
+  end if;
+  select count(*) into v_n from public.obligation_types
+   where werkstroom = 'afsluiting'
+     and code in ('jaarafsluiting', 'algemene_vergadering', 'neerlegging_jaarrekening');
+  if v_n <> 3 then
+    raise exception 'FAIL 30.2: afsluiting telt % types i.p.v. 3', v_n;
+  end if;
+  select count(*) into v_n from public.obligation_types
+   where werkstroom = 'vennootschapsbelasting' and code in ('va_venb', 'aangifte_venb_pb');
+  if v_n <> 2 then
+    raise exception 'FAIL 30.2: vennootschapsbelasting telt % types i.p.v. 2', v_n;
+  end if;
+  select count(*) into v_n from public.obligation_types
+   where werkstroom = 'rapportering' and code = 'rapportering';
+  if v_n <> 1 then
+    raise exception 'FAIL 30.2: rapportering telt % types i.p.v. 1', v_n;
+  end if;
+  raise notice 'PASS 30.2: de vier werkstromen bevatten precies de juiste types';
+
+  -- 30.2b De voorafbetaling staat bij de vennootschapsbelasting, niet bij de
+  -- afsluiting. Het kantoor: "voorafbetaling doen we per kwartaal bij de
+  -- klanten maar hoort inhoudelijk bij de vennootschapsbelasting."
+  if (select werkstroom from public.obligation_types where code = 'va_venb')
+     is distinct from 'vennootschapsbelasting'::public.werkstroom then
+    raise exception 'FAIL 30.2b: de voorafbetaling staat niet bij de vennootschapsbelasting';
+  end if;
+  -- En de rapportering staat apart, niet mee in de emmer "afsluiting" waar het
+  -- kantoor juist op wil kunnen vertrouwen.
+  if (select werkstroom from public.obligation_types where code = 'rapportering')
+     is distinct from 'rapportering'::public.werkstroom then
+    raise exception 'FAIL 30.2b: de rapportering is bij een andere werkstroom gezet';
+  end if;
+  raise notice 'PASS 30.2b: voorafbetaling bij VenB, rapportering apart';
+
+  -- 30.3 Een nieuw type kan er niet zonder werkstroom bij komen. Zonder deze
+  -- grendel zou een latere uitbreiding stil buiten beeld vallen.
+  v_ok := false;
+  begin
+    insert into public.obligation_types (code, naam, categorie, deadline_mechanisme)
+      values ('s30_zonder_stroom', 'S30 Zonder stroom', 'service', 'formule');
+  exception when not_null_violation then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 30.3: een verplichtingstype zonder werkstroom werd aanvaard';
+  end if;
+  raise notice 'PASS 30.3: een type zonder werkstroom wordt geweigerd';
+
+  -- 30.4 De catalogus blijft voor iedereen alleen-lezen: de werkstroom is geen
+  -- nieuwe schrijfweg. obligation_types heeft alleen een SELECT-policy.
+  insert into auth.users (id, email, email_confirmed_at)
+    values (v_uid, 's30@test.local', now());
+  insert into public.firms (naam) values ('Sectie 30 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S30 Beheerder', 's30@test.local', 'kantoorbeheerder', true, true);
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+
+  set local role authenticated;
+  update public.obligation_types set werkstroom = 'btw' where code = 'rapportering';
+  get diagnostics v_n = row_count;
+  set local role postgres;
+  if v_n <> 0 then
+    raise exception 'FAIL 30.4: de werkstroom van een type werd via de app gewijzigd (% rijen)', v_n;
+  end if;
+  if (select werkstroom from public.obligation_types where code = 'rapportering')
+     is distinct from 'rapportering'::public.werkstroom then
+    raise exception 'FAIL 30.4: de werkstroom van de rapportering is toch veranderd';
+  end if;
+  raise notice 'PASS 30.4: de catalogus blijft alleen-lezen, ook voor de werkstroom';
+
+  -- 30.5 Elke taak is via haar verplichtingstype in precies één werkstroom te
+  -- plaatsen; ad-hoc taken (zonder type) vormen de vijfde ingang.
+  select count(*) into v_n from public.task_instances ti
+    join public.obligation_types ot on ot.id = ti.obligation_type_id
+   where ot.werkstroom is null;
+  if v_n > 0 then
+    raise exception 'FAIL 30.5: % taken vallen buiten elke werkstroom', v_n;
+  end if;
+  raise notice 'PASS 30.5: elke taak met een verplichtingstype valt in één werkstroom';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
