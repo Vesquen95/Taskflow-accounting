@@ -427,6 +427,25 @@ Beslist (migratie 0023):
 - Alleen **volledige** jaargangen (tien feestdagen) tellen als gedekt. Een losse
   feestdag in een ver jaar mag niet doorgaan voor "dat jaar is in orde".
 
+### De horizon schuift vanzelf mee
+
+Op 27/08/2026 bleken er kantoorbreed 182 taken te ontbreken: de generatie had
+sinds de eerste opzet nooit meer gedraaid, dus de horizon liep tot november 2026
+in plaats van 36 maanden vooruit. Dat kwam pas aan het licht toen het kantoor bij
+toeval naar een dossier keek waar een taak miste.
+
+Beslist (migratie 0025): een maandelijkse job (`pg_cron`, de 1e om 03:00 UTC)
+vult eerst de feestdagenkalender aan en genereert daarna per kantoor opnieuw.
+Die volgorde is niet vrijblijvend -- andersom worden deadlines berekend tegen een
+kalender die de laatste jaren nog niet kent.
+
+**Het mag niet stil gebeuren.** Elke ronde laat een rij na in `onderhoud_log`, en
+het beheerscherm toont de laatste stand. Een mislukte ronde werpt bewust *geen*
+fout op naar buiten: dat zou de transactie terugdraaien en juist de logregel
+wissen die de mislukking vastlegt (Postgres kent geen autonome transactie). Het
+logboek is dus de enige plek waar een storing zichtbaar wordt, en het scherm zet
+ze daarom in het rood.
+
 ### Kalenderjaar versus boekjaar
 
 Btw loopt per kalenderjaar, de rest per boekjaar. Verwarrend maar zo is het, en

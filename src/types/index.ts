@@ -199,3 +199,18 @@ export interface PublicHoliday {
  * src/lib/urgency.ts). Not a DB concept — the DB stores real dates and the
  * status flow; "how urgent does this look right now" is a display concern. */
 export type UrgencyBand = 'te_laat' | 'vandaag' | 'deze_week' | 'binnenkort' | 'later' | null
+
+/** Eén ronde horizon-onderhoud (migratie 0025). De maandelijkse job schuift de
+ *  generatiehorizon op en vult de feestdagenkalender aan; zonder dit spoor zou
+ *  dat volledig onzichtbaar gebeuren. */
+export interface OnderhoudLog {
+  id: string
+  gestart_op: string
+  geeindigd_op: string | null
+  aanleiding: string
+  nieuwe_taken: number | null
+  nieuwe_feestdagen: number | null
+  /** Gevuld wanneer de ronde afbrak. Een lege en een mislukte ronde tellen
+   *  allebei nul taken; dit veld houdt ze uit elkaar. */
+  fout: string | null
+}

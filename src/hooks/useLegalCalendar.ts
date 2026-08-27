@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { LegalCalendarEntry, PublicHoliday } from '../types'
+import type { LegalCalendarEntry, OnderhoudLog, PublicHoliday } from '../types'
 import { reportError } from '../lib/errorMessage'
 
 /** Wettelijke-kalenderbeheer (§4 point 7): campaign deadlines +
@@ -11,6 +11,7 @@ import { reportError } from '../lib/errorMessage'
 export function useLegalCalendar() {
   const [entries, setEntries] = useState<LegalCalendarEntry[]>([])
   const [holidays, setHolidays] = useState<PublicHoliday[]>([])
+  const [onderhoud, setOnderhoud] = useState<OnderhoudLog | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -18,18 +19,29 @@ export function useLegalCalendar() {
     setLoading(true)
     setError(null)
     try {
-      const [entriesRes, holidaysRes] = await Promise.all([
+      const [entriesRes, holidaysRes, onderhoudRes] = await Promise.all([
         supabase.from('legal_calendar').select('*').order('jaar', { ascending: false }),
         // Bewust ook de ingetrokken feestdagen: het correctiepatroon is
         // append-only (migratie 0011/0012), dus de historie hoort zichtbaar
         // te blijven. Het beheerscherm toont ze doorstreept met wie/wanneer/
         // waarom; next_business_day() telt ze niet meer mee.
         supabase.from('public_holidays').select('*').order('datum', { ascending: true }),
+        // Alleen de laatste ronde: het scherm toont de stand, niet de historie.
+        // Een medewerker mag deze tabel niet lezen (RLS), en krijgt dan gewoon
+        // een lege lijst -- geen fout.
+        supabase
+          .from('onderhoud_log')
+          .select('*')
+          .order('gestart_op', { ascending: false })
+          .limit(1),
       ])
       if (entriesRes.error) throw entriesRes.error
       if (holidaysRes.error) throw holidaysRes.error
       setEntries((entriesRes.data ?? []) as LegalCalendarEntry[])
       setHolidays((holidaysRes.data ?? []) as PublicHoliday[])
+      if (!onderhoudRes.error) {
+        setOnderhoud(((onderhoudRes.data ?? []) as OnderhoudLog[])[0] ?? null)
+      }
     } catch (err) {
       setError(reportError(err, 'Kon de wettelijke kalender niet laden'))
     } finally {
@@ -116,5 +128,5 @@ export function useLegalCalendar() {
     return (data as number) ?? 0
   }
 
-  return { entries, holidays, loading, error, reload: load, addEntry, addHoliday, retractHoliday, generateTaskInstances, laadFeestdagen }
+  return { entries, holidays, onderhoud, loading, error, reload: load, addEntry, addHoliday, retractHoliday, generateTaskInstances, laadFeestdagen }
 }

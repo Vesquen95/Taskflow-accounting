@@ -5,10 +5,10 @@ import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useEmployees } from '../hooks/useEmployees'
 import { ErrorState } from '../components/ErrorState'
 import { Modal } from '../components/Modal'
-import { formatDate } from '../lib/urgency'
+import { formatDate, formatDateTime } from '../lib/urgency'
 import { dekkingStatus } from '../lib/feestdagen'
 import { reportError } from '../lib/errorMessage'
-import type { PublicHoliday } from '../types'
+import type { OnderhoudLog, PublicHoliday } from '../types'
 
 /** Wettelijke-kalenderbeheer (§4 point 7, kantoorbeheerder-only): jaarlijkse
  * campagnedata + feestdagen invoeren/corrigeren, met zichtbare historie van
@@ -18,7 +18,7 @@ export function WettelijkeKalenderPage() {
   const { employee } = useCurrentEmployee()
   const { obligationTypes } = useObligationTypes()
   const { employees } = useEmployees()
-  const { entries, holidays, loading, error, reload, addEntry, addHoliday, retractHoliday, generateTaskInstances, laadFeestdagen } =
+  const { entries, holidays, onderhoud, loading, error, reload, addEntry, addHoliday, retractHoliday, generateTaskInstances, laadFeestdagen } =
     useLegalCalendar()
   const isKantoorbeheerder = employee?.rol === 'kantoorbeheerder'
 
@@ -153,6 +153,8 @@ export function WettelijkeKalenderPage() {
           werken door de kantoorbeheerder.
         </p>
       </div>
+
+      <OnderhoudStand onderhoud={onderhoud} />
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="mb-2 text-sm font-semibold text-slate-800">Taakgeneratie</h2>
@@ -516,5 +518,65 @@ function FeestdagenDekking({
         </p>
       )}
     </div>
+  )
+}
+
+/**
+ * De stand van het automatische onderhoud (migratie 0025).
+ *
+ * De maandelijkse job schuift de generatiehorizon op en vult de
+ * feestdagenkalender aan. Zonder dit blok gebeurt dat volledig onzichtbaar --
+ * en dat is precies hoe er ooit 182 taken konden ontbreken zonder dat iemand
+ * het merkte.
+ *
+ * Een mislukte ronde werpt geen fout op naar buiten: dat zou de transactie
+ * terugdraaien en juist de logregel wissen. Het foutveld hier is dus de enige
+ * plek waar een storing zichtbaar wordt.
+ */
+function OnderhoudStand({ onderhoud }: { onderhoud: OnderhoudLog | null }) {
+  if (!onderhoud) {
+    return (
+      <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm">
+        <h2 className="mb-1 text-sm font-semibold text-amber-900">Automatisch onderhoud</h2>
+        <p className="text-amber-800">
+          Er is nog geen enkele onderhoudsronde geweest. De horizon schuift dan niet mee en de
+          feestdagenkalender vult zich niet aan.
+        </p>
+      </section>
+    )
+  }
+
+  const mislukt = onderhoud.fout !== null
+  return (
+    <section
+      className={`rounded-lg border p-4 text-sm ${
+        mislukt ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'
+      }`}
+    >
+      <h2 className={`mb-1 text-sm font-semibold ${mislukt ? 'text-red-900' : 'text-slate-800'}`}>
+        Automatisch onderhoud
+      </h2>
+      {mislukt ? (
+        <>
+          <p className="text-red-800">
+            De laatste ronde van {formatDateTime(onderhoud.gestart_op)} is <strong>mislukt</strong>.
+            De horizon en de feestdagenkalender zijn mogelijk niet bijgewerkt.
+          </p>
+          <p className="mt-1 font-mono text-xs text-red-700">{onderhoud.fout}</p>
+        </>
+      ) : (
+        <p className="text-slate-600">
+          Laatste ronde {formatDateTime(onderhoud.gestart_op)} ({onderhoud.aanleiding}):{' '}
+          {onderhoud.nieuwe_taken ?? 0} nieuwe {onderhoud.nieuwe_taken === 1 ? 'taak' : 'taken'},{' '}
+          {onderhoud.nieuwe_feestdagen ?? 0} nieuwe{' '}
+          {onderhoud.nieuwe_feestdagen === 1 ? 'feestdag' : 'feestdagen'}.
+          {onderhoud.geeindigd_op === null && ' Nog bezig.'}
+        </p>
+      )}
+      <p className="mt-1 text-xs text-slate-400">
+        Loopt elke maand op de 1e om 03:00 UTC: de horizon 36 maanden vooruit, de feestdagen
+        eroverheen.
+      </p>
+    </section>
   )
 }

@@ -3875,4 +3875,161 @@ begin
   raise notice 'PASS 32.4: de functies die draaien staan er nog';
 end $$;
 
+-- ============================================================
+-- Sectie 33 (0025): het horizon-onderhoud, en zijn spoor.
+--
+-- Aanleiding: 182 ontbrekende taken kantoorbreed, omdat de generatie sinds de
+-- eerste opzet nooit meer gedraaid had. En daarnaast een feestdagenkalender die
+-- achterliep op de horizon. Beide gaten hadden dezelfde vorm: werk dat met de
+-- hand moest gebeuren en dat niemand herinnerde.
+--
+-- De automatisering mag dat gat niet vervangen door een stiller gat. Daarom
+-- gaat deze sectie vooral over het spoor: elke ronde laat een rij na, ook een
+-- mislukte, en niemand kan die rij achteraf bijkleuren.
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid(); v_uid2 uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid; v_klant uuid;
+  v_log uuid; v_n int; v_ok boolean;
+  v_taken int; v_feestdagen int; v_fout text; v_eind timestamptz;
+  v_dekking int; v_horizon int := extract(year from (current_date + interval '36 months'))::int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_uid, 's33-admin@test.local', now()),
+    (v_uid2, 's33-mw@test.local', now());
+  insert into public.firms (naam) values ('Sectie 33 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S33 Beheerder', 's33-admin@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid2, 'S33 Medewerker', 's33-mw@test.local', 'medewerker', false, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S33 Klant', 6, 30, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_klant;
+
+  -- 33.1 De ronde draait zonder ingelogde gebruiker. Dat is de kern: cron heeft
+  -- geen auth.uid(), en een onderhoudsfunctie die daarop leunt draait nooit.
+  perform set_config('taskflow.test_uid', '', true);
+  v_log := public.onderhoud_taken('test');
+  if v_log is null then
+    raise exception 'FAIL 33.1: de onderhoudsronde gaf geen logregel terug';
+  end if;
+  select nieuwe_taken, nieuwe_feestdagen, fout, geeindigd_op
+    into v_taken, v_feestdagen, v_fout, v_eind
+    from public.onderhoud_log where id = v_log;
+  if v_fout is not null then
+    raise exception 'FAIL 33.1: de ronde brak af met %', v_fout;
+  end if;
+  if v_eind is null then
+    raise exception 'FAIL 33.1: de logregel werd niet afgesloten';
+  end if;
+  if v_taken <= 0 then
+    raise exception 'FAIL 33.1: de ronde leverde % taken op i.p.v. meer dan nul', v_taken;
+  end if;
+  raise notice 'PASS 33.1: de ronde draait zonder gebruiker (% taken, % feestdagen)', v_taken, v_feestdagen;
+
+  -- 33.2 De feestdagen gaan voor de taken. Zou dat andersom lopen, dan worden
+  -- deadlines berekend tegen een kalender die de laatste jaren nog niet kent en
+  -- verschuift de motor daar alleen op weekends -- precies de fout die een AV
+  -- op Nieuwjaar 2029 zette.
+  select count(*) into v_dekking from public.public_holidays
+   where jaar = v_horizon and not ingetrokken;
+  if v_dekking < 10 then
+    raise exception 'FAIL 33.2: het horizonjaar % heeft maar % feestdagen', v_horizon, v_dekking;
+  end if;
+  select count(*) into v_n from public.task_instances ti
+   where ti.client_id = v_klant and ti.status <> 'geannuleerd'
+     and ti.due_date in (select datum from public.public_holidays where not ingetrokken);
+  if v_n <> 0 then
+    raise exception 'FAIL 33.2: % taken staan op een feestdag', v_n;
+  end if;
+  raise notice 'PASS 33.2: feestdagen eerst -- geen enkele taak op een feestdag';
+
+  -- 33.3 Een tweede ronde voegt niets toe. Een onderhoudsjob die elke maand
+  -- dubbels maakt is erger dan geen job.
+  v_log := public.onderhoud_taken('test');
+  select nieuwe_taken into v_taken from public.onderhoud_log where id = v_log;
+  if v_taken <> 0 then
+    raise exception 'FAIL 33.3: een tweede ronde leverde % nieuwe taken op i.p.v. 0', v_taken;
+  end if;
+  raise notice 'PASS 33.3: herhalen verandert niets';
+
+  -- 33.4 Een mislukte ronde laat óók een spoor na, en werpt de fout door.
+  -- Een lege ronde en een mislukte ronde zien er in een teller allebei uit als
+  -- nul; zonder het foutveld zijn ze niet uit elkaar te houden.
+  --
+  -- We breken de ronde echt: een jaar feestdagen weghalen zodat er iets in te
+  -- voegen valt, en dan het invoegen laten mislukken.
+  delete from public.public_holidays where jaar = v_horizon + 3;
+  create or replace function pg_temp.s33_breek() returns trigger language plpgsql as $t$
+  begin
+    raise exception 'S33 opzettelijke storing';
+  end $t$;
+  create trigger trg_s33_breek before insert on public.public_holidays
+    for each row execute function pg_temp.s33_breek();
+
+  -- De ronde werpt de fout bewust NIET door: dat zou de transactie terugdraaien
+  -- en juist de logregel wissen die de mislukking vastlegt.
+  perform public.onderhoud_taken('test-storing');
+  drop trigger trg_s33_breek on public.public_holidays;
+
+  select fout, geeindigd_op into v_fout, v_eind
+    from public.onderhoud_log where aanleiding = 'test-storing'
+   order by gestart_op desc limit 1;
+  if v_fout is null then
+    raise exception 'FAIL 33.4: de mislukte ronde liet geen fout na in het logboek';
+  end if;
+  if v_eind is null then
+    raise exception 'FAIL 33.4: de mislukte ronde werd niet afgesloten in het logboek';
+  end if;
+  raise notice 'PASS 33.4: een mislukte ronde laat een spoor na (%)', left(v_fout, 40);
+
+  -- 33.5 Het logboek is voor de kantoorbeheerder, niet voor iedereen, en het is
+  -- door niemand te wijzigen -- ook niet door wie het mag lezen.
+  perform set_config('taskflow.test_uid', v_uid2::text, true);
+  set local role authenticated;
+  select count(*) into v_n from public.onderhoud_log;
+  set local role postgres;
+  if v_n <> 0 then
+    raise exception 'FAIL 33.5: een medewerker zag % logregels', v_n;
+  end if;
+
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  select count(*) into v_n from public.onderhoud_log;
+  set local role postgres;
+  if v_n = 0 then
+    raise exception 'FAIL 33.5: de kantoorbeheerder ziet het logboek niet';
+  end if;
+
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  update public.onderhoud_log set nieuwe_taken = 999;
+  get diagnostics v_n = row_count;
+  set local role postgres;
+  if v_n <> 0 then
+    raise exception 'FAIL 33.5: het logboek was te wijzigen (% rijen)', v_n;
+  end if;
+  raise notice 'PASS 33.5: alleen de kantoorbeheerder leest het, niemand schrijft erin';
+
+  -- 33.6 De ronde zelf is niet vanuit de app aan te roepen: ze loopt over alle
+  -- kantoren heen. De kantoorbeheerder heeft generate_task_instances voor het
+  -- eigen kantoor.
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  v_ok := false;
+  begin
+    perform public.onderhoud_taken('stiekem');
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  set local role postgres;
+  if not v_ok then
+    raise exception 'FAIL 33.6: het instance-brede onderhoud was vanuit de app te starten';
+  end if;
+  raise notice 'PASS 33.6: het onderhoud blijft buiten de app';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

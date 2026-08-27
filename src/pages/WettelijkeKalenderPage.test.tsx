@@ -13,6 +13,10 @@ const addHoliday = vi.fn()
 const addEntry = vi.fn()
 const generateTaskInstances = vi.fn()
 const laadFeestdagen = vi.fn()
+let onderhoud: {
+  id: string; gestart_op: string; geeindigd_op: string | null; aanleiding: string
+  nieuwe_taken: number | null; nieuwe_feestdagen: number | null; fout: string | null
+} | null = null
 
 const holidays = [
   {
@@ -51,6 +55,7 @@ vi.mock('../hooks/useLegalCalendar', () => ({
   useLegalCalendar: () => ({
     entries: [],
     holidays,
+    onderhoud,
     loading: false,
     error: null,
     reload: vi.fn(),
@@ -177,5 +182,51 @@ describe('WettelijkeKalenderPage — dekking van de feestdagenkalender', () => {
 
     expect(screen.getByText(/De feestdagenkalender loopt tot/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /aanvullen/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('WettelijkeKalenderPage — stand van het automatische onderhoud', () => {
+  // Zonder dit blok schuift de maandelijkse job de horizon op zonder dat
+  // iemand het ziet. Precies zo konden er ooit 182 taken ontbreken zonder dat
+  // het opviel.
+  const geslaagd = {
+    id: 'log-1',
+    gestart_op: '2026-09-01T03:00:00Z',
+    geeindigd_op: '2026-09-01T03:00:12Z',
+    aanleiding: 'cron',
+    nieuwe_taken: 14,
+    nieuwe_feestdagen: 10,
+    fout: null,
+  }
+
+  it('toont wat de laatste ronde opleverde', () => {
+    rol = 'kantoorbeheerder'
+    onderhoud = geslaagd
+    render(<WettelijkeKalenderPage />)
+
+    expect(screen.getByText(/14 nieuwe taken/)).toBeInTheDocument()
+    expect(screen.getByText(/10 nieuwe feestdagen/)).toBeInTheDocument()
+  })
+
+  it('zet een mislukte ronde in het rood, met de fout erbij', () => {
+    rol = 'kantoorbeheerder'
+    onderhoud = { ...geslaagd, nieuwe_taken: 0, fout: 'deadlock detected' }
+    render(<WettelijkeKalenderPage />)
+
+    // "mislukt" staat in een eigen <strong>; de zin eromheen is opgesplitst.
+    expect(screen.getByText('mislukt')).toBeInTheDocument()
+    expect(screen.getByText(/De laatste ronde van/)).toBeInTheDocument()
+    expect(screen.getByText('deadlock detected')).toBeInTheDocument()
+    // Een mislukte ronde mag nooit als "0 nieuwe taken" wegzakken: dat ziet
+    // er hetzelfde uit als een ronde waarin niets te doen was.
+    expect(screen.queryByText(/0 nieuwe taken/)).not.toBeInTheDocument()
+  })
+
+  it('waarschuwt wanneer er nog nooit onderhoud gedraaid heeft', () => {
+    rol = 'kantoorbeheerder'
+    onderhoud = null
+    render(<WettelijkeKalenderPage />)
+
+    expect(screen.getByText(/nog geen enkele onderhoudsronde/)).toBeInTheDocument()
   })
 })
