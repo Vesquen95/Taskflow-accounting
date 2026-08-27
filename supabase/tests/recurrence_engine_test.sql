@@ -469,12 +469,9 @@ end $$;
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 -- Supabase geeft anon/authenticated standaard rechten op alles in `public`;
--- die twee regels bootsen dat na. In productie loopt migratie 0014 dáárna en
--- trekt de rechten op de dode kanban-tabellen weer in — hier moeten we die
--- volgorde met de hand herstellen, anders test sectie 21.9 een toestand die
--- alleen lokaal bestaat.
-revoke all on public.boards, public.columns, public.labels, public.tasks, public.task_labels
-  from anon, authenticated;
+-- de regels hierboven bootsen dat na. De dode kanban-tabellen hoefden hier
+-- vroeger met de hand ingetrokken te worden (migratie 0014); sinds 0024 zijn
+-- ze helemaal weg, dus er valt niets meer in te trekken.
 
 do $$
 declare
@@ -581,12 +578,9 @@ end $$;
 grant usage on schema public to authenticated, anon;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 -- Supabase geeft anon/authenticated standaard rechten op alles in `public`;
--- die twee regels bootsen dat na. In productie loopt migratie 0014 dáárna en
--- trekt de rechten op de dode kanban-tabellen weer in — hier moeten we die
--- volgorde met de hand herstellen, anders test sectie 21.9 een toestand die
--- alleen lokaal bestaat.
-revoke all on public.boards, public.columns, public.labels, public.tasks, public.task_labels
-  from anon, authenticated;
+-- de regels hierboven bootsen dat na. De dode kanban-tabellen hoefden hier
+-- vroeger met de hand ingetrokken te worden (migratie 0014); sinds 0024 zijn
+-- ze helemaal weg, dus er valt niets meer in te trekken.
 
 -- ============================================================
 -- Sectie 7 (F-3): de goedkeuringsstap is niet te omzeilen en
@@ -2588,14 +2582,19 @@ begin
   raise notice 'PASS 21.8: employee_change_log is append-only';
 
   -- ---------- H ----------
-  -- 21.9 De dode kanban-tabellen zijn niet meer bereikbaar via PostgREST.
+  -- 21.9 De dode kanban-tabellen bestaan niet meer.
+  -- 0014 trok de rechten erop in; 0024 heeft ze helemaal verwijderd. Dat is de
+  -- sterkere garantie: een tabel die er niet is kan door een latere `grant`
+  -- ook niet per ongeluk weer opengezet worden.
   set local role postgres;
-  if has_table_privilege('authenticated', 'public.tasks', 'insert')
-     or has_table_privilege('authenticated', 'public.boards', 'insert')
-     or has_table_privilege('anon', 'public.tasks', 'select') then
-    raise exception 'FAIL 21.9: de dode kanban-tabellen zijn nog schrijf-/leesbaar';
+  select count(*) into v_cnt from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relname in ('boards', 'columns', 'labels', 'tasks', 'task_labels');
+  if v_cnt <> 0 then
+    raise exception 'FAIL 21.9: % dode kanban-tabel(len) staan er nog', v_cnt;
   end if;
-  raise notice 'PASS 21.9: de dode kanban-tabellen zijn afgesloten';
+  raise notice 'PASS 21.9: de dode kanban-tabellen bestaan niet meer';
 
   raise notice 'PASS 21: sectie 21 volledig';
 end $$;
@@ -3681,7 +3680,7 @@ do $$
 declare
   v_uid uuid := gen_random_uuid(); v_uid2 uuid := gen_random_uuid();
   v_firm uuid; v_admin uuid; v_mw uuid;
-  v_n int; v_ok boolean; v_dekking int;
+  v_n int; v_ok boolean;
   r record;
 begin
   -- 31.1 Pasen, getoetst aan bekende data. Bij een fout in de computus schuift
@@ -3790,19 +3789,6 @@ begin
   end if;
   raise notice 'PASS 31.5: een deadline schuift over Nieuwjaar heen, niet erop';
 
-  -- 31.6 De dekking is af te lezen, en telt alleen volledige jaren: een losse
-  -- feestdag in een ver jaar mag niet doorgaan voor "dat jaar is in orde".
-  v_dekking := public.feestdagen_dekking();
-  if v_dekking < 2030 then
-    raise exception 'FAIL 31.6: dekking staat op % i.p.v. minstens 2030', v_dekking;
-  end if;
-  insert into public.public_holidays (jaar, datum, omschrijving, aangemaakt_door, gewijzigd_door)
-    values (2040, date '2040-12-25', 'Kerstmis', v_admin, v_admin);
-  if public.feestdagen_dekking() <> v_dekking then
-    raise exception 'FAIL 31.6: een losse feestdag in 2040 telde als een volledig jaar';
-  end if;
-  raise notice 'PASS 31.6: de dekking telt alleen volledige jaren (%)', v_dekking;
-
   -- 31.7 De grens op de greep: een tikfout mag geen duizenden rijen invoegen.
   perform set_config('taskflow.test_uid', v_uid::text, true);
   set local role authenticated;
@@ -3816,6 +3802,77 @@ begin
     raise exception 'FAIL 31.7: een greep van bijna duizend jaar werd aanvaard';
   end if;
   raise notice 'PASS 31.7: de greep is begrensd';
+end $$;
+
+-- ============================================================
+-- Sectie 32 (0024): de opruiming blijft opgeruimd.
+--
+-- Dode code komt zelden in één keer terug; ze sluipt terug omdat niemand meer
+-- weet dat ze weg moest. Deze sectie legt vast wat er waarom verdwenen is.
+-- ============================================================
+do $$
+declare
+  v_n int;
+begin
+  -- 32.1 Geen kanbanresten meer: geen tabellen, en dus ook geen policies die
+  -- bij een latere `grant` stilzwijgend weer een deur openzetten.
+  select count(*) into v_n from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relname in ('boards', 'columns', 'labels', 'tasks', 'task_labels');
+  if v_n <> 0 then
+    raise exception 'FAIL 32.1: % kanbantabel(len) zijn terug', v_n;
+  end if;
+
+  select count(*) into v_n from pg_policy p
+    join pg_class c on c.oid = p.polrelid
+    join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relname in ('boards', 'columns', 'labels', 'tasks', 'task_labels');
+  if v_n <> 0 then
+    raise exception 'FAIL 32.1: % policies van de kanbantabellen staan er nog', v_n;
+  end if;
+  raise notice 'PASS 32.1: de kanbantabellen en hun policies zijn weg';
+
+  -- 32.2 De herberekening bij feestdagen loopt via één functie, niet twee.
+  -- recalc_due_dates_on_new_holiday() is in 0011 vervangen en bleef daarna
+  -- zonder trigger achter.
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = 'recalc_due_dates_on_new_holiday'
+  ) then
+    raise exception 'FAIL 32.2: de vervangen feestdagfunctie staat er weer';
+  end if;
+  if not exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = 'recalc_due_dates_after_holiday_change'
+  ) then
+    raise exception 'FAIL 32.2: de opvolger ontbreekt -- de herberekening draait nergens meer';
+  end if;
+  raise notice 'PASS 32.2: één feestdagherberekening, en het is de juiste';
+
+  -- 32.3 De dekking van de feestdagenkalender wordt op één plaats gerekend:
+  -- in de app (src/lib/feestdagen.ts). Een tweede versie in de database zou
+  -- bij een regelwijziging onvermijdelijk achterlopen.
+  if exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = 'feestdagen_dekking'
+  ) then
+    raise exception 'FAIL 32.3: feestdagen_dekking() is terug; de dekking hoort op één plaats gerekend te worden';
+  end if;
+  raise notice 'PASS 32.3: de dekking wordt op één plaats gerekend';
+
+  -- 32.4 Wat wél gebruikt wordt is er nog. Deze sectie mag nooit een reden
+  -- worden om iets te schrappen dat draait.
+  select count(*) into v_n from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.proname in ('pasen', 'belgische_feestdagen', 'laad_feestdagen',
+                       'next_business_day', 'sync_client_tasks',
+                       'generate_task_instances', 'generate_task_instances_intern');
+  if v_n <> 7 then
+    raise exception 'FAIL 32.4: er draaien nog maar % van de 7 kernfuncties', v_n;
+  end if;
+  raise notice 'PASS 32.4: de functies die draaien staan er nog';
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

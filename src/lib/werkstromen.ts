@@ -3,7 +3,7 @@ import type { ObligationType, TaskInstanceWithRelations, Werkstroom } from '../t
 /** De ingangen van de app. De vier werkstromen komen uit de catalogus
  *  (migratie 0022); 'adhoc' is de vijfde en bestaat niet als enumwaarde —
  *  ad-hoc taken hebben geen verplichtingstype. */
-export type Ingang = Werkstroom | 'adhoc'
+type Ingang = Werkstroom | 'adhoc'
 
 export interface IngangDefinitie {
   key: Ingang

@@ -1,7 +1,7 @@
 import type { PublicHoliday } from '../types'
 
 /** Zoveel maanden vooruit genereert de motor taken (migratie 0016/0021). */
-export const HORIZON_MAANDEN = 36
+const HORIZON_MAANDEN = 36
 
 /** Belgie telt tien wettelijke feestdagen (wet van 4 januari 1974). Een jaar
  *  met minder is niet volledig ingevoerd. */

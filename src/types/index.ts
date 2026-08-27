@@ -40,12 +40,6 @@ export type LogEventType =
 
 export type LogTriggerBron = 'medewerker_actie' | 'kalender_herberekening' | 'av_opvolging_automatisch'
 
-export interface Firm {
-  id: string
-  naam: string
-  created_at: string
-}
-
 export interface Employee {
   id: string
   firm_id: string

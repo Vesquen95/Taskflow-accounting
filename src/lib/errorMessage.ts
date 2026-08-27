@@ -238,7 +238,7 @@ export function normalizeError(err: unknown): NormalizedError {
 }
 
 /** Bouwt de te tonen tekst: begrijpelijke zin eerst, techniek tussen haakjes. */
-export function formatNormalizedError(genormaliseerd: NormalizedError, context?: string): string {
+function formatNormalizedError(genormaliseerd: NormalizedError, context?: string): string {
   const details: string[] = []
   if (genormaliseerd.technisch !== null) details.push(genormaliseerd.technisch)
   if (genormaliseerd.code !== null && genormaliseerd.toonCode) details.push(`code ${genormaliseerd.code}`)

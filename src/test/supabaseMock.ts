@@ -22,8 +22,8 @@ export interface ChainState {
   calls: Array<{ method: string; args: unknown[] }>
 }
 
-export type HandlerResult = { data: unknown; error: unknown }
-export type Handler = (state: ChainState) => HandlerResult | Promise<HandlerResult>
+type HandlerResult = { data: unknown; error: unknown }
+type Handler = (state: ChainState) => HandlerResult | Promise<HandlerResult>
 
 export type SupabaseHandlers = Record<string, Handler>
 
@@ -34,7 +34,7 @@ function missingHandlerResult(table: string): HandlerResult {
   }
 }
 
-export function createQueryBuilder(handlers: SupabaseHandlers, table: string) {
+function createQueryBuilder(handlers: SupabaseHandlers, table: string) {
   const state: ChainState = { table, op: 'select', calls: [] }
 
   function resolve(): Promise<HandlerResult> {
@@ -162,12 +162,4 @@ export function createSupabaseMock(
   })
 
   return { from, auth, rpc }
-}
-
-/** Convenience factory for a fake Supabase session/user pair. */
-export function fakeSession(userId = 'user-1', email = 'user@example.com') {
-  return {
-    access_token: 'fake-token',
-    user: { id: userId, email },
-  }
 }

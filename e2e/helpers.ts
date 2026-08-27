@@ -1,12 +1,12 @@
 import type { Page } from '@playwright/test'
 import { expect } from '@playwright/test'
 
-export const TEST_EMAIL = process.env.TASKFLOW_TEST_EMAIL ?? 'test@pato.be'
-export const TEST_PASSWORD = process.env.TASKFLOW_TEST_PASSWORD ?? ''
+const TEST_EMAIL = process.env.TASKFLOW_TEST_EMAIL ?? 'test@pato.be'
+const TEST_PASSWORD = process.env.TASKFLOW_TEST_PASSWORD ?? ''
 
 /** Voorvoegsel voor alles wat een test aanmaakt, zodat het achteraf in de
  *  echte database terug te vinden en op te ruimen is. */
-export const E2E = '[E2E]'
+const E2E = '[E2E]'
 
 export async function login(page: Page) {
   if (!TEST_PASSWORD) {
