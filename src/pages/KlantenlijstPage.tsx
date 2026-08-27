@@ -3,6 +3,8 @@ import { useClients } from '../hooks/useClients'
 import { useEmployees } from '../hooks/useEmployees'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { ClientFormModal, type ClientFormValues } from '../components/ClientFormModal'
+import { useObligationTypes } from '../hooks/useObligationTypes'
+import { saveClientObligations } from '../lib/clientObligations'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { formatDate } from '../lib/urgency'
@@ -12,11 +14,13 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
   const { employee } = useCurrentEmployee()
   const { employees } = useEmployees()
   const { clients, loading, error, filters, setFilters, reload, createClient } = useClients()
+  const { obligationTypes } = useObligationTypes()
+  const codePerTypeId = Object.fromEntries(obligationTypes.map((t) => [t.id, t.code]))
   const [showCreate, setShowCreate] = useState(false)
 
   async function handleCreate(values: ClientFormValues) {
     if (!employee) return
-    await createClient({
+    const nieuw = await createClient({
       firm_id: employee.firm_id,
       naam: values.naam.trim(),
       ondernemingsnummer: values.ondernemingsnummer.trim() || null,
@@ -30,6 +34,9 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
       standaard_verantwoordelijke_id: values.standaard_verantwoordelijke_id || null,
       actief: true,
     })
+    // Alles in één handeling: de klant staat er, en zijn toekomstige taken ook.
+    await saveClientObligations(nieuw.id, values.obligations, codePerTypeId)
+    await reload()
   }
 
   return (
@@ -156,7 +163,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
       )}
 
       {showCreate && (
-        <ClientFormModal client={null} employees={employees} onClose={() => setShowCreate(false)} onSubmit={handleCreate} />
+        <ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={() => setShowCreate(false)} onSubmit={handleCreate} />
       )}
     </div>
   )

@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Modal } from './Modal'
-import type { BtwFrequentie, BtwRegime, Client, Employee } from '../types'
+import type { BtwFrequentie, BtwRegime, Client, Employee, ObligationType } from '../types'
 import { reportError } from '../lib/errorMessage'
+import { ObligationPicker } from './ObligationPicker'
+import { legeSelecties, type ObligationSelection } from '../lib/clientObligations'
 
 const RECHTSVORMEN = ['BV', 'NV', 'CommV', 'VOF', 'VZW', 'Eenmanszaak', 'Coöperatieve vennootschap', 'Andere']
 
@@ -17,9 +19,16 @@ export interface ClientFormValues {
   vertrouwelijk: boolean
   standaard_verantwoordelijke_id: string
   actief: boolean
+  /** Alle verplichtingen die het kantoor voor deze klant doet, in één keer
+   *  ingevuld -- zie docs/PLAN.md §10. */
+  obligations: ObligationSelection[]
 }
 
-function toFormValues(client: Client | null): ClientFormValues {
+function toFormValues(
+  client: Client | null,
+  obligationTypes: ObligationType[],
+  bestaandeSelecties: ObligationSelection[]
+): ClientFormValues {
   return {
     naam: client?.naam ?? '',
     ondernemingsnummer: client?.ondernemingsnummer ?? '',
@@ -32,21 +41,31 @@ function toFormValues(client: Client | null): ClientFormValues {
     vertrouwelijk: client?.vertrouwelijk ?? false,
     standaard_verantwoordelijke_id: client?.standaard_verantwoordelijke_id ?? '',
     actief: client?.actief ?? true,
+    obligations: legeSelecties(obligationTypes).map((leeg) => {
+      const bestaand = bestaandeSelecties.find((b) => b.obligation_type_id === leeg.obligation_type_id)
+      return bestaand ?? leeg
+    }),
   }
 }
 
 export function ClientFormModal({
   client,
   employees,
+  obligationTypes,
+  bestaandeVerplichtingen = [],
   onClose,
   onSubmit,
 }: {
   client: Client | null
   employees: Employee[]
+  obligationTypes: ObligationType[]
+  bestaandeVerplichtingen?: ObligationSelection[]
   onClose: () => void
   onSubmit: (values: ClientFormValues) => Promise<void>
 }) {
-  const [values, setValues] = useState<ClientFormValues>(toFormValues(client))
+  const [values, setValues] = useState<ClientFormValues>(
+    toFormValues(client, obligationTypes, bestaandeVerplichtingen)
+  )
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -228,6 +247,14 @@ export function ClientFormModal({
             </label>
           )}
         </div>
+
+        <ObligationPicker
+          obligationTypes={obligationTypes}
+          employees={employees}
+          selections={values.obligations}
+          btwRegime={values.btw_regime}
+          onChange={(next) => setValues((v) => ({ ...v, obligations: next }))}
+        />
 
         {values.vertrouwelijk && (
           <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">

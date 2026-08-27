@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { UrgencyBadge } from '../components/UrgencyBadge'
 import { TaskDetailModal } from '../components/TaskDetailModal'
 import { ClientFormModal, type ClientFormValues } from '../components/ClientFormModal'
+import { saveClientObligations, loadClientObligations, type ObligationSelection } from '../lib/clientObligations'
 import { ClientObligationFormModal } from '../components/ClientObligationFormModal'
 import { AdhocTaskFormModal } from '../components/AdhocTaskFormModal'
 import { formatDate, formatDateTime } from '../lib/urgency'
@@ -35,6 +36,8 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
   const { obligationTypes } = useObligationTypes()
   const [openTask, setOpenTask] = useState<TaskInstanceWithRelations | null>(null)
   const [showEdit, setShowEdit] = useState(false)
+  const [bestaandeVerplichtingen, setBestaandeVerplichtingen] = useState<ObligationSelection[]>([])
+  const codePerTypeId = Object.fromEntries(obligationTypes.map((t) => [t.id, t.code]))
   const [showAddObligation, setShowAddObligation] = useState(false)
   const [showAdhoc, setShowAdhoc] = useState(false)
 
@@ -56,7 +59,15 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
       })
       .eq('id', clientId)
     if (err) throw err
+    // Verplichtingen bij- en afzetten hoort bij het opslaan, niet bij een
+    // aparte knop (docs/PLAN.md §10).
+    await saveClientObligations(clientId, values.obligations, codePerTypeId)
     await reload()
+  }
+
+  async function openEdit() {
+    setBestaandeVerplichtingen(await loadClientObligations(clientId))
+    setShowEdit(true)
   }
 
   async function updateTaskStatus(taskId: string, status: TaskStatus) {
@@ -147,7 +158,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
             </div>
           </dl>
         </div>
-        <button type="button" onClick={() => setShowEdit(true)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        <button type="button" onClick={() => void openEdit()} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
           Bewerken
         </button>
       </div>
@@ -315,7 +326,16 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           onMarkReviewHandled={markReviewHandled}
         />
       )}
-      {showEdit && <ClientFormModal client={client} employees={employees} onClose={() => setShowEdit(false)} onSubmit={handleEdit} />}
+      {showEdit && (
+        <ClientFormModal
+          client={client}
+          employees={employees}
+          obligationTypes={obligationTypes}
+          bestaandeVerplichtingen={bestaandeVerplichtingen}
+          onClose={() => setShowEdit(false)}
+          onSubmit={handleEdit}
+        />
+      )}
       {showAddObligation && (
         <ClientObligationFormModal
           obligationTypes={obligationTypes.filter((ot) => !activeObligations.some((a) => a.obligation_type_id === ot.id))}

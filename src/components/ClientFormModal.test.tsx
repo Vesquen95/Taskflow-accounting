@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClientFormModal } from './ClientFormModal'
-import type { Client, Employee } from '../types'
+import type { Client, Employee, ObligationType } from '../types'
 
 function employee(overrides: Partial<Employee> = {}): Employee {
   return {
@@ -41,6 +41,12 @@ function client(overrides: Partial<Client> = {}): Client {
 
 const employees = [employee({ id: 'e1', naam: 'Jan Janssens' }), employee({ id: 'e2', naam: 'Els Peeters' })]
 
+const obligationTypes: ObligationType[] = [
+  { id: 'ot-av', code: 'algemene_vergadering', naam: 'Algemene vergadering', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: 'jaarlijks' },
+  { id: 'ot-jaar', code: 'jaarafsluiting', naam: 'Jaarafsluiting', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: 'jaarlijks' },
+  { id: 'ot-btw', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: 'maand_of_kwartaal' },
+]
+
 const onClose = vi.fn()
 const onSubmit = vi.fn()
 
@@ -53,7 +59,7 @@ beforeEach(() => {
 describe('ClientFormModal — required-field validation', () => {
   it('requires a non-empty naam', async () => {
     const user = userEvent.setup()
-    render(<ClientFormModal client={null} employees={employees} onClose={onClose} onSubmit={onSubmit} />)
+    render(<ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />)
 
     await user.type(screen.getByLabelText('Naam *'), '   ')
     await user.click(screen.getByRole('button', { name: 'Opslaan' }))
@@ -66,7 +72,7 @@ describe('ClientFormModal — required-field validation', () => {
 describe('ClientFormModal — vertrouwelijk ⇒ verplichte standaard verantwoordelijke (§7 decision 4)', () => {
   it('blocks submit with a clear error when vertrouwelijk is checked but no responsible employee is chosen', async () => {
     const user = userEvent.setup()
-    render(<ClientFormModal client={null} employees={employees} onClose={onClose} onSubmit={onSubmit} />)
+    render(<ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />)
 
     await user.type(screen.getByLabelText('Naam *'), 'Confidential Client BV')
     await user.click(screen.getByRole('checkbox', { name: 'Vertrouwelijk' }))
@@ -80,7 +86,7 @@ describe('ClientFormModal — vertrouwelijk ⇒ verplichte standaard verantwoord
 
   it('shows an explanatory note once vertrouwelijk is checked', async () => {
     const user = userEvent.setup()
-    render(<ClientFormModal client={null} employees={employees} onClose={onClose} onSubmit={onSubmit} />)
+    render(<ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />)
 
     expect(screen.queryByText(/enkel zichtbaar voor de kantoorbeheerder/)).not.toBeInTheDocument()
     await user.click(screen.getByRole('checkbox', { name: 'Vertrouwelijk' }))
@@ -89,7 +95,7 @@ describe('ClientFormModal — vertrouwelijk ⇒ verplichte standaard verantwoord
 
   it('submits successfully once a standaard verantwoordelijke is chosen for a confidential client', async () => {
     const user = userEvent.setup()
-    render(<ClientFormModal client={null} employees={employees} onClose={onClose} onSubmit={onSubmit} />)
+    render(<ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />)
 
     await user.type(screen.getByLabelText('Naam *'), 'Confidential Client BV')
     await user.click(screen.getByRole('checkbox', { name: 'Vertrouwelijk' }))
@@ -106,7 +112,7 @@ describe('ClientFormModal — vertrouwelijk ⇒ verplichte standaard verantwoord
 describe('ClientFormModal — BTW-regime dependent field (checked-constraint mirror)', () => {
   it('shows the aangiftefrequentie select only for periodieke_aangever, defaulting to kwartaal', async () => {
     const user = userEvent.setup()
-    render(<ClientFormModal client={null} employees={employees} onClose={onClose} onSubmit={onSubmit} />)
+    render(<ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />)
 
     expect(screen.queryByText('Aangiftefrequentie')).not.toBeInTheDocument()
 
@@ -118,7 +124,7 @@ describe('ClientFormModal — BTW-regime dependent field (checked-constraint mir
   it('clears the aangiftefrequentie when switching away from periodieke_aangever', async () => {
     const user = userEvent.setup()
     render(
-      <ClientFormModal client={client({ btw_regime: 'periodieke_aangever', btw_aangifte_frequentie: 'maand' })} employees={employees} onClose={onClose} onSubmit={onSubmit} />
+      <ClientFormModal client={client({ btw_regime: 'periodieke_aangever', btw_aangifte_frequentie: 'maand' })} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />
     )
 
     await user.selectOptions(screen.getByLabelText('BTW-regime'), 'geen')
@@ -131,7 +137,7 @@ describe('ClientFormModal — BTW-regime dependent field (checked-constraint mir
 describe('ClientFormModal — editing an existing client', () => {
   it('prefills the form from the client prop', () => {
     render(
-      <ClientFormModal client={client({ naam: 'Existing Co', mandataris: false })} employees={employees} onClose={onClose} onSubmit={onSubmit} />
+      <ClientFormModal client={client({ naam: 'Existing Co', mandataris: false })} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />
     )
     const naamInput = screen.getByLabelText('Naam *') as HTMLInputElement
     expect(naamInput.value).toBe('Existing Co')
@@ -139,10 +145,10 @@ describe('ClientFormModal — editing an existing client', () => {
   })
 
   it('shows an Actief checkbox only when editing an existing client, not when creating one', () => {
-    const { rerender } = render(<ClientFormModal client={null} employees={employees} onClose={onClose} onSubmit={onSubmit} />)
+    const { rerender } = render(<ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />)
     expect(screen.queryByRole('checkbox', { name: 'Actief' })).not.toBeInTheDocument()
 
-    rerender(<ClientFormModal client={client()} employees={employees} onClose={onClose} onSubmit={onSubmit} />)
+    rerender(<ClientFormModal client={client()} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />)
     expect(screen.getByRole('checkbox', { name: 'Actief' })).toBeInTheDocument()
   })
 })
@@ -151,7 +157,7 @@ describe('ClientFormModal — submit error handling', () => {
   it('shows the returned error and does not close the modal when onSubmit rejects', async () => {
     const user = userEvent.setup()
     onSubmit.mockRejectedValue(new Error('Ondernemingsnummer al in gebruik.'))
-    render(<ClientFormModal client={null} employees={employees} onClose={onClose} onSubmit={onSubmit} />)
+    render(<ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />)
 
     await user.type(screen.getByLabelText('Naam *'), 'Acme BV')
     await user.click(screen.getByRole('button', { name: 'Opslaan' }))
@@ -172,7 +178,7 @@ describe('ClientFormModal — submit error handling', () => {
       details: null,
       hint: null,
     })
-    render(<ClientFormModal client={null} employees={employees} onClose={onClose} onSubmit={onSubmit} />)
+    render(<ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />)
 
     await user.type(screen.getByLabelText('Naam *'), 'Acme BV')
     await user.click(screen.getByRole('button', { name: 'Opslaan' }))

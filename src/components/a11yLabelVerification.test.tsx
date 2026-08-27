@@ -3,7 +3,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { AdhocTaskFormModal } from './AdhocTaskFormModal'
 import { ClientFormModal } from './ClientFormModal'
 import { ClientObligationFormModal } from './ClientObligationFormModal'
-import type { Employee } from '../types'
+import type { Employee, ObligationType } from '../types'
+
+const obligationTypes: ObligationType[] = [
+  {
+    id: 'ot-av',
+    code: 'algemene_vergadering',
+    naam: 'Algemene vergadering',
+    categorie: 'wettelijk',
+    deadline_mechanisme: 'boekjaar_relatief',
+    standaard_periodiciteit: 'jaarlijks',
+  },
+]
 
 // Regression coverage for the a11y label-association fix (htmlFor/id on
 // AdhocTaskFormModal, ClientFormModal, ClientObligationFormModal). Uses the
@@ -45,7 +56,7 @@ describe('a11y label verification (no workaround)', () => {
   })
 
   it('ClientFormModal: screen.getByLabelText("Naam *") finds the naam input directly', () => {
-    render(<ClientFormModal client={null} employees={[employee()]} onClose={vi.fn()} onSubmit={vi.fn()} />)
+    render(<ClientFormModal client={null} employees={[employee()]} obligationTypes={obligationTypes} onClose={vi.fn()} onSubmit={vi.fn()} />)
     const naamInput = screen.getByLabelText('Naam *')
     expect(naamInput).toBeInstanceOf(HTMLInputElement)
   })

@@ -3420,4 +3420,139 @@ begin
   raise notice 'PASS 28.5: zonder ingevulde statuten geldt de wettelijke uiterste datum';
 end $$;
 
+-- ============================================================
+-- Sectie 29 (0021): taken bij- en afmaken bij het opslaan van een klant.
+--
+-- Het kantoor: "taken kunnen bijkomen, zoals een rapportering, of kunnen
+-- wegvallen, zoals de btw-aangiftes. Die moeten dan ook gemaakt of verwijderd
+-- worden bij het opslaan. Niet door een afzonderlijke triggerknop."
+--
+-- De generatie liep tot nu toe over het HELE kantoor en was voorbehouden aan
+-- een kantoorbeheerder. Dat is juist voor het opschuiven van de horizon, maar
+-- fout voor het opslaan van één klant: dat is dagelijks werk van wie het
+-- dossier beheert.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_mw uuid;
+  v_admin_uid uuid := gen_random_uuid(); v_mw_uid uuid := gen_random_uuid();
+  v_klant uuid; v_vreemd uuid; v_firm2 uuid;
+  v_ot_rap uuid; v_ot_btw uuid; v_co_btw uuid;
+  v_n int; v_open int; v_geann int; v_ok boolean;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's29-admin@test.local', now()),
+    (v_mw_uid, 's29-mw@test.local', now());
+  insert into public.firms (naam) values ('Sectie 29 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S29 Beheerder', 's29-admin@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_mw_uid, 'S29 Medewerker', 's29-mw@test.local', 'medewerker', false, true)
+    returning id into v_mw;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  select id into v_ot_rap from public.obligation_types where code = 'rapportering';
+  select id into v_ot_btw from public.obligation_types where code = 'btw_aangifte';
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S29 Klant', 12, 31, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_klant;
+
+  -- 29.1 Een gewone medewerker kan de taken van zijn klant bijwerken; daar is
+  -- geen kantoorbeheerder voor nodig.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  v_n := public.sync_client_tasks(v_klant);
+  set local role postgres;
+  if v_n <= 0 then
+    raise exception 'FAIL 29.1: het opslaan leverde geen taken op (%)', v_n;
+  end if;
+  raise notice 'PASS 29.1: een medewerker werkt de taken van zijn klant bij (% taken)', v_n;
+
+  -- 29.2 Een verplichting erbij: haar taken verschijnen bij het opslaan.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+    values (v_klant, v_ot_rap, true, current_date, v_mw);
+  v_n := public.sync_client_tasks(v_klant);
+  set local role postgres;
+  select count(*) into v_open from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_rap and status = 'open';
+  if v_open = 0 then
+    raise exception 'FAIL 29.2: een toegevoegde verplichting leverde geen taken op';
+  end if;
+  raise notice 'PASS 29.2: een toegevoegde verplichting krijgt haar taken (% open)', v_open;
+
+  -- 29.3 Een verplichting eraf: haar open toekomstige taken worden geannuleerd,
+  -- niet verwijderd. De rest van het dossier blijft ongemoeid.
+  select id into v_co_btw from public.client_obligations
+   where client_id = v_klant and obligation_type_id = v_ot_btw;
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  update public.client_obligations set actief = false, geldig_tot = current_date where id = v_co_btw;
+  v_n := public.sync_client_tasks(v_klant);
+  set local role postgres;
+
+  select count(*) filter (where status = 'open'), count(*) filter (where status = 'geannuleerd')
+    into v_open, v_geann
+  from public.task_instances where client_id = v_klant and obligation_type_id = v_ot_btw;
+  if v_open <> 0 then
+    raise exception 'FAIL 29.3: % btw-taken bleven open na het afzetten van de verplichting', v_open;
+  end if;
+  if v_geann = 0 then
+    raise exception 'FAIL 29.3: de btw-taken werden niet geannuleerd';
+  end if;
+  select count(*) into v_open from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_rap and status = 'open';
+  if v_open = 0 then
+    raise exception 'FAIL 29.3: het afzetten van de btw raakte ook de rapportering';
+  end if;
+  raise notice 'PASS 29.3: afgezette verplichting -> % taken geannuleerd, de rest blijft (% open)', v_geann, v_open;
+
+  -- 29.4 Alleen voor dossiers waar je bij mag. De poort is dezelfde als die
+  -- van de RLS, inclusief de vertrouwelijkheidsregel.
+  insert into public.firms (naam) values ('S29 Ander kantoor') returning id into v_firm2;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm2, 'S29 Vreemde klant', 12, 31, 'geen', true) returning id into v_vreemd;
+
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  v_ok := false;
+  begin
+    perform public.sync_client_tasks(v_vreemd);
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  set local role postgres;
+  if not v_ok then
+    raise exception 'FAIL 29.4: een klant van een ander kantoor kon bijgewerkt worden';
+  end if;
+  raise notice 'PASS 29.4: bijwerken kan alleen op dossiers waar je toegang toe hebt';
+
+  -- 29.5 De batch blijft voorbehouden aan de kantoorbeheerder: dat is
+  -- horizon-onderhoud, geen klantwijziging.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  v_ok := false;
+  begin
+    perform public.generate_task_instances(3, 6);
+  exception when others then v_ok := true;
+  end;
+  set local role postgres;
+  if not v_ok then
+    raise exception 'FAIL 29.5: een medewerker kon de batchgeneratie starten';
+  end if;
+  raise notice 'PASS 29.5: de batch blijft voorbehouden aan de kantoorbeheerder';
+
+  -- 29.6 De teller telt binnen het eigen kantoor (bevinding I uit ronde zes).
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  v_n := public.generate_task_instances(3, 6);
+  set local role postgres;
+  if v_n <> 0 then
+    raise exception 'FAIL 29.6: een tweede ronde leverde % nieuwe taken op i.p.v. 0', v_n;
+  end if;
+  raise notice 'PASS 29.6: de teller telt per kantoor, niet instance-breed';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
