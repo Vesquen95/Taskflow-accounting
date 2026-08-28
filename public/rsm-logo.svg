@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 168" role="img" aria-label="RSM">
+  <title>RSM</title>
+  <!-- De drie balken zijn exacte rechthoeken in de officiele merkkleuren.
+       Het woordmerk staat in een zware schreefloze letter, uitgerekt met
+       textLength zodat het net als in het merkboek doorloopt tot onder het
+       einde van de blauwe balk. Wil je het exacte lettertype van het
+       merkboek, vervang dit bestand dan door de officiele SVG en houd de
+       bestandsnaam gelijk -- de app verwijst er op twee plaatsen naar. -->
+  <rect x="0"   y="0" width="32"  height="34" fill="#888B8D"/>
+  <rect x="44"  y="0" width="76"  height="34" fill="#3F9C35"/>
+  <rect x="132" y="0" width="428" height="34" fill="#009CDE"/>
+  <text x="128" y="160" textLength="430" lengthAdjust="spacingAndGlyphs"
+        font-family="Arial, Helvetica, sans-serif" font-weight="700"
+        font-size="140" fill="#53565A">RSM</text>
+</svg>

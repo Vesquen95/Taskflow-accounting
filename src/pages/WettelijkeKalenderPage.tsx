@@ -166,7 +166,7 @@ export function WettelijkeKalenderPage() {
           type="button"
           disabled={genBusy}
           onClick={handleGenerate}
-          className="rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
         >
           {genBusy ? 'Bezig…' : 'Genereer taken nu'}
         </button>
@@ -503,7 +503,7 @@ function FeestdagenDekking({
           type="button"
           disabled={busy}
           onClick={() => void onLaden(vanaf, tot)}
-          className="mt-2 rounded-md bg-brand-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60"
+          className="mt-2 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60"
         >
           {busy ? 'Bezig\u2026' : `Feestdagen ${vanaf}\u2013${tot} aanvullen`}
         </button>

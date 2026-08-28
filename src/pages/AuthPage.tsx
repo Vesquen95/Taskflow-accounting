@@ -35,11 +35,13 @@ export function AuthPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-6 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-500 text-white font-bold">
-            T
-          </div>
-          <h1 className="text-lg font-semibold text-slate-900">Taskflow</h1>
+        {/* Dit is het eerste dat je ziet, dus staat het merk hier ruim en
+            alleen. Taskflow zelf is een gereedschap, geen merk: de naam mag
+            eronder in het klein. */}
+        <div className="mb-8">
+          <img src={`${import.meta.env.BASE_URL}rsm-logo.svg`} alt="RSM" className="h-9 w-auto" />
+          <h1 className="mt-3 text-lg font-semibold text-slate-900">Taskflow</h1>
+          <p className="text-sm text-slate-500">Opvolging van termijnen en verplichtingen.</p>
         </div>
 
         <div className="mb-6 flex rounded-md bg-slate-100 p-1 text-sm">
@@ -116,7 +118,7 @@ export function AuthPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60"
+            className="w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-60"
           >
             {submitting ? 'Bezig…' : mode === 'signin' ? 'Inloggen' : 'Account aanmaken'}
           </button>

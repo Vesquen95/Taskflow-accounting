@@ -118,7 +118,7 @@ export function OnboardingPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+              className="w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
             >
               {submitting ? 'Bezig…' : 'Kantoor aanmaken'}
             </button>
@@ -137,7 +137,7 @@ export function OnboardingPage() {
               type="button"
               disabled={submitting}
               onClick={handleClaimInvite}
-              className="w-full rounded-md bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+              className="w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
             >
               {submitting ? 'Bezig…' : 'Uitnodiging accepteren'}
             </button>

@@ -131,7 +131,7 @@ export function ClientObligationFormModal({
           <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-slate-600 hover:bg-slate-100">
             Annuleren
           </button>
-          <button type="submit" disabled={submitting} className="rounded-md bg-brand-500 px-4 py-1.5 font-medium text-white hover:bg-brand-600 disabled:opacity-60">
+          <button type="submit" disabled={submitting} className="rounded-md bg-brand-600 px-4 py-1.5 font-medium text-white hover:bg-brand-700 disabled:opacity-60">
             {submitting ? 'Bezig…' : 'Toevoegen'}
           </button>
         </div>

@@ -65,9 +65,11 @@ export function AppLayout({
   return (
     <div className="flex min-h-screen bg-slate-50">
       <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
-        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white">T</div>
-          <span className="text-base font-semibold text-slate-900">Taskflow</span>
+        <div className="border-b border-slate-200 px-4 py-4">
+          {/* Klein gehouden: in de zijbalk is de navigatie het onderwerp, niet
+              het merk. Het logo bevestigt alleen waar je zit. */}
+          <img src={`${import.meta.env.BASE_URL}rsm-logo.svg`} alt="RSM" className="h-6 w-auto" />
+          <span className="mt-2 block text-sm font-semibold text-slate-900">Taskflow</span>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
           {NAV_GROEPEN.map((groep) => {

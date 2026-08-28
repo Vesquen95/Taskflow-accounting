@@ -94,7 +94,7 @@ export function MedewerkersPage() {
           <input type="checkbox" checked={magGoedkeuren} onChange={(e) => setMagGoedkeuren(e.target.checked)} />
           Mag goedkeuren
         </label>
-        <button type="submit" disabled={submitting} className="rounded-md bg-brand-500 px-4 py-1.5 font-medium text-white hover:bg-brand-600 disabled:opacity-60">
+        <button type="submit" disabled={submitting} className="rounded-md bg-brand-600 px-4 py-1.5 font-medium text-white hover:bg-brand-700 disabled:opacity-60">
           {submitting ? 'Bezig…' : 'Uitnodigen'}
         </button>
       </form>

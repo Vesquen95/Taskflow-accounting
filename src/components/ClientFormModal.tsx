@@ -305,7 +305,7 @@ export function ClientFormModal({
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-md bg-brand-500 px-4 py-1.5 font-medium text-white hover:bg-brand-600 disabled:opacity-60"
+            className="rounded-md bg-brand-600 px-4 py-1.5 font-medium text-white hover:bg-brand-700 disabled:opacity-60"
           >
             {submitting ? 'Bezig…' : 'Opslaan'}
           </button>

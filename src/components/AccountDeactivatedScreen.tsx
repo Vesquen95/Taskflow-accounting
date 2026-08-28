@@ -16,7 +16,7 @@ export function AccountDeactivatedScreen({ onAcknowledge }: { onAcknowledge: () 
         <button
           type="button"
           onClick={onAcknowledge}
-          className="mt-4 rounded-md bg-brand-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-600"
+          className="mt-4 rounded-md bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
         >
           Terug naar inloggen
         </button>

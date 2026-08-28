@@ -19,9 +19,16 @@ test.describe('Werkstromen', () => {
     await page.getByLabel('Deadlinevenster').selectOption('alles')
     await expect(page.getByText('Laden…')).toHaveCount(0)
 
-    // Elke zichtbare verplichting hoort in deze werkstroom thuis.
     const cellen = await page.locator('tbody tr td:nth-child(3)').allInnerTexts()
-    expect(cellen.length).toBeGreaterThan(0)
+    if (cellen.length === 0) {
+      // Geen open taken (het kantoor kan alles afgewerkt of geannuleerd
+      // hebben). Dan is het contract dat het scherm dat ook zégt: een lege
+      // lijst zonder uitleg is precies de fout waar dit systeem eerder op
+      // vastliep.
+      await expect(page.getByText(/Geen btw-taken in dit venster/)).toBeVisible()
+      return
+    }
+    // Elke zichtbare verplichting hoort in deze werkstroom thuis.
     for (const tekst of cellen) {
       expect(tekst).toMatch(/BTW/i)
     }
@@ -33,7 +40,13 @@ test.describe('Werkstromen', () => {
     await expect(page.getByText('Laden…')).toHaveCount(0)
 
     const cellen = await page.locator('tbody tr td:nth-child(3)').allInnerTexts()
+    if (cellen.length === 0) {
+      await expect(page.getByText(/Geen afsluiting-taken in dit venster/)).toBeVisible()
+      return
+    }
     expect(cellen.join(' ')).toMatch(/Jaarafsluiting|Algemene vergadering|Neerlegging/i)
+    // Wat de btw-ingang toont hoort hier niet bij: dát is de scheiding die
+    // deze test bewaakt, ook wanneer er maar een handvol taken openstaan.
     expect(cellen.join(' ')).not.toMatch(/BTW-aangifte/i)
   })
 
