@@ -1,5 +1,15 @@
+import { useEffect, useState } from 'react'
 import type { Employee, ObligationType } from '../types'
 import type { ObligationSelection } from '../lib/clientObligations'
+import {
+  AV_GEEN_STATUTAIRE_DATUM,
+  avParametersVoorVorm,
+  metParameter,
+  metStandaardParameters,
+  metStandaardParametersVoorSelecties,
+  STANDAARD_PARAMETERS,
+  type ObligationParameters,
+} from '../lib/obligationParameters'
 
 /** btw_aangifte en btw_klantenlisting worden door de database zelf beheerd op
  *  basis van het btw-regime van de klant (trigger sync_btw_obligations, 0004).
@@ -31,16 +41,41 @@ export function ObligationPicker({
   btwRegime: string
   onChange: (next: ObligationSelection[]) => void
 }) {
+  // Een verplichting die al aangevinkt uit de database komt (een bestaande
+  // klant bewerken) kan parameters missen die het scherm wél toont. Zet ze er
+  // dan alsnog echt in, zodat weergave en opslag hetzelfde zeggen. Bestaande
+  // waarden blijven ongemoeid; is er niets aan te vullen, dan geeft de helper
+  // dezelfde array terug en gebeurt er niets.
+  useEffect(() => {
+    const genormaliseerd = metStandaardParametersVoorSelecties(obligationTypes, selections)
+    if (genormaliseerd !== selections) onChange(genormaliseerd)
+  }, [obligationTypes, selections, onChange])
+
   function wijzig(typeId: string, patch: Partial<ObligationSelection>) {
     onChange(
       selections.map((s) => (s.obligation_type_id === typeId ? { ...s, ...patch } : s))
     )
   }
 
+  function zetParameters(typeId: string, parameters: ObligationParameters) {
+    wijzig(typeId, { parameters })
+  }
+
   function wijzigParameter(typeId: string, sleutel: string, waarde: unknown) {
     const huidig = selections.find((s) => s.obligation_type_id === typeId)
-    const parameters = { ...(huidig?.parameters ?? {}), [sleutel]: waarde }
-    wijzig(typeId, { parameters })
+    zetParameters(typeId, metParameter(huidig?.parameters ?? {}, sleutel, waarde))
+  }
+
+  /** Aanvinken schrijft de standaardwaarden die het scherm toont meteen in
+   *  parameters; afvinken laat ze staan, zodat opnieuw aanvinken niet stil
+   *  iets anders bewaart dan wat er stond. */
+  function wijzigGekozen(type: ObligationType, gekozen: boolean) {
+    const huidig = selections.find((s) => s.obligation_type_id === type.id)
+    if (!gekozen) {
+      wijzig(type.id, { gekozen: false })
+      return
+    }
+    wijzig(type.id, { gekozen: true, parameters: metStandaardParameters(type.code, huidig?.parameters ?? {}) })
   }
 
   return (
@@ -67,7 +102,7 @@ export function ObligationPicker({
                   type="checkbox"
                   checked={afgeleid ? actiefViaBtw : sel.gekozen}
                   disabled={afgeleid}
-                  onChange={(e) => wijzig(type.id, { gekozen: e.target.checked })}
+                  onChange={(e) => wijzigGekozen(type, e.target.checked)}
                 />
                 <span className="font-medium text-slate-800">{type.naam}</span>
                 {type.categorie === 'wettelijk' && (
@@ -85,6 +120,7 @@ export function ObligationPicker({
                   {type.code === 'algemene_vergadering' && (
                     <AvVelden
                       parameters={sel.parameters}
+                      onVorm={(vorm) => zetParameters(type.id, avParametersVoorVorm(sel.parameters, vorm))}
                       onParameter={(k, v) => wijzigParameter(type.id, k, v)}
                     />
                   )}
@@ -92,13 +128,12 @@ export function ObligationPicker({
                   {type.code === 'jaarafsluiting' && (
                     <label className="flex items-center gap-2 text-xs text-slate-600">
                       Klaar binnen
-                      <input
-                        type="number"
+                      <GetalVeld
+                        label="Klaar binnen (maanden na boekjaareinde)"
                         min={1}
                         max={12}
-                        value={(sel.parameters.sla_maanden as number) ?? 3}
-                        onChange={(e) => wijzigParameter(type.id, 'sla_maanden', Number(e.target.value))}
-                        className={`${veldKlasse()} w-16`}
+                        waarde={getal(sel.parameters.sla_maanden, STANDAARD_PARAMETERS.jaarafsluiting.sla_maanden as number)}
+                        onWijzig={(n) => wijzigParameter(type.id, 'sla_maanden', n)}
                       />
                       maanden na het boekjaareinde
                     </label>
@@ -109,7 +144,8 @@ export function ObligationPicker({
                       <label className="flex items-center gap-2">
                         Frequentie
                         <select
-                          value={(sel.parameters.frequentie as string) ?? 'kwartaal'}
+                          aria-label="Frequentie"
+                          value={(sel.parameters.frequentie as string) ?? ''}
                           onChange={(e) => wijzigParameter(type.id, 'frequentie', e.target.value)}
                           className={veldKlasse()}
                         >
@@ -120,13 +156,15 @@ export function ObligationPicker({
                       </label>
                       <label className="flex items-center gap-2">
                         binnen
-                        <input
-                          type="number"
+                        <GetalVeld
+                          label="Termijn (dagen na periode)"
                           min={1}
                           max={90}
-                          value={(sel.parameters.termijn_dagen as number) ?? 10}
-                          onChange={(e) => wijzigParameter(type.id, 'termijn_dagen', Number(e.target.value))}
-                          className={`${veldKlasse()} w-16`}
+                          waarde={getal(
+                            sel.parameters.termijn_dagen,
+                            STANDAARD_PARAMETERS.rapportering.termijn_dagen as number
+                          )}
+                          onWijzig={(n) => wijzigParameter(type.id, 'termijn_dagen', n)}
                         />
                         dagen na de periode
                       </label>
@@ -158,17 +196,73 @@ export function ObligationPicker({
   )
 }
 
+/** Een getalveld toont wat er opgeslagen staat. De standaardwaarde wordt bij
+ *  het aanvinken al weggeschreven, dus dit is alleen een vangnet voor de
+ *  fractie van een seconde tussen aanvinken en die schrijfactie. */
+function getal(waarde: unknown, standaard: number): number {
+  return typeof waarde === 'number' ? waarde : standaard
+}
+
+/** Een getalveld dat altijd toont wat er opgeslagen staat, maar tijdens het
+ *  typen even leeg mag zijn (wie een 3 wil vervangen door een 6 wist eerst).
+ *  Zodra er een getal staat wordt dat meteen bewaard; blijft het veld leeg,
+ *  dan verandert er niets en verschijnt bij het verlaten opnieuw de bewaarde
+ *  waarde. Zo staat er nooit een getal op het scherm dat niet opgeslagen is. */
+function GetalVeld({
+  label,
+  waarde,
+  min,
+  max,
+  onWijzig,
+}: {
+  label: string
+  waarde: number
+  min: number
+  max: number
+  onWijzig: (waarde: number) => void
+}) {
+  const [ruw, setRuw] = useState<string | null>(null)
+
+  return (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      aria-label={label}
+      value={ruw ?? String(waarde)}
+      onChange={(e) => {
+        const tekst = e.target.value
+        const n = Number(tekst)
+        if (tekst.trim() === '' || Number.isNaN(n)) {
+          setRuw(tekst)
+          return
+        }
+        setRuw(null)
+        onWijzig(n)
+      }}
+      onBlur={() => setRuw(null)}
+      className={`${veldKlasse()} w-16`}
+    />
+  )
+}
+
 /** De statutaire AV-datum in de twee vormen die in statuten voorkomen
  *  (migratie 0020). De database weigert een datum die buiten de wettelijke
- *  zes maanden na het boekjaareinde valt. */
+ *  zes maanden na het boekjaareinde valt.
+ *
+ *  Hier staat bewust géén ingevulde standaard: de statutaire datum komt uit de
+ *  statuten van dit ene dossier. De keuzelijsten beginnen leeg ("Kies…") en
+ *  tonen dus exact wat er opgeslagen wordt. */
 function AvVelden({
   parameters,
+  onVorm,
   onParameter,
 }: {
-  parameters: Record<string, unknown>
+  parameters: ObligationParameters
+  onVorm: (vorm: string) => void
   onParameter: (sleutel: string, waarde: unknown) => void
 }) {
-  const vorm = (parameters.av_vorm as string) ?? 'vaste_datum'
+  const vorm = typeof parameters.av_vorm === 'string' ? parameters.av_vorm : AV_GEEN_STATUTAIRE_DATUM
 
   return (
     <div className="space-y-2">
@@ -178,8 +272,17 @@ function AvVelden({
           <input
             type="radio"
             name="av_vorm"
+            checked={vorm === AV_GEEN_STATUTAIRE_DATUM}
+            onChange={() => onVorm(AV_GEEN_STATUTAIRE_DATUM)}
+          />
+          Niet in de statuten
+        </label>
+        <label className="flex items-center gap-1">
+          <input
+            type="radio"
+            name="av_vorm"
             checked={vorm === 'vaste_datum'}
-            onChange={() => onParameter('av_vorm', 'vaste_datum')}
+            onChange={() => onVorm('vaste_datum')}
           />
           Vaste datum
         </label>
@@ -188,44 +291,37 @@ function AvVelden({
             type="radio"
             name="av_vorm"
             checked={vorm === 'nde_weekdag'}
-            onChange={() => onParameter('av_vorm', 'nde_weekdag')}
+            onChange={() => onVorm('nde_weekdag')}
           />
           N-de weekdag
         </label>
       </div>
 
-      {vorm === 'vaste_datum' ? (
+      {vorm === 'vaste_datum' && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
           <input
             type="number"
             min={1}
             max={31}
             aria-label="Dag van de maand"
-            value={(parameters.av_dag as number) ?? 1}
-            onChange={(e) => onParameter('av_dag', Number(e.target.value))}
+            placeholder="dag"
+            value={typeof parameters.av_dag === 'number' ? parameters.av_dag : ''}
+            onChange={(e) => onParameter('av_dag', e.target.value === '' ? undefined : Number(e.target.value))}
             className={`${veldKlasse()} w-16`}
           />
-          <select
-            aria-label="Maand"
-            value={(parameters.av_maand as number) ?? 6}
-            onChange={(e) => onParameter('av_maand', Number(e.target.value))}
-            className={veldKlasse()}
-          >
-            {MAANDEN.map((m, i) => (
-              <option key={m} value={i + 1}>
-                {m}
-              </option>
-            ))}
-          </select>
+          <MaandKeuze waarde={parameters.av_maand} onKies={(v) => onParameter('av_maand', v)} />
         </div>
-      ) : (
+      )}
+
+      {vorm === 'nde_weekdag' && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
           <select
             aria-label="Rang"
-            value={(parameters.av_rang as string) ?? 'eerste'}
+            value={(parameters.av_rang as string) ?? ''}
             onChange={(e) => onParameter('av_rang', e.target.value)}
             className={veldKlasse()}
           >
+            <option value="">Kies…</option>
             {RANGEN.map((r) => (
               <option key={r} value={r}>
                 {r}
@@ -234,10 +330,11 @@ function AvVelden({
           </select>
           <select
             aria-label="Weekdag"
-            value={(parameters.av_weekdag as string) ?? 'maandag'}
+            value={(parameters.av_weekdag as string) ?? ''}
             onChange={(e) => onParameter('av_weekdag', e.target.value)}
             className={veldKlasse()}
           >
+            <option value="">Kies…</option>
             {WEEKDAGEN.map((d) => (
               <option key={d} value={d}>
                 {d}
@@ -245,23 +342,33 @@ function AvVelden({
             ))}
           </select>
           <span>van</span>
-          <select
-            aria-label="Maand"
-            value={(parameters.av_maand as number) ?? 6}
-            onChange={(e) => onParameter('av_maand', Number(e.target.value))}
-            className={veldKlasse()}
-          >
-            {MAANDEN.map((m, i) => (
-              <option key={m} value={i + 1}>
-                {m}
-              </option>
-            ))}
-          </select>
+          <MaandKeuze waarde={parameters.av_maand} onKies={(v) => onParameter('av_maand', v)} />
         </div>
       )}
+
       <p className="text-[11px] text-slate-400">
-        De vergadering moet binnen zes maanden na het boekjaareinde vallen; een datum daarbuiten wordt geweigerd.
+        {vorm === AV_GEEN_STATUTAIRE_DATUM
+          ? 'Staat er geen datum in de statuten, dan geldt de wettelijke uiterste datum: zes maanden na het boekjaareinde.'
+          : 'De vergadering moet binnen zes maanden na het boekjaareinde vallen; een datum daarbuiten wordt geweigerd.'}
       </p>
     </div>
+  )
+}
+
+function MaandKeuze({ waarde, onKies }: { waarde: unknown; onKies: (maand: number | undefined) => void }) {
+  return (
+    <select
+      aria-label="Maand"
+      value={typeof waarde === 'number' ? waarde : ''}
+      onChange={(e) => onKies(e.target.value === '' ? undefined : Number(e.target.value))}
+      className={veldKlasse()}
+    >
+      <option value="">Kies…</option>
+      {MAANDEN.map((m, i) => (
+        <option key={m} value={i + 1}>
+          {m}
+        </option>
+      ))}
+    </select>
   )
 }
