@@ -1,19 +1,17 @@
 import { useState } from 'react'
 import { useTaskInstances } from '../hooks/useTaskInstances'
 import { useEmployees } from '../hooks/useEmployees'
+import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { TaskTable } from '../components/TaskTable'
 import { TaskDetailModal } from '../components/TaskDetailModal'
 import { ErrorState } from '../components/ErrorState'
+import { STATUS_LABEL } from '../lib/taskStatus'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
 
-const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: 'open', label: 'Open' },
-  { value: 'in_uitvoering', label: 'In uitvoering' },
-  { value: 'wacht_op_klant', label: 'Wacht op klant' },
-  { value: 'wacht_op_goedkeuring', label: 'Wacht op goedkeuring' },
-]
+const STATUS_OPTIONS: TaskStatus[] = ['open', 'in_uitvoering', 'wacht_op_klant', 'wacht_op_goedkeuring']
 
 export function WerklijstPage() {
+  const { employee } = useCurrentEmployee()
   const { employees } = useEmployees()
   const { tasks, loading, error, filters, setFilters, reload, updateStatus, reassign, bulkReassign, bulkUpdateStatus, markReviewHandled } =
     useTaskInstances({})
@@ -49,9 +47,9 @@ export function WerklijstPage() {
             className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
           >
             <option value="alle">Alle actieve statussen</option>
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {STATUS_LABEL[status]}
               </option>
             ))}
           </select>
@@ -100,6 +98,8 @@ export function WerklijstPage() {
           onOpenTask={setOpenTask}
           onBulkReassign={bulkReassign}
           onBulkStatus={bulkUpdateStatus}
+          currentEmployee={employee}
+          onStatusChange={updateStatus}
         />
       )}
 

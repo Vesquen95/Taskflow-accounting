@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTaskInstances } from '../hooks/useTaskInstances'
 import { useEmployees } from '../hooks/useEmployees'
+import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useObligationTypes } from '../hooks/useObligationTypes'
 import { TaskBlocks } from '../components/TaskBlocks'
 import { TaskDetailModal } from '../components/TaskDetailModal'
@@ -27,6 +28,9 @@ import {
  */
 export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
   const { employees } = useEmployees()
+  // Nodig om te weten welke statusstap deze persoon mag zetten; zonder haar
+  // blijft de status in de tabel een label in plaats van een knop.
+  const { employee } = useCurrentEmployee()
   const { obligationTypes, loading: typesLaden, error: typesFout } = useObligationTypes()
   const [venster, setVenster] = useState<VensterKey>('deze_week')
   const [openTask, setOpenTask] = useState<TaskInstanceWithRelations | null>(null)
@@ -171,6 +175,8 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
           onOpenTask={setOpenTask}
           onBulkReassign={bulkReassign}
           onBulkStatus={bulkUpdateStatus}
+          currentEmployee={employee}
+          onStatusChange={updateStatus}
           emptyMessage={`Geen ${ingang.label.toLowerCase()}-taken in dit venster.`}
         />
       )}

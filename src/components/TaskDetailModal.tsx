@@ -7,6 +7,17 @@ import { supabase } from '../lib/supabase'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import type { Employee, TaskInstanceWithRelations, TaskStatus, TaskStatusLog } from '../types'
 import { reportError } from '../lib/errorMessage'
+import {
+  annulatieActie,
+  STATUS_LABEL,
+  statusActieFoutmelding,
+  statusContext,
+  voerStatusActieUit,
+  voortgangsActies,
+  wachtOpGoedkeurder,
+  WACHT_OP_GOEDKEURDER_UITLEG,
+  type StatusActie,
+} from '../lib/taskStatus'
 
 interface TaskDetailModalProps {
   task: TaskInstanceWithRelations
@@ -15,24 +26,6 @@ interface TaskDetailModalProps {
   onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>
   onReassign: (taskId: string, employeeId: string) => Promise<void>
   onMarkReviewHandled: (taskId: string) => Promise<void>
-}
-
-const NEXT_STATUS_OPTIONS: Record<TaskStatus, TaskStatus[]> = {
-  open: ['in_uitvoering', 'wacht_op_klant', 'wacht_op_goedkeuring', 'ingediend_afgerond', 'geannuleerd'],
-  in_uitvoering: ['wacht_op_klant', 'wacht_op_goedkeuring', 'ingediend_afgerond', 'geannuleerd'],
-  wacht_op_klant: ['in_uitvoering', 'wacht_op_goedkeuring', 'ingediend_afgerond', 'geannuleerd'],
-  wacht_op_goedkeuring: ['ingediend_afgerond', 'in_uitvoering', 'geannuleerd'],
-  ingediend_afgerond: [],
-  geannuleerd: [],
-}
-
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  open: 'Open',
-  in_uitvoering: 'In uitvoering',
-  wacht_op_klant: 'Wacht op klant',
-  wacht_op_goedkeuring: 'Wacht op goedkeuring',
-  ingediend_afgerond: 'Ingediend/afgerond',
-  geannuleerd: 'Geannuleerd',
 }
 
 const EVENT_LABEL: Record<string, string> = {
@@ -93,31 +86,30 @@ export function TaskDetailModal({
     }
   }, [task.id])
 
-  // Mirrors the server-side statusflow trigger (enforce_task_instance_
-  // transition in 0004_domain_functions_triggers.sql) so the UI doesn't
-  // offer actions the database would reject. The database remains the
-  // real authority — this is only a UX improvement, not the enforcement.
-  const nextOptions = NEXT_STATUS_OPTIONS[task.status].filter((s) => {
-    if (s === 'wacht_op_goedkeuring' && !task.vereist_goedkeuring) return false
-    if (task.status === 'wacht_op_goedkeuring' && (s === 'ingediend_afgerond' || s === 'in_uitvoering')) {
-      return !!employee?.mag_goedkeuren
-    }
-    return true
-  })
+  // Welke stappen mogen, komt uit src/lib/taskStatus.ts — dezelfde bron als
+  // de doorklikbare status in de takenlijst, en een getrouwe spiegel van
+  // enforce_task_instance_transition (migratie 0011). De databank blijft de
+  // handhaving; dit scherm belooft alleen niets wat zij zou weigeren.
+  const ctx = statusContext(task, employee)
+  const volgendeStappen = voortgangsActies(ctx)
+  const annuleren = annulatieActie(ctx)
 
   // §5/§7: four-eyes is allowed, but the UI must warn (non-blocking) when
   // the approver is the same person as the assignee.
   const showFourEyesWarning =
     task.status === 'wacht_op_goedkeuring' && employee?.id === task.toegewezen_medewerker_id
 
-  async function handleStatusChange(status: TaskStatus) {
+  async function handleStatusActie(actie: StatusActie) {
     setBusy(true)
     setError(null)
     try {
-      await onStatusChange(task.id, status)
+      // Een actie kan uit meerdere stappen bestaan (indienen + zelf
+      // goedkeuren). Loopt de tweede stap stuk, dan staat de taak op de
+      // tussenstatus en zegt de melding dat ook.
+      await voerStatusActieUit(task.id, actie, onStatusChange)
       onClose()
     } catch (err) {
-      setError(reportError(err, 'Statuswijziging is mislukt'))
+      setError(statusActieFoutmelding(err))
     } finally {
       setBusy(false)
     }
@@ -234,35 +226,45 @@ export function TaskDetailModal({
           </p>
         )}
 
-        {task.status === 'wacht_op_goedkeuring' && !employee?.mag_goedkeuren && (
-          <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
-            Deze taak wacht op goedkeuring. Enkel medewerkers met goedkeuringsrecht kunnen ze goedkeuren of terugsturen.
-          </p>
+        {wachtOpGoedkeurder(ctx) && (
+          <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">{WACHT_OP_GOEDKEURDER_UITLEG}</p>
         )}
 
-        {nextOptions.length > 0 && (
+        {volgendeStappen.length > 0 && (
           <div className="space-y-1.5">
             <label className="text-xs font-medium uppercase text-slate-400">Status wijzigen</label>
             <div className="flex flex-wrap gap-2">
-              {nextOptions.map((status) => (
+              {volgendeStappen.map((actie) => (
                 <button
-                  key={status}
+                  key={actie.label}
                   type="button"
                   disabled={busy}
-                  onClick={() => handleStatusChange(status)}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  onClick={() => handleStatusActie(actie)}
+                  className={
+                    actie.doel === 'ingediend_afgerond'
+                      ? 'rounded-md border border-brand-600 bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50'
+                      : 'rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50'
+                  }
                 >
-                  {status === 'wacht_op_goedkeuring'
-                    ? 'Dien in voor goedkeuring'
-                    : task.status === 'wacht_op_goedkeuring' && status === 'in_uitvoering'
-                      ? 'Terugsturen (afkeuren)'
-                      : task.status === 'wacht_op_goedkeuring' && status === 'ingediend_afgerond'
-                        ? 'Goedkeuren'
-                        : STATUS_LABEL[status]}
+                  {actie.label}
                 </button>
               ))}
             </div>
           </div>
+        )}
+
+        {/* Annuleren is geen vervolgstap maar het afbreken van de taak: aparte
+            plaats, rustiger vormgeving, en het blijft beschikbaar ook wanneer
+            er verder niets te doen valt (zoals wachten op een goedkeurder). */}
+        {annuleren && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => handleStatusActie(annuleren)}
+            className="text-xs font-medium text-slate-400 underline underline-offset-2 hover:text-red-600 disabled:opacity-50"
+          >
+            {annuleren.label}
+          </button>
         )}
 
         <div>

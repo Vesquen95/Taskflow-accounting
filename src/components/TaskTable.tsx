@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { Employee, TaskInstanceWithRelations, TaskStatus } from '../types'
-import { StatusBadge } from './StatusBadge'
+import { TaskStatusControl } from './TaskStatusControl'
 import { UrgencyBadge } from './UrgencyBadge'
 import { formatDate } from '../lib/urgency'
+import { STATUS_LABEL } from '../lib/taskStatus'
 import { EmptyState } from './EmptyState'
 
 interface TaskTableProps {
@@ -11,15 +12,19 @@ interface TaskTableProps {
   onOpenTask: (task: TaskInstanceWithRelations) => void
   onBulkReassign?: (taskIds: string[], employeeId: string) => Promise<void>
   onBulkStatus?: (taskIds: string[], status: TaskStatus) => Promise<void>
+  /**
+   * De ingelogde medewerker. Nodig om te weten welke statusstap deze persoon
+   * mag zetten (`mag_goedkeuren`); zonder haar blijft de status een label.
+   */
+  currentEmployee?: Employee | null
+  /** Aanwezig = de status is doorklikbaar naar de volgende stap. */
+  onStatusChange?: (taskId: string, status: TaskStatus) => Promise<void>
   showClientColumn?: boolean
   emptyMessage?: string
 }
 
-const BULK_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: 'in_uitvoering', label: 'In uitvoering' },
-  { value: 'wacht_op_klant', label: 'Wacht op klant' },
-  { value: 'geannuleerd', label: 'Geannuleerd' },
-]
+/** Labels komen uit dezelfde bron als de rest van de statusbediening. */
+const BULK_STATUS_OPTIONS: TaskStatus[] = ['in_uitvoering', 'wacht_op_klant', 'geannuleerd']
 
 export function TaskTable({
   tasks,
@@ -27,10 +32,13 @@ export function TaskTable({
   onOpenTask,
   onBulkReassign,
   onBulkStatus,
+  currentEmployee,
+  onStatusChange,
   showClientColumn = true,
   emptyMessage = 'Geen taken gevonden voor deze filters.',
 }: TaskTableProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [statusFout, setStatusFout] = useState<string | null>(null)
   const allSelected = tasks.length > 0 && selected.size === tasks.length
   const canBulk = !!(onBulkReassign || onBulkStatus)
 
@@ -55,6 +63,11 @@ export function TaskTable({
 
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      {statusFout && (
+        <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {statusFout}
+        </p>
+      )}
       {canBulk && selected.size > 0 && (
         <div className="flex items-center gap-3 border-b border-slate-200 bg-brand-50 px-4 py-2 text-sm">
           <span className="font-medium text-brand-800">{selected.size} geselecteerd</span>
@@ -100,9 +113,9 @@ export function TaskTable({
                 <option value="" disabled>
                   Kies status…
                 </option>
-                {BULK_STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                {BULK_STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>
+                    {STATUS_LABEL[status]}
                   </option>
                 ))}
               </select>
@@ -174,7 +187,12 @@ export function TaskTable({
                 </div>
               </td>
               <td className="px-3 py-2">
-                <StatusBadge status={task.status} />
+                <TaskStatusControl
+                  task={task}
+                  currentEmployee={currentEmployee}
+                  onStatusChange={onStatusChange}
+                  onError={setStatusFout}
+                />
               </td>
               <td className="max-w-[160px] truncate px-3 py-2 text-slate-600">{task.toegewezen_medewerker?.naam ?? '—'}</td>
             </tr>

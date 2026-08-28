@@ -63,6 +63,18 @@ export const urgencyClasses: Record<Exclude<UrgencyBand, null>, string> = {
   later: 'bg-slate-100 text-slate-600 border-slate-300',
 }
 
+/**
+ * Banden zonder boodschap. "Later" stond op vrijwel elke regel — een badge
+ * die altijd oplicht, meldt niets. De band zelf blijft wél bestaan: hij
+ * bepaalt de sortering (zie `urgencySortWeight`) en de escalatiequeue. Enkel
+ * de badge zwijgt, zodat de banden die wél iets melden ook opvallen.
+ */
+const STILLE_BANDEN: readonly UrgencyBand[] = ['later']
+
+export function bandVerdientBadge(band: UrgencyBand): band is Exclude<UrgencyBand, null> {
+  return band !== null && !STILLE_BANDEN.includes(band)
+}
+
 /** Lower = more urgent, for sorting a task list "te laat eerst" (§4.2). */
 const URGENCY_SORT_WEIGHT: Record<Exclude<UrgencyBand, null>, number> = {
   te_laat: 0,

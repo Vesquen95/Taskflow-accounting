@@ -32,3 +32,20 @@ describe('UrgencyBadge', () => {
     expect(screen.getByText('Deze week')).toBeInTheDocument()
   })
 })
+
+/**
+ * "Later" stond op vrijwel elke regel en droeg daardoor geen informatie.
+ * Een badge verschijnt alleen nog wanneer ze iets te melden heeft; de band
+ * zelf blijft bestaan voor de sortering in de escalatiequeue.
+ */
+describe('UrgencyBadge — stille band', () => {
+  it('rendert niets voor een taak die nog ver van haar deadline staat (band "later")', () => {
+    const { container } = render(<UrgencyBadge dueDate={iso(90)} status="open" categorie="wettelijk" />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  it('rendert nog steeds wel de banden die iets melden', () => {
+    render(<UrgencyBadge dueDate={iso(1)} status="open" categorie="wettelijk" />)
+    expect(screen.getByText('Deze week')).toBeInTheDocument()
+  })
+})

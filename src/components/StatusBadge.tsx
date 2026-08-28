@@ -1,16 +1,15 @@
+import type { MouseEvent } from 'react'
 import type { TaskStatus } from '../types'
+import { STATUS_LABEL } from '../lib/taskStatus'
 
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  open: 'Open',
-  in_uitvoering: 'In uitvoering',
-  wacht_op_klant: 'Wacht op klant',
-  wacht_op_goedkeuring: 'Wacht op goedkeuring',
-  ingediend_afgerond: 'Ingediend/afgerond',
-  geannuleerd: 'Geannuleerd',
-}
-
+/**
+ * "Open" is de standaardstatus en stond op bijna elke regel even luid als de
+ * uitzonderingen. Hij mag niet verdwijnen — hij is juist het ding waarop je
+ * klikt om vooruit te gaan — maar hij is nu rustig: geen gevulde chip, wel
+ * leesbaar. Wat afwijkt van de standaard blijft opvallen.
+ */
 const STATUS_CLASSES: Record<TaskStatus, string> = {
-  open: 'bg-slate-100 text-slate-700 border-slate-300',
+  open: 'bg-white text-slate-500 border-slate-200',
   in_uitvoering: 'bg-blue-100 text-blue-700 border-blue-300',
   wacht_op_klant: 'bg-purple-100 text-purple-700 border-purple-300',
   wacht_op_goedkeuring: 'bg-amber-100 text-amber-800 border-amber-300',
@@ -18,12 +17,43 @@ const STATUS_CLASSES: Record<TaskStatus, string> = {
   geannuleerd: 'bg-slate-100 text-slate-400 border-slate-200 line-through',
 }
 
-export function StatusBadge({ status }: { status: TaskStatus }) {
+const BASIS = 'inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium'
+
+interface StatusBadgeProps {
+  status: TaskStatus
+  /**
+   * Aanwezig = de badge is een knop naar de volgende stap. Zonder onClick
+   * blijft het een gewoon label (het gedrag overal waar niet doorgeklikt
+   * kan worden).
+   */
+  onClick?: (event: MouseEvent<HTMLButtonElement>) => void
+  disabled?: boolean
+  title?: string
+  /** Voor de knopvariant: benoemt de volgende stap, niet enkel de status. */
+  ariaLabel?: string
+}
+
+export function StatusBadge({ status, onClick, disabled, title, ariaLabel }: StatusBadgeProps) {
+  const classes = `${BASIS} ${STATUS_CLASSES[status]}`
+
+  if (!onClick) {
+    return (
+      <span className={classes} title={title}>
+        {STATUS_LABEL[status]}
+      </span>
+    )
+  }
+
   return (
-    <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[status]}`}
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={ariaLabel}
+      className={`${classes} cursor-pointer transition hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500 disabled:opacity-50`}
     >
       {STATUS_LABEL[status]}
-    </span>
+    </button>
   )
 }

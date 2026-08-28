@@ -185,3 +185,122 @@ describe('TaskTable — bulk actions', () => {
     expect(onBulkStatus).toHaveBeenCalledWith(['t1'], 'geannuleerd')
   })
 })
+
+/**
+ * Status doorklikken: één klik op de statusknop zet de taak naar de volgende
+ * stap in de keten, met exact dezelfde regels als in het detailvenster —
+ * beide halen ze hun keuzes uit src/lib/taskStatus.ts, dat de databaseregel
+ * (migratie 0011) spiegelt.
+ *
+ * Rood voor de fix: de status was een dood label, er was geen doorklik.
+ */
+describe('TaskTable — status doorklikken', () => {
+  const onStatusChange = vi.fn()
+
+  beforeEach(() => {
+    onStatusChange.mockReset()
+    onStatusChange.mockResolvedValue(undefined)
+  })
+
+  function renderTable(t: TaskInstanceWithRelations, emp: Employee = employee({ mag_goedkeuren: false })) {
+    return render(
+      <TaskTable
+        tasks={[t]}
+        employees={employees}
+        onOpenTask={onOpenTask}
+        currentEmployee={emp}
+        onStatusChange={onStatusChange}
+      />
+    )
+  }
+
+  it('zet een open taak in één klik naar In uitvoering, zonder het detailvenster te openen', async () => {
+    const user = userEvent.setup()
+    renderTable(task({ status: 'open' }))
+
+    await user.click(screen.getByRole('button', { name: /volgende stap: In uitvoering/i }))
+
+    expect(onStatusChange).toHaveBeenCalledWith('t1', 'in_uitvoering')
+    expect(onOpenTask).not.toHaveBeenCalled()
+  })
+
+  it('loopt voor een wettelijke taak via wacht op goedkeuring in plaats van rechtstreeks af te ronden', async () => {
+    const user = userEvent.setup()
+    renderTable(task({ status: 'in_uitvoering', vereist_goedkeuring: true }))
+
+    await user.click(screen.getByRole('button', { name: /volgende stap: Dien in voor goedkeuring/i }))
+
+    expect(onStatusChange).toHaveBeenCalledWith('t1', 'wacht_op_goedkeuring')
+  })
+
+  it('rondt een servicetaak zonder goedkeuringsvereiste rechtstreeks af', async () => {
+    const user = userEvent.setup()
+    renderTable(
+      task({
+        status: 'in_uitvoering',
+        vereist_goedkeuring: false,
+        obligation_type: { id: 'ot2', code: 'rapportering', naam: 'Managementrapport', categorie: 'service', werkstroom: 'rapportering' },
+      })
+    )
+
+    await user.click(screen.getByRole('button', { name: /volgende stap: Afronden/i }))
+
+    expect(onStatusChange).toHaveBeenCalledWith('t1', 'ingediend_afgerond')
+  })
+
+  it('laat een taak in wacht_op_goedkeuring goedkeuren door wie het recht heeft', async () => {
+    const user = userEvent.setup()
+    renderTable(task({ status: 'wacht_op_goedkeuring' }), employee({ mag_goedkeuren: true }))
+
+    await user.click(screen.getByRole('button', { name: /volgende stap: Goedkeuren/i }))
+
+    expect(onStatusChange).toHaveBeenCalledWith('t1', 'ingediend_afgerond')
+  })
+
+  it('biedt geen doorklik aan op wacht_op_goedkeuring zonder goedkeuringsrecht, maar zegt waarom', () => {
+    renderTable(task({ status: 'wacht_op_goedkeuring' }), employee({ mag_goedkeuren: false }))
+
+    expect(screen.queryByRole('button', { name: /volgende stap/i })).not.toBeInTheDocument()
+    expect(screen.getByTitle(/goedkeuringsrecht/i)).toBeInTheDocument()
+  })
+
+  it('biedt geen doorklik aan op een afgesloten taak', () => {
+    renderTable(task({ status: 'ingediend_afgerond' }))
+    expect(screen.queryByRole('button', { name: /volgende stap/i })).not.toBeInTheDocument()
+  })
+
+  it('houdt de status een gewoon label zolang er geen statushandler is meegegeven', () => {
+    render(<TaskTable tasks={[task({ status: 'open' })]} employees={employees} onOpenTask={onOpenTask} />)
+    expect(screen.queryByRole('button', { name: /volgende stap/i })).not.toBeInTheDocument()
+    expect(screen.getByText('Open')).toBeInTheDocument()
+  })
+
+  it('toont een foutmelding wanneer de databank de stap weigert', async () => {
+    const user = userEvent.setup()
+    onStatusChange.mockRejectedValue(new Error('Taak met status open is afgesloten'))
+    renderTable(task({ status: 'open' }))
+
+    await user.click(screen.getByRole('button', { name: /volgende stap/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/afgesloten/i)
+  })
+})
+
+/** Een badge die op elke regel staat, meldt niets. "Later" verdwijnt dus. */
+describe('TaskTable — urgentiebadge alleen wanneer ze iets meldt', () => {
+  function overDagen(dagen: number): string {
+    const d = new Date()
+    d.setDate(d.getDate() + dagen)
+    return d.toISOString().slice(0, 10)
+  }
+
+  it('toont geen "Later"-badge op een taak die nog ver weg is', () => {
+    render(<TaskTable tasks={[task({ due_date: overDagen(90) })]} employees={employees} onOpenTask={onOpenTask} />)
+    expect(screen.queryByText('Later')).not.toBeInTheDocument()
+  })
+
+  it('toont de badge wel wanneer de deadline dichtbij is', () => {
+    render(<TaskTable tasks={[task({ due_date: overDagen(1) })]} employees={employees} onOpenTask={onOpenTask} />)
+    expect(screen.getByText('Deze week')).toBeInTheDocument()
+  })
+})

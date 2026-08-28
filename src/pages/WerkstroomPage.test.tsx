@@ -12,6 +12,23 @@ vi.mock('../lib/supabase', () => ({
   supabase: { from: vi.fn(), rpc: vi.fn(), auth: {} },
 }))
 
+// De pagina heeft de ingelogde medewerker nodig om te weten welke statusstap
+// deze persoon mag zetten. Zonder provider valt de hook om, dus die mocken we.
+const ingelogd = {
+  id: 'e1',
+  firm_id: 'f1',
+  auth_user_id: 'auth-1',
+  naam: 'Jan',
+  email: 'jan@rsm.be',
+  rol: 'kantoorbeheerder',
+  mag_goedkeuren: true,
+  actief: true,
+  created_at: '2026-01-01T00:00:00Z',
+}
+vi.mock('../hooks/useCurrentEmployee', () => ({
+  useCurrentEmployee: () => ({ employee: ingelogd, loading: false, error: null }),
+}))
+
 const obligationTypes: ObligationType[] = [
   { id: 'ot-btw', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: null, werkstroom: 'btw' },
   { id: 'ot-lst', code: 'btw_klantenlisting', naam: 'BTW-klantenlisting', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: null, werkstroom: 'btw' },
@@ -203,5 +220,17 @@ describe('WerkstroomPage', () => {
     render(<WerkstroomPage ingang={btw} />)
 
     expect(await screen.findByText(/Geen btw-taken in dit venster/)).toBeInTheDocument()
+  })
+
+  // De doorklikbare status kwam er eerst alleen op Werklijst, Mijn taken en
+  // Escalatie: TaskBlocks gaf de twee props niet door, dus juist de schermen
+  // waar het kantoor dagelijks werkt bleven achter. Zonder deze test is dat
+  // gat onzichtbaar -- de statuskolom staat er dan gewoon, alleen als label.
+  it('maakt de status ook hier doorklikbaar naar de volgende stap', async () => {
+    install([task({ status: 'open' })])
+    render(<WerkstroomPage ingang={btw} />)
+
+    const knop = await screen.findByRole('button', { name: /Status Open .* volgende stap/i })
+    expect(knop).toBeInTheDocument()
   })
 })

@@ -9,6 +9,11 @@ interface TaskBlocksProps {
   onOpenTask: (task: TaskInstanceWithRelations) => void
   onBulkReassign?: (taskIds: string[], employeeId: string) => Promise<void>
   onBulkStatus?: (taskIds: string[], status: TaskStatus) => Promise<void>
+  /** Doorgegeven aan TaskTable: samen maken deze twee de status doorklikbaar
+   *  naar de volgende stap. Zonder de medewerker weet het scherm niet wie er
+   *  mag goedkeuren, en blijft de status een label. */
+  currentEmployee?: Employee | null
+  onStatusChange?: (taskId: string, status: TaskStatus) => Promise<void>
   emptyMessage?: string
 }
 
@@ -41,6 +46,8 @@ export function TaskBlocks({
   onOpenTask,
   onBulkReassign,
   onBulkStatus,
+  currentEmployee,
+  onStatusChange,
   emptyMessage = 'Geen taken in dit venster.',
 }: TaskBlocksProps) {
   const blokken = groepeerInBlokken(tasks)
@@ -71,6 +78,8 @@ export function TaskBlocks({
               onOpenTask={onOpenTask}
               onBulkReassign={onBulkReassign}
               onBulkStatus={onBulkStatus}
+              currentEmployee={currentEmployee}
+              onStatusChange={onStatusChange}
             />
           </section>
         )

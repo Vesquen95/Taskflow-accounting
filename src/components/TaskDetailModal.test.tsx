@@ -371,3 +371,137 @@ describe('TaskDetailModal — reassignment', () => {
     expect(onReassign).toHaveBeenCalledWith('t1', 'e2')
   })
 })
+
+/**
+ * De knoppenlijst moet kloppen met wat de database toelaat
+ * (enforce_task_instance_transition, migratie 0011). Die regel blijft
+ * ongewijzigd — het scherm moet eerlijk zijn.
+ *
+ * Deze tests waren rood voor de fix: TaskDetailModal bood
+ * "Ingediend/afgerond" aan vanuit open/in_uitvoering/wacht_op_klant zonder
+ * naar vereist_goedkeuring te kijken, waardoor 204 van de 252 openstaande
+ * taken een keuze toonden die de database weigert.
+ */
+describe('TaskDetailModal — geen keuzes die de database weigert (migratie 0011)', () => {
+  const RECHTSTREEKS_AFRONDEN = /^(Ingediend\/afgerond|Afronden)$/i
+
+  it.each(['open', 'in_uitvoering', 'wacht_op_klant'] as const)(
+    'biedt vanuit %s géén rechtstreekse afronding aan op een taak die goedkeuring vereist (zonder goedkeuringsrecht)',
+    async (status) => {
+      mockEmployee.mockReturnValue(employee({ id: 'e1', mag_goedkeuren: false }))
+      render(
+        <TaskDetailModal
+          task={task({ status, vereist_goedkeuring: true })}
+          employees={employees}
+          onClose={onClose}
+          onStatusChange={onStatusChange}
+          onReassign={onReassign}
+          onMarkReviewHandled={onMarkReviewHandled}
+        />
+      )
+
+      await screen.findByText('BTW-aangifte')
+      expect(screen.queryByRole('button', { name: RECHTSTREEKS_AFRONDEN })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Dien in voor goedkeuring' })).toBeInTheDocument()
+    }
+  )
+
+  it('biedt rechtstreeks afronden wél aan op een taak zonder goedkeuringsvereiste', async () => {
+    const user = userEvent.setup()
+    mockEmployee.mockReturnValue(employee({ id: 'e1', mag_goedkeuren: false }))
+    render(
+      <TaskDetailModal
+        task={task({ status: 'in_uitvoering', vereist_goedkeuring: false })}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: RECHTSTREEKS_AFRONDEN }))
+    expect(onStatusChange).toHaveBeenCalledTimes(1)
+    expect(onStatusChange).toHaveBeenCalledWith('t1', 'ingediend_afgerond')
+  })
+
+  it('laat een medewerker zonder goedkeuringsrecht geen enkele vervolgstap zien op wacht_op_goedkeuring', async () => {
+    mockEmployee.mockReturnValue(employee({ id: 'e2', mag_goedkeuren: false }))
+    render(
+      <TaskDetailModal
+        task={task({ status: 'wacht_op_goedkeuring' })}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+      />
+    )
+
+    await screen.findByText('BTW-aangifte')
+    for (const label of [
+      'Goedkeuren',
+      'Terugsturen (afkeuren)',
+      'In uitvoering',
+      'Wacht op klant',
+      'Dien in voor goedkeuring',
+    ]) {
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument()
+    }
+    expect(screen.queryByRole('button', { name: RECHTSTREEKS_AFRONDEN })).not.toBeInTheDocument()
+    expect(screen.queryByText('Status wijzigen')).not.toBeInTheDocument()
+    expect(screen.getByText(/Enkel medewerkers met goedkeuringsrecht/)).toBeInTheDocument()
+  })
+})
+
+/** Afronden in één klik voor wie mag goedkeuren (PLAN §7 punt 3). */
+describe('TaskDetailModal — afronden in één klik', () => {
+  const AFRONDEN = /^Afronden/
+
+  it('zet een goedkeuringsplichtige taak in twee stappen af: eerst indienen, dan goedkeuren', async () => {
+    const user = userEvent.setup()
+    mockEmployee.mockReturnValue(employee({ id: 'e1', mag_goedkeuren: true }))
+    render(
+      <TaskDetailModal
+        task={task({ status: 'open', vereist_goedkeuring: true })}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: AFRONDEN }))
+
+    expect(onStatusChange.mock.calls).toEqual([
+      ['t1', 'wacht_op_goedkeuring'],
+      ['t1', 'ingediend_afgerond'],
+    ])
+  })
+
+  it('meldt de tussentoestand wanneer de goedkeuringsstap faalt na een geslaagde indiening', async () => {
+    const user = userEvent.setup()
+    mockEmployee.mockReturnValue(employee({ id: 'e1', mag_goedkeuren: true }))
+    onStatusChange
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('Alleen medewerkers met goedkeuringsrecht kunnen deze taak goedkeuren'))
+    render(
+      <TaskDetailModal
+        task={task({ status: 'open', vereist_goedkeuring: true })}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: AFRONDEN }))
+
+    const melding = await screen.findByRole('alert')
+    expect(melding).toHaveTextContent(/staat nu op "Wacht op goedkeuring"/i)
+    expect(melding).toHaveTextContent(/goedkeuringsrecht/i)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+})

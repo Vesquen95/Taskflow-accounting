@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTaskInstances } from '../hooks/useTaskInstances'
 import { useEmployees } from '../hooks/useEmployees'
+import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { TaskTable } from '../components/TaskTable'
 import { TaskDetailModal } from '../components/TaskDetailModal'
 import { ErrorState } from '../components/ErrorState'
@@ -13,6 +14,7 @@ import type { TaskInstanceWithRelations } from '../types'
  * die komen hier vanzelf eerder binnen dan service-werk met dezelfde
  * kalenderafstand tot de deadline. */
 export function EscalatiePage() {
+  const { employee } = useCurrentEmployee()
   const { employees } = useEmployees()
   const { tasks, loading, error, reload, updateStatus, reassign, bulkReassign, bulkUpdateStatus, markReviewHandled } =
     useTaskInstances({})
@@ -47,6 +49,8 @@ export function EscalatiePage() {
           onOpenTask={setOpenTask}
           onBulkReassign={bulkReassign}
           onBulkStatus={bulkUpdateStatus}
+          currentEmployee={employee}
+          onStatusChange={updateStatus}
           emptyMessage="Geen escalaties — alles onder controle."
         />
       )}

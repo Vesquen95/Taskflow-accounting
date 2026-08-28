@@ -40,7 +40,13 @@ export function MijnTakenPage() {
       ) : loading ? (
         <p className="text-sm text-slate-400">Laden…</p>
       ) : (
-        <TaskTable tasks={tasks} employees={employees} onOpenTask={setOpenTask} />
+        <TaskTable
+          tasks={tasks}
+          employees={employees}
+          onOpenTask={setOpenTask}
+          currentEmployee={employee}
+          onStatusChange={updateStatus}
+        />
       )}
 
       {openTask && (
