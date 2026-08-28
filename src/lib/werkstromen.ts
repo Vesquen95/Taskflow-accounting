@@ -59,15 +59,23 @@ export function typesInWerkstroom(
   return types.filter((t) => t.werkstroom === werkstroom)
 }
 
-/** De vensters waarin het kantoor plant. Er is bewust geen ondergrens: wat te
- *  laat is hoort in élk venster thuis, anders raak je achterstand kwijt zodra
- *  je inzoomt op deze week. */
-export type VensterKey = 'deze_week' | 'twee_weken' | 'deze_maand' | 'alles'
+/** De vensters waarin het kantoor plant. Er is bewust geen ondergrens: elk
+ *  venster is een einddatum en niet een periode. Wat te laat is hoort in élk
+ *  venster thuis, anders raak je achterstand kwijt zodra je inzoomt op deze
+ *  week. "Volgende maand" betekent dus "tot en met het einde van volgende
+ *  maand", niet "alleen volgende maand". */
+export type VensterKey =
+  | 'deze_week'
+  | 'deze_maand'
+  | 'volgende_maand'
+  | 'dit_kwartaal'
+  | 'alles'
 
 export const VENSTERS: { key: VensterKey; label: string }[] = [
   { key: 'deze_week', label: 'Deze week' },
-  { key: 'twee_weken', label: 'Komende twee weken' },
   { key: 'deze_maand', label: 'Deze maand' },
+  { key: 'volgende_maand', label: 'Volgende maand' },
+  { key: 'dit_kwartaal', label: 'Dit kwartaal' },
   { key: 'alles', label: 'Alles' },
 ]
 
@@ -89,13 +97,19 @@ export function vensterTot(venster: VensterKey, vandaag: Date = new Date()): str
       d.setDate(d.getDate() + totZondag)
       return isoDatum(d)
     }
-    case 'twee_weken': {
-      const totZondag = (7 - d.getDay()) % 7
-      d.setDate(d.getDate() + totZondag + 7)
-      return isoDatum(d)
-    }
-    case 'deze_maand': {
+    case 'deze_maand':
+      // Dag 0 van de volgende maand is de laatste dag van deze maand.
       return isoDatum(new Date(d.getFullYear(), d.getMonth() + 1, 0))
+    case 'volgende_maand':
+      // Idem, één maand verder. De Date-constructor rolt zelf over de
+      // jaarwissel: december is maand 11, dus maand 13 is januari erna.
+      return isoDatum(new Date(d.getFullYear(), d.getMonth() + 2, 0))
+    case 'dit_kwartaal': {
+      // Kwartalen eindigen op 31/03, 30/06, 30/09 en 31/12. Sta je op zo'n
+      // laatste dag, dan is dat meteen de bovengrens: het venster is die dag
+      // smal, maar de achterstand blijft er onverkort in staan.
+      const eersteMaandVolgendKwartaal = Math.floor(d.getMonth() / 3) * 3 + 3
+      return isoDatum(new Date(d.getFullYear(), eersteMaandVolgendKwartaal, 0))
     }
     case 'alles':
       return undefined
@@ -103,18 +117,25 @@ export function vensterTot(venster: VensterKey, vandaag: Date = new Date()): str
 }
 
 export interface TakenBlok {
-  /** De deadline van dit blok, of null voor het verzamelblok "te laat". */
-  due_date: string | null
+  /** De maand van dit blok als 'JJJJ-MM', of null voor het verzamelblok
+   *  "te laat". Bewust de maand en niet de exacte deadline: die staat per
+   *  regel in de kolom Deadline, met de urgentiebadge ernaast, en hoorde niet
+   *  ook nog eens in de blokkop. */
+  maand: string | null
   taken: TaskInstanceWithRelations[]
 }
 
 /**
- * Groepeert taken in blokken per deadline — zo werkt het kantoor: "we werken
+ * Groepeert taken in blokken per maand — zo werkt het kantoor: "we werken
  * taken af per takenblok, niet per klant."
  *
- * Alles wat al te laat is gaat in één blok vooraan in plaats van in een reeks
- * losse dagblokken: die achterstand pak je als geheel aan, en anders staat er
- * bij ~100 dossiers een lange staart van dagen met één taak.
+ * Per maand en niet per deadlinedatum: bij een venster van een kwartaal levert
+ * een blok per dag tientallen minuscule blokjes op, en dan zie je de stapel
+ * niet meer. Binnen een blok blijven de taken op deadline gesorteerd, zodat de
+ * maand chronologisch leest.
+ *
+ * Alles wat al te laat is gaat in één blok vooraan in plaats van in losse
+ * maanden: die achterstand pak je als geheel aan.
  */
 export function groepeerInBlokken(
   taken: TaskInstanceWithRelations[],
@@ -122,21 +143,31 @@ export function groepeerInBlokken(
 ): TakenBlok[] {
   const vandaagIso = isoDatum(vandaag)
   const teLaat: TaskInstanceWithRelations[] = []
-  const perDatum = new Map<string, TaskInstanceWithRelations[]>()
+  const perMaand = new Map<string, TaskInstanceWithRelations[]>()
 
   for (const taak of taken) {
     if (taak.due_date < vandaagIso) {
       teLaat.push(taak)
       continue
     }
-    const rij = perDatum.get(taak.due_date)
+    const maand = taak.due_date.slice(0, 7)
+    const rij = perMaand.get(maand)
     if (rij) rij.push(taak)
-    else perDatum.set(taak.due_date, [taak])
+    else perMaand.set(maand, [taak])
   }
 
-  const blokken: TakenBlok[] = [...perDatum.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([due_date, blokTaken]) => ({ due_date, taken: blokTaken }))
+  // Binnen een maandblok staan nu tientallen verschillende deadlines onder
+  // elkaar; die moeten chronologisch lopen, ook als de bron ze niet gesorteerd
+  // aanlevert. De sortering is stabiel, dus taken op dezelfde dag houden hun
+  // onderlinge volgorde.
+  const opDeadline = (a: TaskInstanceWithRelations, b: TaskInstanceWithRelations) =>
+    a.due_date.localeCompare(b.due_date)
 
-  return teLaat.length > 0 ? [{ due_date: null, taken: teLaat }, ...blokken] : blokken
+  const blokken: TakenBlok[] = [...perMaand.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([maand, blokTaken]) => ({ maand, taken: blokTaken.sort(opDeadline) }))
+
+  return teLaat.length > 0
+    ? [{ maand: null, taken: teLaat.sort(opDeadline) }, ...blokken]
+    : blokken
 }

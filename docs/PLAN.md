@@ -391,15 +391,22 @@ van de stapel verbergen.
 **Gebouwd (migratie 0022 + `src/lib/werkstromen.ts`).** Elke werkstroom heeft
 een eigen ingang in de zijbalk, onder de kop "Werk". Per ingang:
 
-- Een keuze uit vier deadlinevensters: deze week, komende twee weken, deze
-  maand, alles. Het venster heeft alleen een bovengrens — **geen** ondergrens:
-  wat te laat is hoort in élk venster thuis, anders raak je achterstand kwijt
-  zodra je inzoomt op deze week.
-- De taken staan in blokken per deadlinedatum, met de bulkacties per blok. Zo
-  doe je een hele deadlinedag in één beweging.
+- Een keuze uit vijf deadlinevensters: deze week, deze maand, volgende maand,
+  dit kwartaal, alles. Het venster heeft alleen een bovengrens — **geen**
+  ondergrens: wat te laat is hoort in élk venster thuis, anders raak je
+  achterstand kwijt zodra je inzoomt op deze week. "Volgende maand" betekent
+  dus "tot en met het einde van volgende maand", niet "alleen volgende maand";
+  de filterbalk zegt dat er ook bij. "Alles" blijft als laatste keuze staan,
+  want zonder die keuze kan je het geheel niet meer overzien.
+- De taken staan in blokken per deadline**maand**, met de bulkacties per blok,
+  en binnen een blok chronologisch op deadline. Kop: "september 2026" — het
+  jaartal moet erbij, want met "Alles" loopt de lijst tot 2029.
+- Blokken per dag (de eerste versie) zijn vervangen na gebruik door het
+  kantoor: bij een venster van een kwartaal gaf dat tientallen blokjes van één
+  regel, en de blokkop herhaalde de datum die al per regel in de kolom Deadline
+  staat. De exacte dag staat dus nog op één plek, naast de urgentiebadge.
 - Alles wat te laat is staat als één blok bovenaan, niet uitgesmeerd over losse
-  dagen: achterstand pak je als geheel aan, en anders krijg je bij ~100
-  dossiers een lange staart van dagen met één taak.
+  maanden: achterstand pak je als geheel aan.
 
 De brede lijsten (Werklijst, Mijn taken, Escalatie-queue, Kalender) blijven
 bestaan onder de kop "Overzicht", voor wie het geheel wil zien.

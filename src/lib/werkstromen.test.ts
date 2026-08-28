@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   INGANGEN,
+  VENSTERS,
   groepeerInBlokken,
   ingangVoorPad,
   typesInWerkstroom,
@@ -54,7 +55,7 @@ describe('typesInWerkstroom', () => {
 })
 
 describe('vensterTot', () => {
-  // Woensdag 27 augustus 2026.
+  // Woensdag 26 augustus 2026.
   const woensdag = new Date(2026, 7, 26)
 
   it('laat "deze week" lopen tot en met zondag', () => {
@@ -65,55 +66,140 @@ describe('vensterTot', () => {
     expect(vensterTot('deze_week', new Date(2026, 7, 30))).toBe('2026-08-30')
   })
 
-  it('laat "komende twee weken" een week verder lopen', () => {
-    expect(vensterTot('twee_weken', woensdag)).toBe('2026-09-06')
-  })
-
   it('laat "deze maand" tot de laatste dag van de maand lopen', () => {
     expect(vensterTot('deze_maand', woensdag)).toBe('2026-08-31')
     expect(vensterTot('deze_maand', new Date(2026, 1, 3))).toBe('2026-02-28')
   })
 
+  it('laat "volgende maand" tot en met het einde van volgende maand lopen', () => {
+    expect(vensterTot('volgende_maand', woensdag)).toBe('2026-09-30')
+  })
+
+  it('rolt "volgende maand" in december mee over de jaarwissel', () => {
+    // 15 december 2026 → tot en met 31 januari 2027, niet 31 januari 2026.
+    expect(vensterTot('volgende_maand', new Date(2026, 11, 15))).toBe('2027-01-31')
+    // En de laatste dag van december rekent nog altijd januari erbij.
+    expect(vensterTot('volgende_maand', new Date(2026, 11, 31))).toBe('2027-01-31')
+  })
+
+  it('houdt rekening met een kortere volgende maand', () => {
+    // 31 januari 2028 (schrikkeljaar) → tot en met 29 februari, niet 31 februari.
+    expect(vensterTot('volgende_maand', new Date(2028, 0, 31))).toBe('2028-02-29')
+    expect(vensterTot('volgende_maand', new Date(2026, 0, 31))).toBe('2026-02-28')
+  })
+
+  it('laat "dit kwartaal" tot de laatste dag van het lopende kwartaal lopen', () => {
+    expect(vensterTot('dit_kwartaal', new Date(2026, 0, 5))).toBe('2026-03-31')
+    expect(vensterTot('dit_kwartaal', new Date(2026, 4, 5))).toBe('2026-06-30')
+    expect(vensterTot('dit_kwartaal', woensdag)).toBe('2026-09-30')
+    expect(vensterTot('dit_kwartaal', new Date(2026, 10, 5))).toBe('2026-12-31')
+  })
+
+  it('rekent op een kwartaaleinde die dag zelf mee en springt niet naar het volgende kwartaal', () => {
+    expect(vensterTot('dit_kwartaal', new Date(2026, 2, 31))).toBe('2026-03-31')
+    expect(vensterTot('dit_kwartaal', new Date(2026, 5, 30))).toBe('2026-06-30')
+    expect(vensterTot('dit_kwartaal', new Date(2026, 8, 30))).toBe('2026-09-30')
+    // Het vierde kwartaal loopt tot oudejaar en niet door in het nieuwe jaar.
+    expect(vensterTot('dit_kwartaal', new Date(2026, 11, 31))).toBe('2026-12-31')
+  })
+
   it('heeft geen bovengrens voor "alles"', () => {
     expect(vensterTot('alles', woensdag)).toBeUndefined()
+  })
+
+  it('geeft voor elk venster in de keuzelijst een bruikbare bovengrens', () => {
+    // De keuzelijst en vensterTot mogen niet uit elkaar lopen: een venster
+    // zonder tak in de switch zou stil undefined teruggeven en dus onbedoeld
+    // "alles" tonen.
+    for (const v of VENSTERS) {
+      const tot = vensterTot(v.key, woensdag)
+      if (v.key === 'alles') expect(tot).toBeUndefined()
+      else expect(tot).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    }
+  })
+
+  it('houdt "alles" als laatste keuze, zodat het geheel te overzien blijft', () => {
+    expect(VENSTERS.map((v) => v.key)).toEqual([
+      'deze_week',
+      'deze_maand',
+      'volgende_maand',
+      'dit_kwartaal',
+      'alles',
+    ])
   })
 })
 
 describe('groepeerInBlokken', () => {
   const vandaag = new Date(2026, 7, 26) // 2026-08-26
 
-  it('zet taken met dezelfde deadline in één blok, op datum gesorteerd', () => {
+  it('zet taken uit dezelfde maand in één blok, op maand gesorteerd', () => {
     const blokken = groepeerInBlokken(
-      [taak('c', '2026-09-20'), taak('a', '2026-08-31'), taak('b', '2026-08-31')],
+      [taak('c', '2026-09-20'), taak('a', '2026-08-31'), taak('b', '2026-08-28')],
       vandaag
     )
 
-    expect(blokken.map((b) => b.due_date)).toEqual(['2026-08-31', '2026-09-20'])
-    expect(blokken[0].taken.map((t) => t.id)).toEqual(['a', 'b'])
+    expect(blokken.map((b) => b.maand)).toEqual(['2026-08', '2026-09'])
+    // Binnen de maand loopt het chronologisch, ook al kwam het door elkaar aan.
+    expect(blokken[0].taken.map((t) => t.id)).toEqual(['b', 'a'])
   })
 
-  it('verzamelt alles wat te laat is in één blok vooraan', () => {
+  it('houdt dezelfde maand in verschillende jaren uit elkaar', () => {
+    // Met het venster "Alles" loopt de lijst tot 2029; september 2026 en
+    // september 2027 mogen dan niet in één blok belanden.
+    const blokken = groepeerInBlokken(
+      [taak('nu', '2026-09-20'), taak('later', '2027-09-20')],
+      vandaag
+    )
+
+    expect(blokken.map((b) => b.maand)).toEqual(['2026-09', '2027-09'])
+  })
+
+  it('verzamelt alles wat te laat is in één blok vooraan, ook over maanden heen', () => {
     const blokken = groepeerInBlokken(
       [taak('laat1', '2026-07-20'), taak('op-tijd', '2026-08-31'), taak('laat2', '2026-08-10')],
       vandaag
     )
 
-    expect(blokken[0].due_date).toBeNull()
+    expect(blokken[0].maand).toBeNull()
     expect(blokken[0].taken.map((t) => t.id)).toEqual(['laat1', 'laat2'])
     expect(blokken).toHaveLength(2)
   })
 
-  it('rekent vandaag niet als te laat', () => {
+  it('rekent vandaag niet als te laat en zet het bij de lopende maand', () => {
     const blokken = groepeerInBlokken([taak('vandaag', '2026-08-26')], vandaag)
 
     expect(blokken).toHaveLength(1)
-    expect(blokken[0].due_date).toBe('2026-08-26')
+    expect(blokken[0].maand).toBe('2026-08')
+  })
+
+  it('splitst de lopende maand tussen achterstand en wat nog komt', () => {
+    const blokken = groepeerInBlokken(
+      [taak('laat', '2026-08-10'), taak('komt-nog', '2026-08-31')],
+      vandaag
+    )
+
+    expect(blokken.map((b) => b.maand)).toEqual([null, '2026-08'])
+    expect(blokken[1].taken.map((t) => t.id)).toEqual(['komt-nog'])
   })
 
   it('laat het te-laat-blok weg als er geen achterstand is', () => {
     const blokken = groepeerInBlokken([taak('a', '2026-08-31')], vandaag)
 
-    expect(blokken.every((b) => b.due_date !== null)).toBe(true)
+    expect(blokken.every((b) => b.maand !== null)).toBe(true)
+  })
+
+  it('houdt bij een kwartaalvenster het aantal blokken beperkt tot de maanden', () => {
+    // De aanleiding voor maandblokken: een kwartaal aan dagblokken gaf
+    // tientallen blokjes van één regel.
+    const taken = Array.from({ length: 30 }, (_, i) =>
+      taak(`t${i}`, `2026-09-${String((i % 30) + 1).padStart(2, '0')}`)
+    )
+
+    const blokken = groepeerInBlokken(taken, vandaag)
+
+    expect(blokken).toHaveLength(1)
+    expect(blokken[0].maand).toBe('2026-09')
+    expect(blokken[0].taken).toHaveLength(30)
   })
 
   it('geeft een lege lijst terug zonder taken', () => {

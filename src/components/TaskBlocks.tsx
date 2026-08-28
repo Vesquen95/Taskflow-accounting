@@ -1,7 +1,6 @@
 import type { Employee, TaskInstanceWithRelations, TaskStatus } from '../types'
 import { TaskTable } from './TaskTable'
 import { EmptyState } from './EmptyState'
-import { daysUntil, formatDate } from '../lib/urgency'
 import { groepeerInBlokken } from '../lib/werkstromen'
 
 interface TaskBlocksProps {
@@ -13,23 +12,28 @@ interface TaskBlocksProps {
   emptyMessage?: string
 }
 
-function blokTitel(due_date: string): string {
-  const dagen = daysUntil(due_date)
-  if (dagen === 0) return `Vandaag — ${formatDate(due_date)}`
-  if (dagen === 1) return `Morgen — ${formatDate(due_date)}`
-  const weekdag = new Date(`${due_date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long' })
-  return `${weekdag} ${formatDate(due_date)}`
+/** De kop van een maandblok: "september 2026". Het jaartal moet erbij: met het
+ *  venster "Alles" loopt de lijst tot 2029, en dan zijn september 2026 en
+ *  september 2027 niet uit elkaar te houden. */
+function blokTitel(maand: string): string {
+  return new Date(`${maand}-01T00:00:00`).toLocaleDateString('nl-BE', {
+    month: 'long',
+    year: 'numeric',
+  })
 }
 
 /**
- * De takenlijst zoals het kantoor ze afwerkt: in blokken per deadline.
+ * De takenlijst zoals het kantoor ze afwerkt: in blokken per maand.
  *
- * "We werken taken af per takenblok, niet per klant." Eén datum, alle dossiers
- * eronder, en de bulkacties per blok — zo doe je een hele deadlinedag in één
+ * "We werken taken af per takenblok, niet per klant." Eén maand, alle dossiers
+ * eronder, en de bulkacties per blok — zo doe je een hele deadlinemaand in één
  * beweging in plaats van dossier per dossier.
  *
+ * De blokkop noemt enkel de maand. De exacte dag herhalen in de kop maakte de
+ * lijst dubbel: die staat al per regel in de kolom Deadline, waar hij hoort.
+ *
  * Wat te laat is staat als één blok bovenaan, niet uitgesmeerd over losse
- * dagen: achterstand pak je als geheel aan.
+ * maanden: achterstand pak je als geheel aan.
  */
 export function TaskBlocks({
   tasks,
@@ -48,14 +52,14 @@ export function TaskBlocks({
   return (
     <div className="space-y-5">
       {blokken.map((blok) => {
-        const teLaat = blok.due_date === null
+        const teLaat = blok.maand === null
         return (
-          <section key={blok.due_date ?? 'te-laat'}>
+          <section key={blok.maand ?? 'te-laat'}>
             <div className="mb-2 flex items-baseline gap-2">
               <h2
                 className={`text-sm font-semibold ${teLaat ? 'text-red-700' : 'text-slate-800'}`}
               >
-                {teLaat ? 'Te laat' : blokTitel(blok.due_date!)}
+                {teLaat ? 'Te laat' : blokTitel(blok.maand!)}
               </h2>
               <span className="text-xs text-slate-500">
                 {blok.taken.length} {blok.taken.length === 1 ? 'taak' : 'taken'}

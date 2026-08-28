@@ -159,9 +159,27 @@ describe('WerkstroomPage', () => {
     expect(argsVan(laatsteQuery(), 'in', 'obligation_type_id')).toBeUndefined()
   })
 
-  it('toont de taken in blokken per deadline, met de achterstand vooraan', async () => {
-    const gisteren = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
-    const overEenWeek = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  it('biedt de deadlinevensters die het kantoor plant, met "Alles" als laatste', async () => {
+    install([task()])
+    render(<WerkstroomPage ingang={btw} />)
+
+    const keuze = await screen.findByLabelText('Deadlinevenster')
+    expect(
+      Array.from(keuze.querySelectorAll('option')).map((o) => o.textContent)
+    ).toEqual(['Deze week', 'Deze maand', 'Volgende maand', 'Dit kwartaal', 'Alles'])
+  })
+
+  it('toont de taken in blokken per maand, met de achterstand vooraan', async () => {
+    // Lokale datum, net als de groepering zelf: met toISOString zou een taak
+    // rond middernacht in de verkeerde maand belanden.
+    const isoLokaal = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const gisteren = isoLokaal(new Date(Date.now() - 86400000))
+    const overEenWeek = isoLokaal(new Date(Date.now() + 7 * 86400000))
+    const maandKop = new Date(`${overEenWeek.slice(0, 7)}-01T00:00:00`).toLocaleDateString(
+      'nl-BE',
+      { month: 'long', year: 'numeric' }
+    )
     install([
       task({ id: 't-laat', due_date: gisteren, client: { id: 'c1', naam: 'Achterstand BV', vertrouwelijk: false, actief: true } }),
       task({ id: 't-straks', due_date: overEenWeek, client: { id: 'c2', naam: 'Op tijd BV', vertrouwelijk: false, actief: true } }),
@@ -173,6 +191,9 @@ describe('WerkstroomPage', () => {
     // De achterstand staat vooraan, en de rest in een eigen blok erna.
     expect(koppen[0]).toHaveTextContent('Te laat')
     expect(koppen.length).toBeGreaterThan(1)
+    // De blokkop noemt de maand mét jaartal en niets meer: de exacte dag staat
+    // per regel in de kolom Deadline en hoort niet dubbel in de kop.
+    expect(koppen[1].textContent).toBe(maandKop)
     expect(screen.getByText('Achterstand BV')).toBeInTheDocument()
     expect(screen.getByText('Op tijd BV')).toBeInTheDocument()
   })

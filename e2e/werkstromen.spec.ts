@@ -12,7 +12,7 @@ test.describe('Werkstromen', () => {
     }
   })
 
-  test('Btw toont alleen btw-taken, in blokken per deadline', async ({ page }) => {
+  test('Btw toont alleen btw-taken, in blokken per maand', async ({ page }) => {
     await page.getByRole('button', { name: 'Btw', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Btw', level: 1 })).toBeVisible()
 

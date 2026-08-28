@@ -146,15 +146,24 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
             className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
           />
         </div>
-        <p className="ml-auto text-xs text-slate-400">
-          Achterstand blijft zichtbaar, ook in een smal venster.
+        {/* Het venster is een einddatum en geen periode. Zonder die uitleg leest
+            "Volgende maand" als "alleen volgende maand", en dan lijkt een blok
+            van deze maand er ten onrechte bij te staan. */}
+        <p className="ml-auto max-w-xs text-xs text-slate-500">
+          Elk venster loopt tot en met die datum: “Volgende maand” toont dus ook
+          deze maand. Achterstand blijft altijd zichtbaar.
         </p>
       </div>
 
       {foutmelding ? (
         <ErrorState message={foutmelding} onRetry={reload} />
       ) : loading || !klaar ? (
-        <p className="text-sm text-slate-400">Laden…</p>
+        // "Laden" moet leesbaar zijn en niet op "je bent klaar" lijken: geen
+        // grijstint voor bijzaken, en een role="status" zodat een schermlezer
+        // het meekrijgt.
+        <p role="status" className="text-sm text-slate-600">
+          Taken laden…
+        </p>
       ) : (
         <TaskBlocks
           tasks={tasks}
