@@ -4032,4 +4032,247 @@ begin
   raise notice 'PASS 33.6: het onderhoud blijft buiten de app';
 end $$;
 
+-- ============================================================
+-- Sectie 34 (0026): een gearchiveerde klant laat geen taken achter.
+--
+-- Het kantoor: "klanten archiveren. Als een klant dan wordt gearchiveerd
+-- moeten de taken automatisch geannuleerd of ook gearchiveerd worden."
+--
+-- Tot 0025 sloeg de generatie een inactieve klant wel over (er kwamen geen
+-- taken bij), maar ruimde niemand de taken op die er al stonden. Een
+-- gearchiveerde klant verdween dus uit de klantenlijst terwijl zijn
+-- openstaande taken in de werkstroomblokken bleven hangen -- bij honderd
+-- dossiers precies het soort stille rommel waar dit systeem niet tegen kan.
+--
+-- Drie regels sturen deze sectie:
+--   * "verwijderen bestaat niet" (0021): annuleren haalt de taak uit alle
+--     lijsten en houdt hem in de geschiedenis;
+--   * afgesloten werk blijft afgesloten: ingediend_afgerond en geannuleerd
+--     worden niet aangeraakt;
+--   * niets gebeurt in stilte: elke geannuleerde taak krijgt haar eigen
+--     logregel, en het dossier houdt het aantal bij.
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid(); v_uid2 uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid; v_mw uuid;
+  v_klant uuid; v_buur uuid;
+  v_ot_rap uuid; v_ot_btw uuid;
+  v_taak_lopend uuid; v_taak_klaar uuid; v_taak_wacht uuid; v_taak_geann uuid;
+  v_afgerond_op timestamptz;
+  v_te_annuleren int; v_n int; v_open int; v_geann int; v_log int; v_nieuw int;
+  v_status public.task_status; v_notitie text; v_actor uuid;
+  v_buur_open int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_uid, 's34-admin@test.local', now()),
+    (v_uid2, 's34-mw@test.local', now());
+  insert into public.firms (naam) values ('Sectie 34 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S34 Beheerder', 's34-admin@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid2, 'S34 Medewerker', 's34-mw@test.local', 'medewerker', false, true)
+    returning id into v_mw;
+
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select id into v_ot_rap from public.obligation_types where code = 'rapportering';
+  select id into v_ot_btw from public.obligation_types where code = 'btw_aangifte';
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S34 Klant', 12, 31, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_klant;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S34 Buurklant', 12, 31, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_buur;
+
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, standaard_toegewezen_medewerker_id)
+    values (v_klant, v_ot_rap, true, current_date, v_mw), (v_buur, v_ot_rap, true, current_date, v_mw);
+
+  perform set_config('taskflow.test_uid', v_uid2::text, true);
+  set local role authenticated;
+  perform public.sync_client_tasks(v_klant);
+  perform public.sync_client_tasks(v_buur);
+  set local role postgres;
+
+  -- Een dossier zoals het er in het echt bijligt: iets in uitvoering, iets dat
+  -- op de klant wacht, iets dat af is, en iets dat eerder al geannuleerd werd.
+  select id into v_taak_lopend from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_rap order by due_date limit 1;
+  select id into v_taak_klaar from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_rap and id <> v_taak_lopend
+   order by due_date limit 1;
+  select id into v_taak_wacht from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_btw order by due_date limit 1;
+  select id into v_taak_geann from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_btw and id <> v_taak_wacht
+   order by due_date desc limit 1;
+
+  perform set_config('taskflow.test_uid', v_uid2::text, true);
+  set local role authenticated;
+  update public.task_instances set status = 'in_uitvoering' where id = v_taak_lopend;
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_taak_klaar;
+  update public.task_instances set status = 'wacht_op_klant' where id = v_taak_wacht;
+  update public.task_instances set status = 'geannuleerd' where id = v_taak_geann;
+  set local role postgres;
+
+  select afgerond_op into v_afgerond_op from public.task_instances where id = v_taak_klaar;
+  select count(*) into v_te_annuleren from public.task_instances
+   where client_id = v_klant and status not in ('ingediend_afgerond', 'geannuleerd');
+  select count(*) into v_buur_open from public.task_instances
+   where client_id = v_buur and status not in ('ingediend_afgerond', 'geannuleerd');
+  select count(*) into v_log from public.task_status_log where task_instance_id = v_taak_geann;
+  if v_te_annuleren < 2 then
+    raise exception 'FAIL 34.0: fixture levert maar % openstaande taken op', v_te_annuleren;
+  end if;
+
+  -- 34.1 Archiveren annuleert alles wat nog open stond.
+  perform set_config('taskflow.test_uid', v_uid2::text, true);
+  set local role authenticated;
+  update public.clients set actief = false where id = v_klant;
+  set local role postgres;
+
+  select count(*) into v_open from public.task_instances
+   where client_id = v_klant and status not in ('ingediend_afgerond', 'geannuleerd');
+  if v_open <> 0 then
+    raise exception 'FAIL 34.1: % taken bleven openstaan na het archiveren van de klant', v_open;
+  end if;
+  select status into v_status from public.task_instances where id = v_taak_lopend;
+  if v_status <> 'geannuleerd' then
+    raise exception 'FAIL 34.1: een taak in uitvoering bleef op % staan', v_status;
+  end if;
+  raise notice 'PASS 34.1: archiveren annuleert de % openstaande taken', v_te_annuleren;
+
+  -- 34.2 Wat af is blijft af, en wat al geannuleerd was wordt niet nog eens
+  -- aangeraakt. enforce_task_instance_transition weigert die overgangen sowieso;
+  -- de archivering mag er dus niet op stukvallen en er ook geen dubbele
+  -- logregel voor schrijven.
+  select status, afgerond_op into v_status, v_afgerond_op
+    from public.task_instances where id = v_taak_klaar;
+  if v_status <> 'ingediend_afgerond' or v_afgerond_op is null then
+    raise exception 'FAIL 34.2: de afgeronde taak werd aangeraakt (status %, afgerond_op %)', v_status, v_afgerond_op;
+  end if;
+  select count(*) into v_n from public.task_status_log where task_instance_id = v_taak_geann;
+  if v_n <> v_log then
+    raise exception 'FAIL 34.2: de eerder geannuleerde taak kreeg % extra logregels', v_n - v_log;
+  end if;
+  raise notice 'PASS 34.2: afgesloten werk blijft ongemoeid';
+
+  -- 34.3 De buurklant merkt er niets van.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_buur and status not in ('ingediend_afgerond', 'geannuleerd');
+  if v_n <> v_buur_open then
+    raise exception 'FAIL 34.3: de buurklant ging van % naar % openstaande taken', v_buur_open, v_n;
+  end if;
+  raise notice 'PASS 34.3: alleen het gearchiveerde dossier wordt geraakt';
+
+  -- 34.4 Niets gebeurt in stilte. Elke geannuleerde taak heeft haar eigen
+  -- statusregel, op naam van wie archiveerde, en die regel zegt waarom.
+  -- created_at is now(), en dat is binnen een transactie voor alle regels
+  -- dezelfde waarde -- sorteren zegt hier dus niets. Filter op de overgang zelf.
+  select nieuw_status, notitie, actor_employee_id into v_status, v_notitie, v_actor
+    from public.task_status_log
+   where task_instance_id = v_taak_lopend and event_type = 'status_wijziging'
+     and oud_status = 'in_uitvoering' and nieuw_status = 'geannuleerd';
+  if v_status is distinct from 'geannuleerd' then
+    raise exception 'FAIL 34.4: geen statusregel voor de geannuleerde taak';
+  end if;
+  if v_actor <> v_mw then
+    raise exception 'FAIL 34.4: de logregel staat op naam van % i.p.v. wie archiveerde', v_actor;
+  end if;
+  if v_notitie is null or v_notitie not ilike '%gearchiveerd%' then
+    raise exception 'FAIL 34.4: de logregel zegt niet dat de klant gearchiveerd werd (%)', coalesce(v_notitie, 'leeg');
+  end if;
+  select count(*) into v_n from public.task_status_log l
+    join public.task_instances ti on ti.id = l.task_instance_id
+   where ti.client_id = v_klant and l.event_type = 'status_wijziging'
+     and l.nieuw_status = 'geannuleerd' and l.notitie ilike '%gearchiveerd%';
+  if v_n <> v_te_annuleren then
+    raise exception 'FAIL 34.4: % logregels voor % geannuleerde taken', v_n, v_te_annuleren;
+  end if;
+  raise notice 'PASS 34.4: elke annulering staat in task_status_log (% regels)', v_n;
+
+  -- 34.5 Het dossier houdt het aantal bij. Een klant archiveren die zestig
+  -- taken annuleert hoort in de wijzigingshistoriek van dat dossier te staan,
+  -- niet alleen verspreid over zestig taken.
+  select count(*) into v_n from public.client_change_log
+   where client_id = v_klant and veld = 'actief' and nieuwe_waarde = 'false';
+  if v_n <> 1 then
+    raise exception 'FAIL 34.5: het archiveren zelf staat % keer in de historiek', v_n;
+  end if;
+  select nieuwe_waarde into v_notitie from public.client_change_log
+   where client_id = v_klant and veld = 'taken_geannuleerd_bij_archivering'
+   order by created_at desc limit 1;
+  if v_notitie is distinct from v_te_annuleren::text then
+    raise exception 'FAIL 34.5: de historiek meldt % geannuleerde taken i.p.v. %',
+      coalesce(v_notitie, 'niets'), v_te_annuleren;
+  end if;
+  raise notice 'PASS 34.5: de wijzigingshistoriek noemt het aantal (%)', v_te_annuleren;
+
+  -- 34.6 Een gearchiveerde klant krijgt geen nieuwe taken, ook niet wanneer er
+  -- toevallig nog een ronde over het dossier loopt.
+  perform set_config('taskflow.test_uid', v_uid2::text, true);
+  set local role authenticated;
+  v_nieuw := public.sync_client_tasks(v_klant);
+  set local role postgres;
+  if v_nieuw <> 0 then
+    raise exception 'FAIL 34.6: een gearchiveerde klant kreeg % nieuwe taken', v_nieuw;
+  end if;
+  select count(*) into v_open from public.task_instances
+   where client_id = v_klant and status not in ('ingediend_afgerond', 'geannuleerd');
+  if v_open <> 0 then
+    raise exception 'FAIL 34.6: er stonden na de ronde weer % taken open', v_open;
+  end if;
+  raise notice 'PASS 34.6: een gearchiveerd dossier blijft leeg';
+
+  -- 34.7 Een tweede wijziging aan een al gearchiveerde klant doet niets: de
+  -- trigger vuurt alleen op de overgang actief -> niet actief.
+  select count(*) into v_log from public.client_change_log
+   where client_id = v_klant and veld = 'taken_geannuleerd_bij_archivering';
+  perform set_config('taskflow.test_uid', v_uid2::text, true);
+  set local role authenticated;
+  update public.clients set naam = 'S34 Klant (gearchiveerd)' where id = v_klant;
+  update public.clients set actief = false where id = v_klant;
+  set local role postgres;
+  select count(*) into v_n from public.client_change_log
+   where client_id = v_klant and veld = 'taken_geannuleerd_bij_archivering';
+  if v_n <> v_log then
+    raise exception 'FAIL 34.7: de archivering vuurde opnieuw (% i.p.v. % regels)', v_n, v_log;
+  end if;
+  raise notice 'PASS 34.7: de trigger vuurt alleen op de overgang naar gearchiveerd';
+
+  -- 34.8 Het omgekeerde: een klant die weer actief wordt. De geannuleerde
+  -- taken komen niet terug -- dat hoort ook niet -- maar de generator maakt bij
+  -- de volgende ronde nieuwe aan voor de verplichtingen die nog lopen, zonder
+  -- een tweede actieve taak voor dezelfde periode.
+  select count(*) into v_geann from public.task_instances
+   where client_id = v_klant and status = 'geannuleerd';
+  perform set_config('taskflow.test_uid', v_uid2::text, true);
+  set local role authenticated;
+  update public.clients set actief = true where id = v_klant;
+  v_nieuw := public.sync_client_tasks(v_klant);
+  set local role postgres;
+  if v_nieuw <= 0 then
+    raise exception 'FAIL 34.8: een heractiveerde klant kreeg geen nieuwe taken (%)', v_nieuw;
+  end if;
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and status = 'geannuleerd';
+  if v_n <> v_geann then
+    raise exception 'FAIL 34.8: er kwamen geannuleerde taken terug (% i.p.v. %)', v_n, v_geann;
+  end if;
+  select count(*) into v_n from (
+    select client_id, obligation_type_id, periode_label
+      from public.task_instances
+     where client_id = v_klant and status <> 'geannuleerd'
+       and bron_type = 'automatisch_gegenereerd'
+     group by 1, 2, 3 having count(*) > 1
+  ) d;
+  if v_n <> 0 then
+    raise exception 'FAIL 34.8: % periodes kregen een dubbele actieve taak', v_n;
+  end if;
+  raise notice 'PASS 34.8: heractiveren levert nieuwe taken op (%), geen dubbels, geen herrijzenis', v_nieuw;
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

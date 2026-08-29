@@ -57,8 +57,9 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
 
       <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Zoeken</label>
+          <label htmlFor="klanten-zoeken" className="mb-1 block text-xs font-medium text-slate-500">Zoeken</label>
           <input
+            id="klanten-zoeken"
             type="text"
             placeholder="Naam, ondernemingsnummer…"
             value={filters.zoekterm ?? ''}
@@ -67,20 +68,25 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Status</label>
+          {/* Een gearchiveerde klant hoort niet tussen de actieve te staan,
+              maar moet wel terug te vinden zijn — vandaar de twee andere
+              standen van dit filter. */}
+          <label htmlFor="klanten-status" className="mb-1 block text-xs font-medium text-slate-500">Status</label>
           <select
+            id="klanten-status"
             value={String(filters.actief)}
             onChange={(e) => setFilters((f) => ({ ...f, actief: e.target.value === 'alle' ? 'alle' : e.target.value === 'true' }))}
             className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
           >
             <option value="true">Actief</option>
-            <option value="false">Inactief</option>
-            <option value="alle">Alle</option>
+            <option value="false">Gearchiveerd</option>
+            <option value="alle">Alle (ook gearchiveerd)</option>
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Mandataris</label>
+          <label htmlFor="klanten-mandataris" className="mb-1 block text-xs font-medium text-slate-500">Mandataris</label>
           <select
+            id="klanten-mandataris"
             value={String(filters.mandataris)}
             onChange={(e) => setFilters((f) => ({ ...f, mandataris: e.target.value === 'alle' ? 'alle' : e.target.value === 'true' }))}
             className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
@@ -91,8 +97,9 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Verantwoordelijke</label>
+          <label htmlFor="klanten-verantwoordelijke" className="mb-1 block text-xs font-medium text-slate-500">Verantwoordelijke</label>
           <select
+            id="klanten-verantwoordelijke"
             value={filters.verantwoordelijkeId ?? 'alle'}
             onChange={(e) => setFilters((f) => ({ ...f, verantwoordelijkeId: e.target.value }))}
             className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
@@ -152,7 +159,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
                         client.actief ? 'border-emerald-300 bg-emerald-100 text-emerald-700' : 'border-slate-300 bg-slate-100 text-slate-500'
                       }`}
                     >
-                      {client.actief ? 'Actief' : 'Inactief'}
+                      {client.actief ? 'Actief' : 'Gearchiveerd'}
                     </span>
                   </td>
                 </tr>

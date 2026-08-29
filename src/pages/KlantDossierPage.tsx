@@ -10,8 +10,11 @@ import { ClientFormModal, type ClientFormValues } from '../components/ClientForm
 import { saveClientObligations, loadClientObligations, type ObligationSelection } from '../lib/clientObligations'
 import { ClientObligationFormModal } from '../components/ClientObligationFormModal'
 import { AdhocTaskFormModal } from '../components/AdhocTaskFormModal'
+import { ClientArchiveModal } from '../components/ClientArchiveModal'
+import { isAfgesloten, telTeAnnulerenTaken } from '../lib/klantArchief'
 import { formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
+import { reportError } from '../lib/errorMessage'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
 
 /** Leesbare namen voor client_change_log.veld — het log slaat kolomnamen op,
@@ -25,13 +28,28 @@ const CHANGE_FIELD_LABEL: Record<string, string> = {
   btw_regime: 'Btw-regime',
   btw_aangifte_frequentie: 'Btw-aangiftefrequentie',
   actief: 'Actief',
+  // Geschreven door de archiveringstrigger (migratie 0026): hoeveel taken het
+  // archiveren van dit dossier gekost heeft.
+  taken_geannuleerd_bij_archivering: 'Taken geannuleerd bij het archiveren',
 }
 
 /** Klantdossier (§4 point 3): alle verplichtingen, status/historiek,
  * komende deadlines, verantwoordelijke, notities per klant. */
 export function KlantDossierPage({ clientId, navigate }: { clientId: string; navigate: (view: string, param?: string) => void }) {
-  const { client, obligations, tasks, changeLog, loading, error, reload, addObligation, deactivateObligation, createAdhocTask } =
-    useClientDetail(clientId)
+  const {
+    client,
+    obligations,
+    tasks,
+    changeLog,
+    loading,
+    error,
+    reload,
+    addObligation,
+    deactivateObligation,
+    createAdhocTask,
+    archiveClient,
+    reactivateClient,
+  } = useClientDetail(clientId)
   const { employees } = useEmployees()
   const { obligationTypes } = useObligationTypes()
   const [openTask, setOpenTask] = useState<TaskInstanceWithRelations | null>(null)
@@ -40,6 +58,9 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
   const codePerTypeId = Object.fromEntries(obligationTypes.map((t) => [t.id, t.code]))
   const [showAddObligation, setShowAddObligation] = useState(false)
   const [showAdhoc, setShowAdhoc] = useState(false)
+  const [showArchive, setShowArchive] = useState(false)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
+  const [heractiveren, setHeractiveren] = useState(false)
 
   async function handleEdit(values: ClientFormValues) {
     const { error: err } = await supabase
@@ -63,6 +84,20 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     // aparte knop (docs/PLAN.md §10).
     await saveClientObligations(clientId, values.obligations, codePerTypeId)
     await reload()
+  }
+
+  /** Heractiveren vraagt geen bevestiging: er gaat niets verloren, en de
+   *  taken van de nog lopende verplichtingen komen er meteen weer bij. */
+  async function handleReactivate() {
+    setArchiveError(null)
+    setHeractiveren(true)
+    try {
+      await reactivateClient()
+    } catch (err) {
+      setArchiveError(reportError(err, 'Heractiveren is mislukt'))
+    } finally {
+      setHeractiveren(false)
+    }
   }
 
   async function openEdit() {
@@ -104,10 +139,11 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
   const historicalObligations = obligations.filter((o) => !(o.actief && !o.geldig_tot))
   // `tasks` comes back due_date-descending (useful for history "most
   // recent first") — the upcoming/open list reads better soonest-first.
-  const upcoming = tasks
-    .filter((t) => !['ingediend_afgerond', 'geannuleerd'].includes(t.status))
-    .sort((a, b) => a.due_date.localeCompare(b.due_date))
-  const history = tasks.filter((t) => ['ingediend_afgerond', 'geannuleerd'].includes(t.status))
+  const upcoming = tasks.filter((t) => !isAfgesloten(t.status)).sort((a, b) => a.due_date.localeCompare(b.due_date))
+  const history = tasks.filter((t) => isAfgesloten(t.status))
+  // Exact wat de archiveringstrigger zal annuleren (migratie 0026), geteld op
+  // dezelfde regel — zie src/lib/klantArchief.ts.
+  const teAnnuleren = telTeAnnulerenTaken(tasks)
 
   return (
     <div className="p-6">
@@ -122,7 +158,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
             {client.naam}
             {!client.actief && (
               <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
-                Inactief
+                Gearchiveerd
               </span>
             )}
           </h1>
@@ -158,9 +194,36 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
             </div>
           </dl>
         </div>
-        <button type="button" onClick={() => void openEdit()} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-          Bewerken
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className="flex gap-2">
+            <button type="button" onClick={() => void openEdit()} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Bewerken
+            </button>
+            {client.actief ? (
+              <button
+                type="button"
+                onClick={() => setShowArchive(true)}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Archiveren
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void handleReactivate()}
+                disabled={heractiveren}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {heractiveren ? 'Bezig…' : 'Heractiveren'}
+              </button>
+            )}
+          </div>
+          {archiveError && (
+            <p role="alert" className="max-w-xs rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+              {archiveError}
+            </p>
+          )}
+        </div>
       </div>
 
       <section className="mb-6">
@@ -326,9 +389,19 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           onMarkReviewHandled={markReviewHandled}
         />
       )}
+      {showArchive && (
+        <ClientArchiveModal
+          clientNaam={client.naam}
+          vertrouwelijk={client.vertrouwelijk}
+          openstaandeTaken={teAnnuleren}
+          onClose={() => setShowArchive(false)}
+          onConfirm={archiveClient}
+        />
+      )}
       {showEdit && (
         <ClientFormModal
           client={client}
+          openstaandeTaken={teAnnuleren}
           employees={employees}
           obligationTypes={obligationTypes}
           bestaandeVerplichtingen={bestaandeVerplichtingen}

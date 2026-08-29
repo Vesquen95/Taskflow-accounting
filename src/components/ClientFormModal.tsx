@@ -4,6 +4,7 @@ import type { BtwFrequentie, BtwRegime, Client, Employee, ObligationType } from 
 import { reportError } from '../lib/errorMessage'
 import { ObligationPicker } from './ObligationPicker'
 import { legeSelecties, type ObligationSelection } from '../lib/clientObligations'
+import { omschrijfOpenstaandeTaken } from '../lib/klantArchief'
 
 const RECHTSVORMEN = ['BV', 'NV', 'CommV', 'VOF', 'VZW', 'Eenmanszaak', 'Coöperatieve vennootschap', 'Andere']
 
@@ -53,6 +54,7 @@ export function ClientFormModal({
   employees,
   obligationTypes,
   bestaandeVerplichtingen = [],
+  openstaandeTaken,
   onClose,
   onSubmit,
 }: {
@@ -60,6 +62,9 @@ export function ClientFormModal({
   employees: Employee[]
   obligationTypes: ObligationType[]
   bestaandeVerplichtingen?: ObligationSelection[]
+  /** Hoeveel taken er geannuleerd worden als "Actief" hier uitgevinkt wordt.
+   *  Zonder dit getal blijft het vinkje een stille archivering. */
+  openstaandeTaken?: number
   onClose: () => void
   onSubmit: (values: ClientFormValues) => Promise<void>
 }) {
@@ -276,6 +281,16 @@ export function ClientFormModal({
             </label>
           )}
         </div>
+
+        {client?.actief && !values.actief && (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Het vinkje "Actief" uitzetten archiveert deze klant
+            {typeof openstaandeTaken === 'number' && openstaandeTaken > 0
+              ? ` en annuleert ${omschrijfOpenstaandeTaken(openstaandeTaken)}`
+              : ''}
+            . Dat is niet terug te draaien; de taken blijven wel in de historiek van het dossier staan.
+          </p>
+        )}
 
         <ObligationPicker
           obligationTypes={obligationTypes}

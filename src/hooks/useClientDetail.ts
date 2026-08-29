@@ -136,6 +136,36 @@ export function useClientDetail(clientId: string | null) {
     await load()
   }
 
+  /**
+   * Een klant archiveren. De databank doet de rest: de trigger uit migratie
+   * 0026 annuleert alle nog niet afgesloten taken van dit dossier en laat er
+   * per taak een spoor van na. Vandaar dat hier maar één kolom gezet wordt —
+   * de opruiming hoort niet in de app, anders klopt ze alleen wanneer ze via
+   * dit scherm loopt.
+   */
+  async function archiveClient() {
+    if (!clientId) return
+    const { error: err } = await supabase.from('clients').update({ actief: false }).eq('id', clientId)
+    if (err) throw err
+    await load()
+  }
+
+  /**
+   * En terug. De geannuleerde taken komen niet terug (ze zijn geannuleerd,
+   * niet vergeten), maar de verplichtingen lopen nog, dus de generator maakt
+   * meteen nieuwe taken aan — dat hoeft niet tot de maandelijkse
+   * onderhoudsronde te wachten. Dezelfde aanroep als bij het opslaan van een
+   * klant (sync_client_tasks, migratie 0021).
+   */
+  async function reactivateClient() {
+    if (!clientId) return
+    const { error: err } = await supabase.from('clients').update({ actief: true }).eq('id', clientId)
+    if (err) throw err
+    const { error: syncErr } = await supabase.rpc('sync_client_tasks', { p_client_id: clientId })
+    if (syncErr) throw syncErr
+    await load()
+  }
+
   async function createAdhocTask(input: { title: string; description: string | null; due_date: string; toegewezen_medewerker_id: string }) {
     if (!clientId) return
     const { error: err } = await supabase.from('task_instances').insert({
@@ -167,5 +197,7 @@ export function useClientDetail(clientId: string | null) {
     addObligation,
     deactivateObligation,
     createAdhocTask,
+    archiveClient,
+    reactivateClient,
   }
 }

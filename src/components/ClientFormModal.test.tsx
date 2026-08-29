@@ -144,6 +144,28 @@ describe('ClientFormModal — editing an existing client', () => {
     expect(screen.getByRole('checkbox', { name: 'Mandataris' })).not.toBeChecked()
   })
 
+  // Het vinkje "Actief" uitzetten archiveert de klant en annuleert al zijn
+  // openstaande taken (migratie 0026). Dat mag niet stil gebeuren, ook niet
+  // langs deze weg -- de nadrukkelijke archiveeractie staat op het dossier.
+  it('warns, with the number of tasks at stake, when Actief is unticked for an active client', async () => {
+    const user = userEvent.setup()
+    render(
+      <ClientFormModal
+        client={client()}
+        employees={employees}
+        obligationTypes={obligationTypes}
+        openstaandeTaken={7}
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    )
+    expect(screen.queryByText(/archiveert deze klant/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('checkbox', { name: 'Actief' }))
+
+    expect(screen.getByText(/archiveert deze klant/)).toHaveTextContent('7 openstaande taken')
+  })
+
   it('shows an Actief checkbox only when editing an existing client, not when creating one', () => {
     const { rerender } = render(<ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={onClose} onSubmit={onSubmit} />)
     expect(screen.queryByRole('checkbox', { name: 'Actief' })).not.toBeInTheDocument()
