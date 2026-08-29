@@ -56,7 +56,7 @@ beforeEach(() => {
 })
 
 describe('useTaskInstances — filter wiring', () => {
-  it('defaults to filtering out final statuses (open/in_uitvoering/wacht_op_klant/wacht_op_goedkeuring)', async () => {
+  it('haalt altijd enkel de niet-afgesloten statussen op (open/in_uitvoering/wacht_op_klant/wacht_op_goedkeuring)', async () => {
     let capturedState: ChainState | undefined
     install({
       task_instances: (state) => {
@@ -70,36 +70,6 @@ describe('useTaskInstances — filter wiring', () => {
 
     const inCall = capturedState?.calls.find((c) => c.method === 'in')
     expect(inCall?.args).toEqual(['status', ['open', 'in_uitvoering', 'wacht_op_klant', 'wacht_op_goedkeuring']])
-  })
-
-  it('includeAlles skips the status filter entirely (Klantdossier history view)', async () => {
-    let capturedState: ChainState | undefined
-    install({
-      task_instances: (state) => {
-        capturedState = state
-        return { data: [], error: null }
-      },
-    })
-
-    const { result } = renderHook(() => useTaskInstances({ includeAlles: true }))
-    await waitFor(() => expect(result.current.loading).toBe(false))
-
-    expect(capturedState?.calls.some((c) => c.method === 'in')).toBe(false)
-  })
-
-  it('scopes to a single client via eq("client_id", ...) — data-access-layer regression for cross-client isolation', async () => {
-    let capturedState: ChainState | undefined
-    install({
-      task_instances: (state) => {
-        capturedState = state
-        return { data: [], error: null }
-      },
-    })
-
-    const { result } = renderHook(() => useTaskInstances({ clientId: 'client-42' }))
-    await waitFor(() => expect(result.current.loading).toBe(false))
-
-    expect(capturedState?.calls).toContainEqual({ method: 'eq', args: ['client_id', 'client-42'] })
   })
 
   it('beperkt tot de verplichtingstypes van één werkstroom', async () => {
@@ -188,23 +158,6 @@ describe('useTaskInstances — filter wiring', () => {
     act(() => result.current.setFilters((f) => ({ ...f, paused: false })))
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(opgevraagd).toBe(1)
-  })
-
-  it('overdueOnly filters via lt(due_date, today)', async () => {
-    let capturedState: ChainState | undefined
-    install({
-      task_instances: (state) => {
-        capturedState = state
-        return { data: [], error: null }
-      },
-    })
-
-    const { result } = renderHook(() => useTaskInstances({ overdueOnly: true }))
-    await waitFor(() => expect(result.current.loading).toBe(false))
-
-    const ltCall = capturedState?.calls.find((c) => c.method === 'lt')
-    expect(ltCall?.args[0]).toBe('due_date')
-    expect(ltCall?.args[1]).toBe(new Date().toISOString().slice(0, 10))
   })
 
   it('filters client-side by zoekterm across client naam, obligation naam, and ad-hoc title', async () => {

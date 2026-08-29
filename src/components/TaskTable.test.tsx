@@ -67,11 +67,6 @@ describe('TaskTable — empty state', () => {
     expect(screen.getByText('Geen taken gevonden voor deze filters.')).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
-
-  it('supports a custom empty message', () => {
-    render(<TaskTable tasks={[]} employees={employees} onOpenTask={onOpenTask} emptyMessage="Geen escalaties." />)
-    expect(screen.getByText('Geen escalaties.')).toBeInTheDocument()
-  })
 })
 
 describe('TaskTable — row rendering', () => {

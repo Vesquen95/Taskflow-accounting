@@ -15,7 +15,8 @@ export interface Route {
 function parseHash(): Route {
   const hash = window.location.hash.replace(/^#\/?/, '')
   const [view, param] = hash.split('/')
-  return { view: view || 'werklijst', param }
+  // Geen hash = het hoofdscherm: de kalender.
+  return { view: view || 'kalender', param }
 }
 
 export function useRoute(): [Route, (view: string, param?: string) => void] {

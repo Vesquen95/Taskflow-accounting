@@ -23,7 +23,6 @@ interface TaskTableProps {
   /** Aanwezig = de status is doorklikbaar naar de volgende stap. */
   onStatusChange?: (taskId: string, status: TaskStatus) => Promise<void>
   showClientColumn?: boolean
-  emptyMessage?: string
 }
 
 export function TaskTable({
@@ -35,7 +34,6 @@ export function TaskTable({
   currentEmployee,
   onStatusChange,
   showClientColumn = true,
-  emptyMessage = 'Geen taken gevonden voor deze filters.',
 }: TaskTableProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [statusFout, setStatusFout] = useState<string | null>(null)
@@ -62,8 +60,11 @@ export function TaskTable({
     })
   }
 
+  // Vangnet. In de app komt het niet voor: TaskBlocks is de enige die deze
+  // tabel gebruikt en rendert alleen blokken die taken bevatten — de lege
+  // stand hoort daar, per venster, met een tekst die de werkstroom noemt.
   if (tasks.length === 0) {
-    return <EmptyState title={emptyMessage} />
+    return <EmptyState title="Geen taken gevonden voor deze filters." />
   }
 
   return (

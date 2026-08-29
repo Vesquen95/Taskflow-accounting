@@ -17,10 +17,10 @@ export function daysUntil(dueDate: string, today: Date = new Date()): number {
 }
 
 /**
- * Compliance-critical ("wettelijk") obligations get stricter, earlier
- * urgency bands than service work (docs/PLAN.md §4 point 5): the same
- * "5 days left" is merely "binnenkort" for a service report but already
- * "deze_week" for a statutory deadline.
+ * Wettelijke verplichtingen krijgen strengere, vroegere urgentiebanden dan
+ * service-werk (docs/PLAN.md §4): dezelfde "nog 5 dagen" is voor een
+ * servicerapport nog "binnenkort", maar voor een wettelijke deadline al
+ * "deze week".
  */
 export function getUrgencyBand(
   dueDate: string,
@@ -66,26 +66,13 @@ export const urgencyClasses: Record<Exclude<UrgencyBand, null>, string> = {
 /**
  * Banden zonder boodschap. "Later" stond op vrijwel elke regel — een badge
  * die altijd oplicht, meldt niets. De band zelf blijft wél bestaan: hij
- * bepaalt de sortering (zie `urgencySortWeight`) en de escalatiequeue. Enkel
- * de badge zwijgt, zodat de banden die wél iets melden ook opvallen.
+ * bepaalt de kleur en de toon van de badges die wél iets melden. Enkel de
+ * badge zwijgt, zodat die andere banden ook opvallen.
  */
 const STILLE_BANDEN: readonly UrgencyBand[] = ['later']
 
 export function bandVerdientBadge(band: UrgencyBand): band is Exclude<UrgencyBand, null> {
   return band !== null && !STILLE_BANDEN.includes(band)
-}
-
-/** Lower = more urgent, for sorting a task list "te laat eerst" (§4.2). */
-const URGENCY_SORT_WEIGHT: Record<Exclude<UrgencyBand, null>, number> = {
-  te_laat: 0,
-  vandaag: 1,
-  deze_week: 2,
-  binnenkort: 3,
-  later: 4,
-}
-
-export function urgencySortWeight(band: UrgencyBand): number {
-  return band === null ? 5 : URGENCY_SORT_WEIGHT[band]
 }
 
 export function formatDate(date: string | null): string {

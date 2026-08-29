@@ -21,8 +21,11 @@ export async function login(page: Page) {
   // "Inloggen" staat twee keer op het scherm: als tab en als verzendknop.
   // Alleen die in het formulier logt echt in.
   await page.locator('form').getByRole('button', { name: 'Inloggen' }).click()
-  // De zijbalk verschijnt pas als de medewerker geladen is.
-  await expect(page.getByRole('button', { name: 'Werklijst' })).toBeVisible()
+  // De zijbalk verschijnt pas als de medewerker geladen is. "Uitloggen"
+  // staat onderaan die zijbalk en hoort bij het ingelogd zijn zelf, niet bij
+  // één scherm: schermen komen en gaan (de Werklijst waar deze controle
+  // vroeger op wachtte, bestaat niet meer), deze knop blijft.
+  await expect(page.getByRole('button', { name: 'Uitloggen' })).toBeVisible()
 }
 
 /** Een naam die uniek is per run, zodat parallelle of herhaalde runs elkaar

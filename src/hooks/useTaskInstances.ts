@@ -10,12 +10,7 @@ type TaakPatch = { status: TaskStatus } | { toegewezen_medewerker_id: string }
 const NOT_FINAL: TaskStatus[] = ['open', 'in_uitvoering', 'wacht_op_klant', 'wacht_op_goedkeuring']
 
 export interface TaskInstanceFilters {
-  /** undefined = all non-final statuses (the common "actief" default). */
-  status?: TaskStatus[]
   toegewezenAan?: string | 'alle'
-  clientId?: string
-  overdueOnly?: boolean
-  reviewVereist?: boolean
   zoekterm?: string
   /** Beperk tot deze verplichtingstypes -- zo staat één werkstroom op het
    *  scherm. De indeling zelf staat in de catalogus (migratie 0022); dit
@@ -31,18 +26,20 @@ export interface TaskInstanceFilters {
    *  ronde (de werkstromen halen hun verplichtingstypes uit de catalogus) zou
    *  anders eerst een query afvuren die het meteen weer overdoet. */
   paused?: boolean
-  /** Include everything, including geannuleerd/ingediend_afgerond — used
-   * by the Klantdossier history view. Overrides `status`. */
-  includeAlles?: boolean
 }
 
 const SELECT_WITH_RELATIONS =
   '*, client:clients(id,naam,vertrouwelijk,actief), obligation_type:obligation_types(id,code,naam,categorie,werkstroom), toegewezen_medewerker:employees!task_instances_toegewezen_medewerker_id_fkey(id,naam)'
 
-/** Shared data source for Werklijst, Mijn taken, and de Escalatie-queue
- * (§4 points 1/2/5) — a firm-wide, cross-client list of task instances
- * with server-side filtering (RLS still applies underneath: confidential
- * clients this employee can't see are already excluded by Postgres). */
+/** Gedeelde bron voor de werkschermen: de werkstromen, de kalender en het
+ * workload-dashboard. Kantoorbrede, klant-overschrijdende lijst van
+ * taakinstanties met server-side filtering (RLS geldt eronder: een
+ * vertrouwelijke klant die deze medewerker niet mag zien, komt er door
+ * Postgres al niet uit).
+ *
+ * Altijd enkel de niet-afgesloten statussen: de historiek van één dossier
+ * (inclusief geannuleerd/ingediend) haalt het klantdossier via
+ * useClientDetail op, met een eigen query. */
 export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
   const [tasks, setTasks] = useState<TaskInstanceWithRelations[]>([])
   const [loading, setLoading] = useState(true)
@@ -56,22 +53,13 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
     setLoading(true)
     setError(null)
     try {
-      let query = supabase.from('task_instances').select(SELECT_WITH_RELATIONS)
+      let query = supabase
+        .from('task_instances')
+        .select(SELECT_WITH_RELATIONS)
+        .in('status', NOT_FINAL)
 
-      if (!filters.includeAlles) {
-        query = query.in('status', filters.status ?? NOT_FINAL)
-      }
       if (filters.toegewezenAan && filters.toegewezenAan !== 'alle') {
         query = query.eq('toegewezen_medewerker_id', filters.toegewezenAan)
-      }
-      if (filters.clientId) {
-        query = query.eq('client_id', filters.clientId)
-      }
-      if (filters.overdueOnly) {
-        query = query.lt('due_date', new Date().toISOString().slice(0, 10))
-      }
-      if (filters.reviewVereist) {
-        query = query.eq('review_vereist', true)
       }
       if (filters.adhocOnly) {
         query = query.is('obligation_type_id', null)

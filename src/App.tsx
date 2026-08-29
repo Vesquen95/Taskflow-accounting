@@ -6,11 +6,8 @@ import { AuthPage } from './pages/AuthPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { AppLayout } from './components/AppLayout'
 import { AccountDeactivatedScreen } from './components/AccountDeactivatedScreen'
-import { WerklijstPage } from './pages/WerklijstPage'
 import { WerkstroomPage } from './pages/WerkstroomPage'
 import { ingangVoorPad } from './lib/werkstromen'
-import { MijnTakenPage } from './pages/MijnTakenPage'
-import { EscalatiePage } from './pages/EscalatiePage'
 import { KalenderPage } from './pages/KalenderPage'
 import { KlantenlijstPage } from './pages/KlantenlijstPage'
 import { KlantDossierPage } from './pages/KlantDossierPage'
@@ -50,42 +47,46 @@ function AuthenticatedApp({ onDeactivated }: { onDeactivated: () => void }) {
   if (!employee) return <OnboardingPage />
 
   let page
+  // Wat er op het scherm komt kan van de URL afwijken: een onbekende
+  // werkstroom, een oude bookmark naar een verwijderd scherm, of een
+  // beheerpagina waar deze medewerker geen recht op heeft. De zijbalk moet
+  // markeren wat er écht staat, niet wat er gevraagd werd.
+  let zichtbareView = route.view
+  const naarHoofdscherm = () => {
+    zichtbareView = 'kalender'
+    return <KalenderPage />
+  }
+
   switch (route.view) {
     case 'werk': {
       // Onbekende werkstroom in de URL (oude bookmark, typefout): terug naar
-      // de brede lijst in plaats van een leeg scherm.
+      // het hoofdscherm in plaats van een leeg scherm.
       const ingang = route.param ? ingangVoorPad(route.param) : undefined
-      page = ingang ? <WerkstroomPage ingang={ingang} /> : <WerklijstPage />
+      page = ingang ? <WerkstroomPage ingang={ingang} /> : naarHoofdscherm()
       break
     }
-    case 'mijn-taken':
-      page = <MijnTakenPage />
-      break
-    case 'escalaties':
-      page = <EscalatiePage />
-      break
-    case 'kalender':
-      page = <KalenderPage />
-      break
     case 'klanten':
       page = route.param ? <KlantDossierPage clientId={route.param} navigate={navigate} /> : <KlantenlijstPage navigate={navigate} />
       break
     case 'workload':
-      page = employee.rol === 'kantoorbeheerder' ? <WorkloadDashboardPage /> : <WerklijstPage />
+      page = employee.rol === 'kantoorbeheerder' ? <WorkloadDashboardPage /> : naarHoofdscherm()
       break
     case 'wettelijke-kalender':
-      page = employee.rol === 'kantoorbeheerder' ? <WettelijkeKalenderPage /> : <WerklijstPage />
+      page = employee.rol === 'kantoorbeheerder' ? <WettelijkeKalenderPage /> : naarHoofdscherm()
       break
     case 'medewerkers':
-      page = employee.rol === 'kantoorbeheerder' ? <MedewerkersPage /> : <WerklijstPage />
+      page = employee.rol === 'kantoorbeheerder' ? <MedewerkersPage /> : naarHoofdscherm()
       break
-    case 'werklijst':
+    // De kalender is het hoofdscherm en dus ook de terugval: een medewerker
+    // die een beheerpagina opvraagt, een oude bookmark naar de verdwenen
+    // werklijst/mijn taken/escalatie, of een lege hash komt hier uit.
+    case 'kalender':
     default:
-      page = <WerklijstPage />
+      page = naarHoofdscherm()
   }
 
   return (
-    <AppLayout employee={employee} activeView={route.view} activeParam={route.param} navigate={navigate}>
+    <AppLayout employee={employee} activeView={zichtbareView} activeParam={route.param} navigate={navigate}>
       {page}
     </AppLayout>
   )

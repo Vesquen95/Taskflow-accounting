@@ -60,9 +60,10 @@ gebruikt:**
   dynamisch berekende escalatie/overdue.
 - Volledig audittrail (`task_status_log`), altijd een echte medewerker als
   actor, nooit "systeem".
-- Kernviews (§4): Mijn taken, Werklijst, Klantdossier, Kalenderweergave,
-  Escalatie-queue, Workload-dashboard, Wettelijke-kalenderbeheer,
-  Klantenlijst.
+- Kernviews (§4): Kalenderweergave (hoofdscherm), de vijf werkstromen
+  (§10), Klantdossier, Workload-dashboard, Wettelijke-kalenderbeheer,
+  Klantenlijst. (Mijn taken, Werklijst en de Escalatie-queue zijn er
+  geweest en zijn in augustus 2026 vervallen — zie §4.)
 - Firm-scoped RLS + `can_view_client()`-mechanisme voor vertrouwelijke
   klanten (§2.9).
 
@@ -198,9 +199,10 @@ niet-toegewezen taak voor een vertrouwelijke klant ontstaat.
    mechanisme (fragiel voor een compliance-tool).
 3. **Mid-jaar wijziging**: bij aanpassing van een `client_obligations`-
    parameter met al bestaande toekomstige/open instanties: die instanties
-   krijgen `review_vereist=true` + leesbare `review_reden`, filterbaar in
-   de werklijst. Bij afhandeling: reset naar `false` + `review_afgehandeld`
-   gelogd.
+   krijgen `review_vereist=true` + leesbare `review_reden`. De taak draagt
+   in elke lijst een zichtbaar "review"-merkteken; het aparte filter erop
+   verdween met de werklijst (§4). Bij afhandeling: reset naar `false` +
+   `review_afgehandeld` gelogd.
 4. **Kalendercorrectie**: nieuwe `legal_calendar`/`public_holidays`-rij met
    `is_override=true` herberekent `due_date` op alle instanties met
    `status='open'` die ernaar verwijzen (niet instanties die al in
@@ -233,18 +235,37 @@ deze aannames als veilige default):**
 
 ## §4 — Werkschermen (geen kanbanbord als hoofdscherm)
 
-1. **Mijn taken (vandaag/deze week)** — persoonlijke, cross-klant
-   werklijst op urgentie, filters op type/status.
-2. **Werklijst** (tabel, primair dagelijks werkscherm) — filterbaar/
-   sorteerbaar op klant/type/status/medewerker/deadline, "te laat eerst",
-   bulkacties (herverdelen, status).
+**Bijgewerkt augustus 2026, beslist met het kantoor.** De punten 1, 2 en 5
+zijn vervallen en gebouwd-en-weer-verwijderd; punt 4 (de kalender) is het
+hoofdscherm geworden. De nummering blijft bewust staan — code en tests
+verwijzen ernaar ("§4 point 3"), en een vervallen punt is nuttiger dan een
+verschoven nummer. Wat er staat is dus de huidige opzet, niet de
+oorspronkelijke.
+
+1. ~~**Mijn taken (vandaag/deze week)**~~ — **vervallen (augustus 2026).**
+   Een werkstroom met het medewerkersfilter op jezelf toont hetzelfde, en
+   dan binnen het werk dat je op dat moment aan het doen bent. Een apart
+   scherm ernaast betekende twee plekken waar dezelfde taak kon opduiken.
+2. ~~**Werklijst** (tabel, primair dagelijks werkscherm)~~ — **vervallen
+   (augustus 2026).** Eén kantoorbrede lijst over alle verplichtingstypes
+   heen is bij ~100 dossiers onwerkbaar: je scrolt door honderden regels
+   voor je bij het werk van vandaag komt. Dat is precies waarom de
+   werkstromen (§10) er kwamen; die zijn nu de enige takenlijst, mét de
+   bulkacties en de doorklikbare status die hier stonden.
 3. **Klantdossier** — alle verplichtingen, status/historiek, komende
    deadlines, verantwoordelijke, notities per klant.
 4. **Kalender-/tijdlijnweergave** — maand/kwartaal, deadline-dichtheid,
-   per medewerker of kantoorbreed.
-5. **Escalatie-/overdue-queue** — te laat/naderend zonder actie, op
-   ernst gesorteerd. Wettelijke verplichtingen krijgen strengere/eerdere
-   urgentiebanden dan service-rapportering.
+   per medewerker of kantoorbreed. **Sinds augustus 2026 het hoofdscherm**:
+   de landingspagina na inloggen, en de terugval voor elke onbekende of
+   niet-toegelaten route. Het is bewust een overzichtsscherm — afwerken
+   gebeurt in de werkstromen.
+5. ~~**Escalatie-/overdue-queue**~~ — **vervallen (augustus 2026).** De
+   achterstand staat nu als blok **"Te laat"** bovenaan élke werkstroom, in
+   elk deadlinevenster (§10). Je ziet je achterstand dus in het scherm waar
+   je hem wegwerkt, in plaats van in een aparte lijst die je apart moest
+   opzoeken. De strengere/eerdere urgentiebanden voor wettelijke
+   verplichtingen t.o.v. service-rapportering blijven bestaan
+   (`src/lib/urgency.ts`) en kleuren de badges in elke lijst.
 6. **Workload-dashboard** (kantoorbeheerder/partner) — capaciteit per
    medewerker, aantal te laat, verwacht volume.
 7. **Wettelijke-kalenderbeheer** (adminscherm) — jaarlijkse campagnedata +
@@ -254,9 +275,8 @@ deze aannames als veilige default):**
 
 ### Waar de status doorklikbaar is, en waar niet
 
-Op de werkschermen (de vijf werkstromen, Werklijst, Mijn taken, Escalatie) is
-de status een knop: één klik zet de taak naar de volgende stap. Dat is waar het
-kantoor taken afwerkt, blok per blok.
+Op de werkschermen (de vijf werkstromen) is de status een knop: één klik zet de
+taak naar de volgende stap. Dat is waar het kantoor taken afwerkt, blok per blok.
 
 Op de **kalender** en in het **klantdossier** blijft de status een label
 (beslist met het kantoor, augustus 2026). Dat zijn overzichtsschermen: je kijkt
@@ -265,7 +285,9 @@ naar wat je nu moet afvinken. Een knop op een plek waar je alleen leest nodigt
 uit tot een klik die je niet bedoelde. Wie daar toch iets wil wijzigen, opent de
 taak; het detailvenster toont de juiste keuzes.
 
-Aanpassen hoort dus niet "voor de consistentie" alsnog te gebeuren.
+Aanpassen hoort dus niet "voor de consistentie" alsnog te gebeuren. Ook niet nu
+de kalender het hoofdscherm is: dat verandert waar je binnenkomt, niet waarvoor
+het scherm dient.
 
 ## §5 — Rollen & rechten (RLS-samenvatting)
 
@@ -308,7 +330,9 @@ pragmatisch en documenteer de keuze in je samenvatting).
 - Dit is een grote build. Prioriteit: datamodel + RLS + recurrence-engine
   correct (dit is het compliance-kritische deel), dan de kernviews uit §4
   (Werklijst en Klantdossier eerst als primaire schermen, daarna Mijn
-  taken/Kalender/Escalatie/Workload/Kalenderbeheer/Klantenlijst). Als tijd
+  taken/Kalender/Escalatie/Workload/Kalenderbeheer/Klantenlijst — deze
+  volgorde is de opzet van de eerste build; Werklijst/Mijn taken/Escalatie
+  bestaan niet meer, zie §4). Als tijd
   beperkt is: lever een werkende, correcte basis op één view minder liever
   dan overal een halfwerkende versie — en meld expliciet wat nog ontbreekt.
 - Seed de `obligation_types`-tabel met de 8 rijen uit §2.5 in de migratie
@@ -423,8 +447,11 @@ een eigen ingang in de zijbalk, onder de kop "Werk". Per ingang:
 - Alles wat te laat is staat als één blok bovenaan, niet uitgesmeerd over losse
   maanden: achterstand pak je als geheel aan.
 
-De brede lijsten (Werklijst, Mijn taken, Escalatie-queue, Kalender) blijven
-bestaan onder de kop "Overzicht", voor wie het geheel wil zien.
+**Augustus 2026:** de brede lijsten Werklijst, Mijn taken en Escalatie-queue
+zijn verwijderd (§4). De werkstromen zijn de enige takenlijst; de kop
+"Overzicht" in de zijbalk is daarmee verdwenen. De kalender staat als
+hoofdscherm bovenaan de zijbalk, zonder tussenkop — een kop boven één item
+leest als een categorie waar nog iets bij hoort.
 
 ### De feestdagenkalender loopt voor op de horizon
 

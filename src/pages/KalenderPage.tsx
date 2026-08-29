@@ -5,14 +5,23 @@ import { TaskDetailModal } from '../components/TaskDetailModal'
 import { StatusBadge } from '../components/StatusBadge'
 import { UrgencyBadge } from '../components/UrgencyBadge'
 import { ErrorState } from '../components/ErrorState'
+import { EmptyState } from '../components/EmptyState'
 import { formatDate } from '../lib/urgency'
 import type { TaskInstanceWithRelations } from '../types'
 
-/** Kalender-/tijdlijnweergave (§4 point 4). Simplified as a month-grouped
- * deadline-density list rather than a full visual month/week grid — a
- * deliberate v1 scope trade-off (documented in the developer-agent
- * summary): it still answers "how many deadlines pile up in which month,
- * for whom" without the complexity of a full calendar-grid component. */
+/**
+ * Kalender-/tijdlijnweergave (§4 point 4), sinds augustus 2026 het
+ * hoofdscherm: dit is waar je binnenkomt.
+ *
+ * Bewust een lijst per maand en geen volledig maand-/weekraster — die keuze
+ * uit v1 blijft staan: ze beantwoordt "hoeveel deadlines stapelen zich in
+ * welke maand op, en bij wie" zonder de complexiteit van een kalenderraster.
+ *
+ * De status is hier een **label** en geen knop (docs/PLAN.md §4, beslist met
+ * het kantoor). Dat verandert niet nu dit het eerste scherm is: je kijkt hier
+ * naar de spreiding van deadlines, je werkt ze af in de werkstromen. Wie hier
+ * toch iets wil wijzigen, opent de taak.
+ */
 export function KalenderPage() {
   const { employees } = useEmployees()
   const { tasks, loading, error, filters, setFilters, reload, updateStatus, reassign, markReviewHandled } = useTaskInstances({})
@@ -37,6 +46,7 @@ export function KalenderPage() {
           <p className="text-sm text-slate-500">Deadline-dichtheid per maand, kantoorbreed of per medewerker.</p>
         </div>
         <select
+          aria-label="Medewerker"
           value={filters.toegewezenAan ?? 'alle'}
           onChange={(e) => setFilters((f) => ({ ...f, toegewezenAan: e.target.value }))}
           className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
@@ -53,9 +63,24 @@ export function KalenderPage() {
       {error ? (
         <ErrorState message={error} onRetry={reload} />
       ) : loading ? (
-        <p className="text-sm text-slate-400">Laden…</p>
+        // Leesbaar en aankondigbaar: "Laden" mag niet op "je bent klaar"
+        // lijken, en een schermlezer hoort het mee te krijgen.
+        <p role="status" className="text-sm text-slate-600">
+          Taken laden…
+        </p>
       ) : grouped.length === 0 ? (
-        <p className="text-sm text-slate-400">Geen taken binnen bereik.</p>
+        // Vroeger "Geen taken binnen bereik" — maar er is op dit scherm geen
+        // bereik te zien dat je kan verruimen. Als eerste scherm na het
+        // inloggen moet de lege stand zeggen wat ze betekent en waar het werk
+        // dan wél staat.
+        <EmptyState
+          title={
+            filters.toegewezenAan && filters.toegewezenAan !== 'alle'
+              ? 'Geen openstaande taken voor deze medewerker.'
+              : 'Geen openstaande taken.'
+          }
+          description="Afgewerkte en geannuleerde taken staan niet in de kalender; die vind je in het klantdossier."
+        />
       ) : (
         <div className="space-y-4">
           {grouped.map(([month, monthTasks]) => (

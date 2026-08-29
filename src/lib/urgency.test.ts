@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { daysUntil, formatDate, getUrgencyBand, urgencySortWeight } from './urgency'
+import { daysUntil, formatDate, getUrgencyBand } from './urgency'
 
 const today = new Date('2026-06-15T12:00:00')
 
@@ -39,14 +39,6 @@ describe('getUrgencyBand', () => {
   it('returns later for dates well beyond the near-term bands', () => {
     expect(getUrgencyBand(iso(30), 'open', 'wettelijk', today)).toBe('later')
     expect(getUrgencyBand(iso(20), 'open', 'service', today)).toBe('later')
-  })
-})
-
-describe('urgencySortWeight', () => {
-  it('orders te_laat before vandaag before later bands, with null (done) last', () => {
-    const weights = [null, 'later', 'binnenkort', 'deze_week', 'vandaag', 'te_laat'] as const
-    const sorted = [...weights].sort((a, b) => urgencySortWeight(a) - urgencySortWeight(b))
-    expect(sorted).toEqual(['te_laat', 'vandaag', 'deze_week', 'binnenkort', 'later', null])
   })
 })
 

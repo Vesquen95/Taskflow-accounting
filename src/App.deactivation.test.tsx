@@ -40,7 +40,7 @@ vi.mock('./hooks/useCurrentEmployee', () => ({
 vi.mock('./components/AppLayout', () => ({
   AppLayout: ({ children }: { children: React.ReactNode }) => <div data-testid="app-layout">{children}</div>,
 }))
-vi.mock('./pages/WerklijstPage', () => ({ WerklijstPage: () => <div>werklijst</div> }))
+vi.mock('./pages/KalenderPage', () => ({ KalenderPage: () => <div>kalender</div> }))
 
 import App from './App'
 

@@ -36,7 +36,7 @@ describe('UrgencyBadge', () => {
 /**
  * "Later" stond op vrijwel elke regel en droeg daardoor geen informatie.
  * Een badge verschijnt alleen nog wanneer ze iets te melden heeft; de band
- * zelf blijft bestaan voor de sortering in de escalatiequeue.
+ * zelf blijft bestaan: hij bepaalt of en hoe de andere banden oplichten.
  */
 describe('UrgencyBadge — stille band', () => {
   it('rendert niets voor een taak die nog ver van haar deadline staat (band "later")', () => {

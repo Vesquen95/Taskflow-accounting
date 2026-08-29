@@ -11,15 +11,25 @@ interface NavItem {
 }
 
 interface NavGroep {
-  titel: string
+  /** Sleutel voor React; de kop is optioneel, de sleutel niet. */
+  id: string
+  /** Geen kop = geen groep. Een tussenkop boven één item ("Overzicht" met
+   *  enkel Kalender eronder) leest als een categorie waar nog iets bij hoort. */
+  titel?: string
   items: NavItem[]
 }
 
-/** De werkstromen staan bovenaan en apart: dat is waar het kantoor zijn dag
- *  begint ("ik wil enkel de BTW aangiftes zien"). De brede lijsten eronder
- *  blijven bestaan voor wie het geheel wil overzien. */
+/** De kalender staat als eerste en zonder kop: dat is het hoofdscherm, de
+ *  plek waar je binnenkomt. Daaronder de werkstromen — daar begint het
+ *  kantoor zijn dag ("ik wil enkel de BTW aangiftes zien"), en daar staat
+ *  ook de achterstand, in het blok "Te laat" bovenaan elke stroom. */
 const NAV_GROEPEN: NavGroep[] = [
   {
+    id: 'start',
+    items: [{ view: 'kalender', label: 'Kalender' }],
+  },
+  {
+    id: 'werk',
     titel: 'Werk',
     items: INGANGEN.map((ingang) => ({
       view: 'werk',
@@ -28,15 +38,7 @@ const NAV_GROEPEN: NavGroep[] = [
     })),
   },
   {
-    titel: 'Overzicht',
-    items: [
-      { view: 'werklijst', label: 'Werklijst' },
-      { view: 'mijn-taken', label: 'Mijn taken' },
-      { view: 'escalaties', label: 'Escalatie-queue' },
-      { view: 'kalender', label: 'Kalender' },
-    ],
-  },
-  {
+    id: 'beheer',
     titel: 'Beheer',
     items: [
       { view: 'klanten', label: 'Klanten' },
@@ -78,10 +80,12 @@ export function AppLayout({
             )
             if (items.length === 0) return null
             return (
-              <div key={groep.titel} className="space-y-0.5">
-                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  {groep.titel}
-                </p>
+              <div key={groep.id} className="space-y-0.5">
+                {groep.titel && (
+                  <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    {groep.titel}
+                  </p>
+                )}
                 {items.map((item) => {
                   const actief =
                     activeView === item.view &&
