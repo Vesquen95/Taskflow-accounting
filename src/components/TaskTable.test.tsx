@@ -131,7 +131,7 @@ describe('TaskTable — bulk actions', () => {
 
   it('selects all/none via the header checkbox', async () => {
     const user = userEvent.setup()
-    const onBulkStatus = vi.fn().mockResolvedValue(undefined)
+    const onBulkStatus = vi.fn().mockResolvedValue({ gelukt: ['t1', 't2'], mislukt: [] })
     render(<TaskTable tasks={[task({ id: 't1' }), task({ id: 't2' })]} employees={employees} onOpenTask={onOpenTask} onBulkStatus={onBulkStatus} />)
 
     const headerCheckbox = screen.getByLabelText('Selecteer alle taken')
@@ -144,7 +144,7 @@ describe('TaskTable — bulk actions', () => {
 
   it('clicking a row checkbox selects only that row and does not trigger onOpenTask (stopPropagation)', async () => {
     const user = userEvent.setup()
-    const onBulkStatus = vi.fn().mockResolvedValue(undefined)
+    const onBulkStatus = vi.fn().mockResolvedValue({ gelukt: ['t1'], mislukt: [] })
     render(<TaskTable tasks={[task({ id: 't1', title: 'Taak 1', obligation_type: null, obligation_type_id: null })]} employees={employees} onOpenTask={onOpenTask} onBulkStatus={onBulkStatus} />)
 
     await user.click(screen.getByLabelText('Selecteer taak Taak 1'))
@@ -155,7 +155,7 @@ describe('TaskTable — bulk actions', () => {
 
   it('bulk-reassigns the selected rows and clears the selection afterwards', async () => {
     const user = userEvent.setup()
-    const onBulkReassign = vi.fn().mockResolvedValue(undefined)
+    const onBulkReassign = vi.fn().mockResolvedValue({ gelukt: ['t1', 't2'], mislukt: [] })
     render(
       <TaskTable
         tasks={[task({ id: 't1' }), task({ id: 't2' })]}
@@ -175,7 +175,7 @@ describe('TaskTable — bulk actions', () => {
 
   it('bulk-updates status for the selected rows', async () => {
     const user = userEvent.setup()
-    const onBulkStatus = vi.fn().mockResolvedValue(undefined)
+    const onBulkStatus = vi.fn().mockResolvedValue({ gelukt: ['t1'], mislukt: [] })
     render(<TaskTable tasks={[task({ id: 't1' })]} employees={employees} onOpenTask={onOpenTask} onBulkStatus={onBulkStatus} />)
 
     await user.click(screen.getByLabelText('Selecteer alle taken'))
@@ -302,5 +302,186 @@ describe('TaskTable — urgentiebadge alleen wanneer ze iets meldt', () => {
   it('toont de badge wel wanneer de deadline dichtbij is', () => {
     render(<TaskTable tasks={[task({ due_date: overDagen(1) })]} employees={employees} onOpenTask={onOpenTask} />)
     expect(screen.getByText('Deze week')).toBeInTheDocument()
+  })
+})
+
+/**
+ * Bulk "Zet status op": even eerlijk als de doorklikbare status. De balk mag
+ * alleen aanbieden wat op élke geselecteerde taak kan — één statement dat de
+ * trigger op één rij afbreekt, past niets toe — en moet achteraf per taak
+ * melden wat er wél en niet gebeurd is.
+ *
+ * Rood voor de fix: de balk bood vast in_uitvoering/wacht_op_klant/
+ * geannuleerd aan, ongeacht de selectie, en toonde geen verslag.
+ */
+describe('TaskTable — bulkstatus: alleen wat op alle geselecteerde taken kan', () => {
+  const onBulkStatus = vi.fn()
+
+  beforeEach(() => {
+    onBulkStatus.mockReset()
+    onBulkStatus.mockResolvedValue({ gelukt: [], mislukt: [] })
+  })
+
+  function renderBulk(tasks: TaskInstanceWithRelations[], emp: Employee = employee({ mag_goedkeuren: false })) {
+    return render(
+      <TaskTable
+        tasks={tasks}
+        employees={employees}
+        onOpenTask={onOpenTask}
+        onBulkStatus={onBulkStatus}
+        currentEmployee={emp}
+      />
+    )
+  }
+
+  function statusKeuzes(): string[] {
+    const select = screen.getByLabelText('Zet status op') as HTMLSelectElement
+    return Array.from(select.options)
+      .map((o) => o.value)
+      .filter((v) => v !== '')
+  }
+
+  it('biedt "Wacht op klant" niet aan wanneer één geselecteerde taak daar al op staat', async () => {
+    const user = userEvent.setup()
+    renderBulk([task({ id: 't1', status: 'open' }), task({ id: 't2', status: 'wacht_op_klant' })])
+
+    await user.click(screen.getByLabelText('Selecteer alle taken'))
+
+    expect(statusKeuzes()).toEqual(['in_uitvoering', 'geannuleerd'])
+  })
+
+  it('biedt zonder goedkeuringsrecht geen "In uitvoering" aan bij een taak in wacht_op_goedkeuring', async () => {
+    const user = userEvent.setup()
+    renderBulk([task({ id: 't1', status: 'open' }), task({ id: 't2', status: 'wacht_op_goedkeuring' })])
+
+    await user.click(screen.getByLabelText('Selecteer alle taken'))
+
+    expect(statusKeuzes()).toEqual(['geannuleerd'])
+  })
+
+  it('herberekent de keuzes zodra de selectie verandert', async () => {
+    const user = userEvent.setup()
+    renderBulk([
+      task({ id: 't1', status: 'open', title: 'Taak 1', obligation_type: null, obligation_type_id: null }),
+      task({ id: 't2', status: 'wacht_op_klant', title: 'Taak 2', obligation_type: null, obligation_type_id: null }),
+    ])
+
+    await user.click(screen.getByLabelText('Selecteer taak Taak 1'))
+    expect(statusKeuzes()).toContain('wacht_op_klant')
+
+    await user.click(screen.getByLabelText('Selecteer taak Taak 2'))
+    expect(statusKeuzes()).not.toContain('wacht_op_klant')
+  })
+
+  it('toont geen lege keuzelijst maar de reden wanneer er geen gezamenlijke status is', async () => {
+    const user = userEvent.setup()
+    renderBulk([task({ id: 't1', status: 'open' }), task({ id: 't2', status: 'ingediend_afgerond' })])
+
+    await user.click(screen.getByLabelText('Selecteer alle taken'))
+
+    expect(screen.queryByLabelText('Zet status op')).not.toBeInTheDocument()
+    expect(screen.getByText(/afgesloten/i)).toBeInTheDocument()
+  })
+})
+
+describe('TaskTable — bulkverslag per taak', () => {
+  const onBulkStatus = vi.fn()
+
+  beforeEach(() => {
+    onBulkStatus.mockReset()
+  })
+
+  const takenVanTweeKlanten = [
+    task({ id: 't1', status: 'open', client: { id: 'c1', naam: 'Bakkerij Peeters', vertrouwelijk: false, actief: true } }),
+    task({ id: 't2', status: 'open', client: { id: 'c2', naam: 'Garage Willems', vertrouwelijk: false, actief: true } }),
+  ]
+
+  async function zetStatus(user: ReturnType<typeof userEvent.setup>, waarde: string) {
+    await user.click(screen.getByLabelText('Selecteer alle taken'))
+    await user.selectOptions(screen.getByLabelText('Zet status op'), waarde)
+  }
+
+  it('meldt na een gedeeltelijke mislukking per taak wat er gebeurde en waarom niet', async () => {
+    const user = userEvent.setup()
+    onBulkStatus.mockResolvedValue({
+      gelukt: ['t1'],
+      mislukt: [{ taskId: 't2', reden: 'Ongeldige statusovergang: open -> in_uitvoering' }],
+    })
+    render(
+      <TaskTable
+        tasks={takenVanTweeKlanten}
+        employees={employees}
+        onOpenTask={onOpenTask}
+        onBulkStatus={onBulkStatus}
+        currentEmployee={employee()}
+      />
+    )
+
+    await zetStatus(user, 'in_uitvoering')
+
+    const verslag = await screen.findByRole('alert')
+    expect(within(verslag).getByText(/1 van de 2/)).toBeInTheDocument()
+    expect(within(verslag).getByText(/Garage Willems/)).toBeInTheDocument()
+    expect(within(verslag).getByText(/Ongeldige statusovergang/)).toBeInTheDocument()
+    expect(within(verslag).queryByText(/Bakkerij Peeters/)).not.toBeInTheDocument()
+  })
+
+  it('houdt enkel de mislukte taken geselecteerd zodat het kantoor ze kan opvolgen', async () => {
+    const user = userEvent.setup()
+    onBulkStatus.mockResolvedValue({
+      gelukt: ['t1'],
+      mislukt: [{ taskId: 't2', reden: 'Geen rechten' }],
+    })
+    render(
+      <TaskTable
+        tasks={takenVanTweeKlanten}
+        employees={employees}
+        onOpenTask={onOpenTask}
+        onBulkStatus={onBulkStatus}
+        currentEmployee={employee()}
+      />
+    )
+
+    await zetStatus(user, 'in_uitvoering')
+
+    expect(await screen.findByText('1 geselecteerd')).toBeInTheDocument()
+  })
+
+  it('meldt kort dat alles gelukt is en maakt de selectie leeg', async () => {
+    const user = userEvent.setup()
+    onBulkStatus.mockResolvedValue({ gelukt: ['t1', 't2'], mislukt: [] })
+    render(
+      <TaskTable
+        tasks={takenVanTweeKlanten}
+        employees={employees}
+        onOpenTask={onOpenTask}
+        onBulkStatus={onBulkStatus}
+        currentEmployee={employee()}
+      />
+    )
+
+    await zetStatus(user, 'in_uitvoering')
+
+    const verslag = await screen.findByRole('status')
+    expect(within(verslag).getByText(/2 van de 2/)).toBeInTheDocument()
+    expect(screen.queryByText(/geselecteerd/)).not.toBeInTheDocument()
+  })
+
+  it('meldt het ook wanneer de bulkopdracht zelf stukloopt in plaats van stil te falen', async () => {
+    const user = userEvent.setup()
+    onBulkStatus.mockRejectedValue(new Error('Geen verbinding met de server'))
+    render(
+      <TaskTable
+        tasks={takenVanTweeKlanten}
+        employees={employees}
+        onOpenTask={onOpenTask}
+        onBulkStatus={onBulkStatus}
+        currentEmployee={employee()}
+      />
+    )
+
+    await zetStatus(user, 'in_uitvoering')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Geen verbinding/)
   })
 })

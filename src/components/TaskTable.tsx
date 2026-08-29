@@ -1,17 +1,20 @@
 import { useMemo, useState } from 'react'
 import type { Employee, TaskInstanceWithRelations, TaskStatus } from '../types'
+import type { BulkResultaat } from '../lib/bulkActie'
 import { TaskStatusControl } from './TaskStatusControl'
+import { TaskBulkBar } from './TaskBulkBar'
 import { UrgencyBadge } from './UrgencyBadge'
 import { formatDate } from '../lib/urgency'
-import { STATUS_LABEL } from '../lib/taskStatus'
+import { taakNaam } from '../lib/taakLabel'
 import { EmptyState } from './EmptyState'
 
 interface TaskTableProps {
   tasks: TaskInstanceWithRelations[]
   employees: Employee[]
   onOpenTask: (task: TaskInstanceWithRelations) => void
-  onBulkReassign?: (taskIds: string[], employeeId: string) => Promise<void>
-  onBulkStatus?: (taskIds: string[], status: TaskStatus) => Promise<void>
+  /** Bulkacties geven een verslag per taak terug i.p.v. te gooien — zie src/lib/bulkActie.ts. */
+  onBulkReassign?: (taskIds: string[], employeeId: string) => Promise<BulkResultaat>
+  onBulkStatus?: (taskIds: string[], status: TaskStatus) => Promise<BulkResultaat>
   /**
    * De ingelogde medewerker. Nodig om te weten welke statusstap deze persoon
    * mag zetten (`mag_goedkeuren`); zonder haar blijft de status een label.
@@ -22,9 +25,6 @@ interface TaskTableProps {
   showClientColumn?: boolean
   emptyMessage?: string
 }
-
-/** Labels komen uit dezelfde bron als de rest van de statusbediening. */
-const BULK_STATUS_OPTIONS: TaskStatus[] = ['in_uitvoering', 'wacht_op_klant', 'geannuleerd']
 
 export function TaskTable({
   tasks,
@@ -39,10 +39,15 @@ export function TaskTable({
 }: TaskTableProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [statusFout, setStatusFout] = useState<string | null>(null)
-  const allSelected = tasks.length > 0 && selected.size === tasks.length
+  // Op de zichtbare rijen, niet op de omvang van de set: na een bulkactie kan
+  // een aangevinkte taak uit de lijst verdwenen zijn (ze voldoet niet meer
+  // aan de filters), en dan zou een vergelijking op aantal liegen.
+  const allSelected = tasks.length > 0 && tasks.every((t) => selected.has(t.id))
   const canBulk = !!(onBulkReassign || onBulkStatus)
 
-  const selectedIds = useMemo(() => Array.from(selected), [selected])
+  // In lijstvolgorde, niet in aanvinkvolgorde: het verslag leest zo mee met
+  // de tabel eronder.
+  const selectedTasks = useMemo(() => tasks.filter((t) => selected.has(t.id)), [tasks, selected])
 
   function toggleAll() {
     setSelected(allSelected ? new Set() : new Set(tasks.map((t) => t.id)))
@@ -68,60 +73,15 @@ export function TaskTable({
           {statusFout}
         </p>
       )}
-      {canBulk && selected.size > 0 && (
-        <div className="flex items-center gap-3 border-b border-slate-200 bg-brand-50 px-4 py-2 text-sm">
-          <span className="font-medium text-brand-800">{selected.size} geselecteerd</span>
-          {onBulkReassign && (
-            <label className="flex items-center gap-1 text-slate-600">
-              Herverdeel naar
-              <select
-                className="rounded border border-slate-300 px-1.5 py-1 text-xs"
-                defaultValue=""
-                onChange={async (e) => {
-                  const value = e.target.value
-                  if (!value) return
-                  await onBulkReassign(selectedIds, value)
-                  setSelected(new Set())
-                  e.target.value = ''
-                }}
-              >
-                <option value="" disabled>
-                  Kies medewerker…
-                </option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.naam}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {onBulkStatus && (
-            <label className="flex items-center gap-1 text-slate-600">
-              Zet status op
-              <select
-                className="rounded border border-slate-300 px-1.5 py-1 text-xs"
-                defaultValue=""
-                onChange={async (e) => {
-                  const value = e.target.value as TaskStatus | ''
-                  if (!value) return
-                  await onBulkStatus(selectedIds, value)
-                  setSelected(new Set())
-                  e.target.value = ''
-                }}
-              >
-                <option value="" disabled>
-                  Kies status…
-                </option>
-                {BULK_STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {STATUS_LABEL[status]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
+      {canBulk && (
+        <TaskBulkBar
+          geselecteerd={selectedTasks}
+          employees={employees}
+          currentEmployee={currentEmployee}
+          onBulkReassign={onBulkReassign}
+          onBulkStatus={onBulkStatus}
+          onNaActie={(nogGeselecteerd) => setSelected(new Set(nogGeselecteerd))}
+        />
       )}
       <table className="min-w-full divide-y divide-slate-200 text-sm">
         <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -167,7 +127,7 @@ export function TaskTable({
                 </td>
               )}
               <td className="max-w-[220px] truncate px-3 py-2 text-slate-700">
-                {task.obligation_type?.naam ?? task.title ?? 'Ad-hoc taak'}
+                {taakNaam(task)}
                 {task.review_vereist && (
                   <span className="ml-2 inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
                     review

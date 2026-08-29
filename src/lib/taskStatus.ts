@@ -234,6 +234,54 @@ export function volgendeStatusActie(ctx: StatusContext): StatusActie | null {
 }
 
 /**
+ * De statussen die de bulkbalk kan zetten. Bewust dezelfde drie als voorheen:
+ * een bulkactie schrijft één status naar N taken, terwijl "Afronden" op een
+ * goedkeuringsplichtige taak een tweetrapsactie is (indienen + goedkeuren)
+ * met een vier-ogen-waarschuwing die per taak beoordeeld hoort te worden.
+ * Wat hier verandert is niet de lijst, maar dat ze per selectie gefilterd
+ * wordt.
+ */
+const BULK_KANDIDATEN: readonly TaskStatus[] = ['in_uitvoering', 'wacht_op_klant', 'geannuleerd']
+
+/**
+ * De doorsnede: enkel de statussen die op élke geselecteerde taak toegelaten
+ * zijn. Nodig omdat een bulkupdate één SQL-statement is — weigert de trigger
+ * er één rij van, dan wordt er niets toegepast. Iets aanbieden dat op één
+ * taak faalt, is dus een belofte die de hele actie kost.
+ */
+export function gemeenschappelijkeBulkStatussen(ctxs: readonly StatusContext[]): TaskStatus[] {
+  if (ctxs.length === 0) return []
+  return BULK_KANDIDATEN.filter((doel) => ctxs.every((ctx) => overgangToegestaan(ctx.status, doel, ctx)))
+}
+
+/**
+ * Waarom er voor deze selectie niets te kiezen valt. Een lege keuzelijst
+ * laat de gebruiker raden; dezelfde les als bij het detailvenster
+ * (WACHT_OP_GOEDKEURDER_UITLEG).
+ */
+export function bulkStatusUitleg(ctxs: readonly StatusContext[]): string {
+  const totaal = ctxs.length
+  if (totaal === 0) return ''
+
+  const afgesloten = ctxs.filter((c) => EINDSTATUSSEN.includes(c.status)).length
+  if (afgesloten > 0) {
+    return (
+      `${afgesloten} van de ${totaal} geselecteerde taken zijn afgesloten (ingediend/afgerond of geannuleerd) ` +
+      'en kunnen niet meer wijzigen. Haal ze uit de selectie om een status te kunnen zetten.'
+    )
+  }
+
+  // Vandaag onbereikbaar — annuleren mag vanuit elke niet-eindstatus, dus de
+  // doorsnede is nooit leeg zonder afgesloten taak. Blijft staan als
+  // vangnet: wijzigen de trigger of BULK_KANDIDATEN, dan is er nog altijd
+  // een uitleg in plaats van een lege lijst.
+  return (
+    'De geselecteerde taken staan in te uiteenlopende statussen: er is geen status die op alle taken tegelijk ' +
+    'kan. Verfijn je selectie.'
+  )
+}
+
+/**
  * Een actie die halverwege stukliep. De eerste stap(pen) zijn wél
  * doorgevoerd: de taak staat op `bereikt`. Dat is een zichtbare, herstelbare
  * toestand — maar dan moet de melding dat ook zeggen in plaats van te doen

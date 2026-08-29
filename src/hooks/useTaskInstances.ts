@@ -2,6 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
 import { reportError } from '../lib/errorMessage'
+import { voerBulkUit, type BulkResultaat } from '../lib/bulkActie'
+
+/** De velden die een bulkactie mag schrijven — één status of één toewijzing. */
+type TaakPatch = { status: TaskStatus } | { toegewezen_medewerker_id: string }
 
 const NOT_FINAL: TaskStatus[] = ['open', 'in_uitvoering', 'wacht_op_klant', 'wacht_op_goedkeuring']
 
@@ -115,19 +119,43 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
     await load()
   }
 
-  async function bulkReassign(taskIds: string[], toegewezen_medewerker_id: string) {
-    const { error: err } = await supabase
-      .from('task_instances')
-      .update({ toegewezen_medewerker_id })
-      .in('id', taskIds)
+  /**
+   * Eén update over een lijst ids. Geeft terug wélke rijen de databank
+   * effectief bijgewerkt heeft: `.select('id')` is hier geen luxe, want RLS
+   * laat een onzichtbare rij zonder fout buiten de update vallen.
+   */
+  async function updateTaken(ids: string[], patch: TaakPatch): Promise<string[]> {
+    const query = supabase.from('task_instances').update(patch)
+    const { data, error: err } = await (ids.length === 1
+      ? query.eq('id', ids[0])
+      : query.in('id', ids)
+    ).select('id')
     if (err) throw err
-    await load()
+    return ((data ?? []) as Array<{ id: string }>).map((rij) => rij.id)
   }
 
-  async function bulkUpdateStatus(taskIds: string[], status: TaskStatus) {
-    const { error: err } = await supabase.from('task_instances').update({ status }).in('id', taskIds)
-    if (err) throw err
+  /**
+   * Bulk met verslag: snelle weg eerst, per taak uitzoeken wanneer de
+   * databank de ene opdracht weigert. Zie src/lib/bulkActie.ts voor de
+   * afweging. Gooit bewust niet meer bij een deelweigering — het verslag ís
+   * het antwoord, en de UI toont het per taak.
+   */
+  async function bulkPatch(taskIds: string[], patch: TaakPatch): Promise<BulkResultaat> {
+    const resultaat = await voerBulkUit(
+      taskIds,
+      (ids) => updateTaken(ids, patch),
+      async (id) => (await updateTaken([id], patch)).length > 0
+    )
     await load()
+    return resultaat
+  }
+
+  async function bulkReassign(taskIds: string[], toegewezen_medewerker_id: string): Promise<BulkResultaat> {
+    return bulkPatch(taskIds, { toegewezen_medewerker_id })
+  }
+
+  async function bulkUpdateStatus(taskIds: string[], status: TaskStatus): Promise<BulkResultaat> {
+    return bulkPatch(taskIds, { status })
   }
 
   async function markReviewHandled(taskId: string) {

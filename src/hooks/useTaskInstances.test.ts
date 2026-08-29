@@ -314,3 +314,126 @@ describe('useTaskInstances — mutations', () => {
     expect(updateState?.payload).toEqual({ review_vereist: false })
   })
 })
+
+/**
+ * Bulk: één opdracht is alles-of-niets (de trigger breekt het hele statement
+ * af op de eerste dwarsligger). Het kantoor moet achteraf per taak weten wat
+ * er gebeurd is, dus valt de hook bij een weigering terug op één opdracht per
+ * taak en geeft ze een verslag terug in plaats van te gooien.
+ */
+describe('useTaskInstances — bulk met verslag per taak', () => {
+  function updateCalls(state: ChainState) {
+    return state.calls
+  }
+
+  it('bulkUpdateStatus doet één opdracht zolang de databank ze aanvaardt', async () => {
+    let updates = 0
+    install({
+      task_instances: (state) => {
+        if (state.op !== 'update') return { data: [], error: null }
+        updates++
+        const inCall = updateCalls(state).find((c) => c.method === 'in' && c.args[0] === 'id')
+        const ids = (inCall?.args[1] ?? []) as string[]
+        return { data: ids.map((id) => ({ id })), error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    let verslag: Awaited<ReturnType<typeof result.current.bulkUpdateStatus>> | undefined
+    await act(async () => {
+      verslag = await result.current.bulkUpdateStatus(['t1', 't2'], 'in_uitvoering')
+    })
+
+    expect(updates).toBe(1)
+    expect(verslag).toEqual({ gelukt: ['t1', 't2'], mislukt: [] })
+  })
+
+  it('bulkUpdateStatus zoekt per taak uit wat er misging wanneer de ene opdracht faalt', async () => {
+    install({
+      task_instances: (state) => {
+        if (state.op !== 'update') return { data: [], error: null }
+        const eqCall = updateCalls(state).find((c) => c.method === 'eq' && c.args[0] === 'id')
+        if (!eqCall) {
+          // De ene grote opdracht: de trigger breekt ze af op t2.
+          return { data: null, error: { message: 'Ongeldige statusovergang: wacht_op_klant -> wacht_op_klant', code: '23514' } }
+        }
+        const id = eqCall.args[1] as string
+        if (id === 't2') {
+          return { data: null, error: { message: 'Ongeldige statusovergang: wacht_op_klant -> wacht_op_klant', code: '23514' } }
+        }
+        return { data: [{ id }], error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    let verslag: Awaited<ReturnType<typeof result.current.bulkUpdateStatus>> | undefined
+    await act(async () => {
+      verslag = await result.current.bulkUpdateStatus(['t1', 't2', 't3'], 'wacht_op_klant')
+    })
+
+    expect(verslag?.gelukt).toEqual(['t1', 't3'])
+    expect(verslag?.mislukt).toHaveLength(1)
+    expect(verslag?.mislukt[0].taskId).toBe('t2')
+    expect(verslag?.mislukt[0].reden).toContain('Ongeldige statusovergang')
+  })
+
+  it('bulkReassign meldt op dezelfde manier welke taken de kantoorgrens niet passeerden', async () => {
+    install({
+      task_instances: (state) => {
+        if (state.op !== 'update') return { data: [], error: null }
+        const eqCall = updateCalls(state).find((c) => c.method === 'eq' && c.args[0] === 'id')
+        if (!eqCall) {
+          return {
+            data: null,
+            error: { message: 'De toegewezen medewerker hoort niet bij het kantoor van deze klant', code: '23514' },
+          }
+        }
+        const id = eqCall.args[1] as string
+        if (id === 't2') {
+          return {
+            data: null,
+            error: { message: 'De toegewezen medewerker hoort niet bij het kantoor van deze klant', code: '23514' },
+          }
+        }
+        return { data: [{ id }], error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    let verslag: Awaited<ReturnType<typeof result.current.bulkReassign>> | undefined
+    await act(async () => {
+      verslag = await result.current.bulkReassign(['t1', 't2'], 'e9')
+    })
+
+    expect(verslag?.gelukt).toEqual(['t1'])
+    expect(verslag?.mislukt[0].reden).toContain('hoort niet bij het kantoor')
+  })
+
+  it('meldt een taak die de databank stil overslaat (RLS) als niet bijgewerkt', async () => {
+    install({
+      task_instances: (state) => {
+        if (state.op !== 'update') return { data: [], error: null }
+        // Alleen t1 is zichtbaar/schrijfbaar; t2 valt stil uit de update weg.
+        return { data: [{ id: 't1' }], error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    let verslag: Awaited<ReturnType<typeof result.current.bulkUpdateStatus>> | undefined
+    await act(async () => {
+      verslag = await result.current.bulkUpdateStatus(['t1', 't2'], 'in_uitvoering')
+    })
+
+    expect(verslag?.gelukt).toEqual(['t1'])
+    expect(verslag?.mislukt).toHaveLength(1)
+    expect(verslag?.mislukt[0].taskId).toBe('t2')
+  })
+})

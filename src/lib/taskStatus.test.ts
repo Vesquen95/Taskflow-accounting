@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   annulatieActie,
   beschikbareStatusActies,
+  bulkStatusUitleg,
+  gemeenschappelijkeBulkStatussen,
   overgangToegestaan,
   statusContext,
   StatusActieOnderbroken,
@@ -237,5 +239,78 @@ describe('statusActieFoutmelding', () => {
   it('valt terug op de gewone foutvertaling voor een gewone fout', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(statusActieFoutmelding(new Error('Netwerk weg'))).toContain('Statuswijziging is mislukt')
+  })
+})
+
+/**
+ * Bulk: de statusbalk mag alleen aanbieden wat op *elke* geselecteerde taak
+ * kan. Eén doorsnede over de selectie, met dezelfde regels als één taak —
+ * anders belooft de balk iets wat de trigger op de eerste dwarsligger
+ * afbreekt, en dan gebeurt er (één statement!) helemaal niets.
+ */
+describe('gemeenschappelijkeBulkStatussen — de doorsnede over een selectie', () => {
+  it('biedt op één open taak de gewone bulkkeuzes aan', () => {
+    expect(gemeenschappelijkeBulkStatussen([ctx({ status: 'open' })])).toEqual([
+      'in_uitvoering',
+      'wacht_op_klant',
+      'geannuleerd',
+    ])
+  })
+
+  it('laat "Wacht op klant" vallen zodra één taak daar al op staat (geen overgang naar zichzelf)', () => {
+    const statussen = gemeenschappelijkeBulkStatussen([ctx({ status: 'open' }), ctx({ status: 'wacht_op_klant' })])
+    expect(statussen).not.toContain('wacht_op_klant')
+    expect(statussen).toEqual(['in_uitvoering', 'geannuleerd'])
+  })
+
+  it('laat "Wacht op klant" vallen bij een taak in wacht_op_goedkeuring (niet in de whitelist van de trigger)', () => {
+    const statussen = gemeenschappelijkeBulkStatussen([
+      ctx({ status: 'in_uitvoering' }),
+      ctx({ status: 'wacht_op_goedkeuring', magGoedkeuren: true }),
+    ])
+    expect(statussen).not.toContain('wacht_op_klant')
+  })
+
+  it('biedt zonder goedkeuringsrecht geen "In uitvoering" aan op een selectie met wacht_op_goedkeuring', () => {
+    const statussen = gemeenschappelijkeBulkStatussen([
+      ctx({ status: 'open' }),
+      ctx({ status: 'wacht_op_goedkeuring', magGoedkeuren: false }),
+    ])
+    expect(statussen).toEqual(['geannuleerd'])
+  })
+
+  it('geeft dat terugsturen wél terug aan wie goedkeuringsrecht heeft', () => {
+    const statussen = gemeenschappelijkeBulkStatussen([
+      ctx({ status: 'open', magGoedkeuren: true }),
+      ctx({ status: 'wacht_op_goedkeuring', magGoedkeuren: true }),
+    ])
+    expect(statussen).toContain('in_uitvoering')
+  })
+
+  it('levert niets op zodra er een afgesloten taak in de selectie zit', () => {
+    expect(gemeenschappelijkeBulkStatussen([ctx({ status: 'open' }), ctx({ status: 'ingediend_afgerond' })])).toEqual([])
+    expect(gemeenschappelijkeBulkStatussen([ctx({ status: 'geannuleerd' })])).toEqual([])
+  })
+
+  it('levert niets op voor een lege selectie', () => {
+    expect(gemeenschappelijkeBulkStatussen([])).toEqual([])
+  })
+})
+
+describe('bulkStatusUitleg — waarom er niets te kiezen valt', () => {
+  it('noemt hoeveel taken afgesloten zijn en dus niets meer toelaten', () => {
+    const uitleg = bulkStatusUitleg([
+      ctx({ status: 'open' }),
+      ctx({ status: 'ingediend_afgerond' }),
+      ctx({ status: 'geannuleerd' }),
+    ])
+    expect(uitleg).toContain('2 van de 3')
+    expect(uitleg).toMatch(/afgesloten/i)
+  })
+
+  it('geeft een leesbare reden terug, ook wanneer geen enkele taak afgesloten is', () => {
+    const uitleg = bulkStatusUitleg([ctx({ status: 'open' })])
+    expect(uitleg.length).toBeGreaterThan(0)
+    expect(uitleg).not.toMatch(/undefined|NaN/)
   })
 })

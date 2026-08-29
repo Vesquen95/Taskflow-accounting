@@ -1,4 +1,5 @@
 import type { Employee, TaskInstanceWithRelations, TaskStatus } from '../types'
+import type { BulkResultaat } from '../lib/bulkActie'
 import { TaskTable } from './TaskTable'
 import { EmptyState } from './EmptyState'
 import { groepeerInBlokken } from '../lib/werkstromen'
@@ -7,8 +8,9 @@ interface TaskBlocksProps {
   tasks: TaskInstanceWithRelations[]
   employees: Employee[]
   onOpenTask: (task: TaskInstanceWithRelations) => void
-  onBulkReassign?: (taskIds: string[], employeeId: string) => Promise<void>
-  onBulkStatus?: (taskIds: string[], status: TaskStatus) => Promise<void>
+  /** Doorgegeven aan TaskTable; geven een verslag per taak terug (src/lib/bulkActie.ts). */
+  onBulkReassign?: (taskIds: string[], employeeId: string) => Promise<BulkResultaat>
+  onBulkStatus?: (taskIds: string[], status: TaskStatus) => Promise<BulkResultaat>
   /** Doorgegeven aan TaskTable: samen maken deze twee de status doorklikbaar
    *  naar de volgende stap. Zonder de medewerker weet het scherm niet wie er
    *  mag goedkeuren, en blijft de status een label. */
