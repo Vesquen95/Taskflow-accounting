@@ -252,6 +252,21 @@ deze aannames als veilige default):**
 8. **Klantenlijst/zoekscherm** — zoeken/filteren over alle klanten op
    rechtsvorm, boekjaareinde, mandataris, actief, verantwoordelijke.
 
+### Waar de status doorklikbaar is, en waar niet
+
+Op de werkschermen (de vijf werkstromen, Werklijst, Mijn taken, Escalatie) is
+de status een knop: één klik zet de taak naar de volgende stap. Dat is waar het
+kantoor taken afwerkt, blok per blok.
+
+Op de **kalender** en in het **klantdossier** blijft de status een label
+(beslist met het kantoor, augustus 2026). Dat zijn overzichtsschermen: je kijkt
+daar naar de spreiding van deadlines of naar de historiek van één dossier, niet
+naar wat je nu moet afvinken. Een knop op een plek waar je alleen leest nodigt
+uit tot een klik die je niet bedoelde. Wie daar toch iets wil wijzigen, opent de
+taak; het detailvenster toont de juiste keuzes.
+
+Aanpassen hoort dus niet "voor de consistentie" alsnog te gebeuren.
+
 ## §5 — Rollen & rechten (RLS-samenvatting)
 
 - Twee rollen: `medewerker`, `kantoorbeheerder`, plus onafhankelijke
