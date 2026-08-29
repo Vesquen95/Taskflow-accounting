@@ -1,22 +1,38 @@
-import { useState } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { useClients } from '../hooks/useClients'
 import { useEmployees } from '../hooks/useEmployees'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { ClientFormModal, type ClientFormValues } from '../components/ClientFormModal'
 import { useObligationTypes } from '../hooks/useObligationTypes'
-import { saveClientObligations } from '../lib/clientObligations'
+import { saveClientObligations, syncClientTasks } from '../lib/clientObligations'
+import type { NieuweKlant } from '../lib/klantImport'
+import { reportError } from '../lib/errorMessage'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { formatDate } from '../lib/urgency'
+
+/** Het importscherm en alles wat eraan hangt (de Excel-bibliotheken voorop)
+ *  blijven uit de hoofdbundel: de meeste mensen importeren nooit iets. Enkel
+ *  het type NieuweKlant komt hierboven statisch binnen, en dat is een
+ *  type-import — die verdwijnt bij het bouwen. */
+const KlantImportModal = lazy(() =>
+  import('../components/KlantImportModal').then((m) => ({ default: m.KlantImportModal }))
+)
 
 /** Klantenlijst/zoekscherm (§4 point 8). */
 export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?: string) => void }) {
   const { employee } = useCurrentEmployee()
   const { employees } = useEmployees()
-  const { clients, loading, error, filters, setFilters, reload, createClient } = useClients()
+  const { clients, loading, error, filters, setFilters, reload, createClient, insertClient, haalOndernemingsnummers } =
+    useClients()
   const { obligationTypes } = useObligationTypes()
   const codePerTypeId = Object.fromEntries(obligationTypes.map((t) => [t.id, t.code]))
   const [showCreate, setShowCreate] = useState(false)
+  // null = importscherm dicht. De bestaande ondernemingsnummers worden één
+  // keer opgehaald bij het openen, zodat het voorbeeld dubbels kan tonen vóór
+  // de unieke index ze weigert.
+  const [importNummers, setImportNummers] = useState<string[] | null>(null)
+  const [sjabloonFout, setSjabloonFout] = useState<string | null>(null)
 
   async function handleCreate(values: ClientFormValues) {
     if (!employee) return
@@ -39,6 +55,43 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
     await reload()
   }
 
+  async function openImport() {
+    setSjabloonFout(null)
+    try {
+      setImportNummers(await haalOndernemingsnummers())
+    } catch (err) {
+      // Geen reden om de import tegen te houden: de databank blijft de echte
+      // bewaker van dubbele ondernemingsnummers.
+      console.error('[Taskflow] Kon bestaande ondernemingsnummers niet ophalen', err)
+      setImportNummers([])
+    }
+  }
+
+  async function haalSjabloon() {
+    setSjabloonFout(null)
+    try {
+      const { downloadSjabloon } = await import('../lib/klantImportBestand')
+      await downloadSjabloon()
+    } catch (err) {
+      setSjabloonFout(reportError(err, 'Kon het sjabloon niet maken'))
+    }
+  }
+
+  /** Eén klant uit het importbestand. Bewust dezelfde velden als het
+   *  klantformulier, min vertrouwelijk en de standaard verantwoordelijke:
+   *  block_unaudited_confidentiality_change() weigert die bij het aanmaken. */
+  async function maakKlantUitImport(klant: NieuweKlant): Promise<string> {
+    if (!employee) throw new Error('Geen medewerkersprofiel geladen.')
+    const nieuw = await insertClient({
+      firm_id: employee.firm_id,
+      ...klant,
+      vertrouwelijk: false,
+      standaard_verantwoordelijke_id: null,
+      actief: true,
+    })
+    return nieuw.id
+  }
+
   return (
     <div className="p-6">
       <div className="mb-4 flex items-center justify-between">
@@ -46,13 +99,29 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
           <h1 className="text-xl font-semibold text-slate-900">Klanten</h1>
           <p className="text-sm text-slate-500">Zoek en filter over alle klanten van het kantoor.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-        >
-          Nieuwe klant
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={haalSjabloon}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Sjabloon downloaden
+          </button>
+          <button
+            type="button"
+            onClick={openImport}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Importeren uit Excel
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            Nieuwe klant
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-3">
@@ -167,6 +236,26 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
             </tbody>
           </table>
         </div>
+      )}
+
+      {sjabloonFout && (
+        <p role="alert" className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {sjabloonFout}
+        </p>
+      )}
+
+      {importNummers !== null && (
+        <Suspense fallback={<p className="text-sm text-slate-400">Importscherm laden…</p>}>
+          <KlantImportModal
+            bestaandeOndernemingsnummers={importNummers}
+            maakKlant={maakKlantUitImport}
+            genereerTaken={async (clientId) => {
+              await syncClientTasks(clientId)
+            }}
+            onKlaar={() => reload()}
+            onClose={() => setImportNummers(null)}
+          />
+        </Suspense>
       )}
 
       {showCreate && (

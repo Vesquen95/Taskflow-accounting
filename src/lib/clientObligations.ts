@@ -105,6 +105,18 @@ export async function saveClientObligations(
     }
   }
 
+  return syncClientTasks(clientId)
+}
+
+/**
+ * Zet de taken van één klant gelijk met zijn lopende verplichtingen
+ * (migratie 0021). De trigger sync_btw_obligations maakt bij het aanmaken wel
+ * de btw-verplichtingen aan, maar géén taakinstanties — die komen hiervandaan.
+ * Staat apart zodat het klantformulier én de Excel-import dezelfde stap doen.
+ *
+ * @returns het aantal nieuw aangemaakte taken.
+ */
+export async function syncClientTasks(clientId: string): Promise<number> {
   const { data: aantal, error: syncErr } = await supabase.rpc('sync_client_tasks', {
     p_client_id: clientId,
   })

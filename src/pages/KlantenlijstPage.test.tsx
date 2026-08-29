@@ -107,3 +107,80 @@ describe('KlantenlijstPage — gearchiveerde klanten', () => {
     expect(screen.queryByText('Inactief')).not.toBeInTheDocument()
   })
 })
+
+describe('KlantenlijstPage — klanten importeren uit Excel', () => {
+  /** Zet een echt sjabloonbestand klaar zoals een medewerker het aanlevert. */
+  async function sjabloonBestand() {
+    const { bouwSjabloonBlob } = await import('../lib/klantImportBestand')
+    return new File([await bouwSjabloonBlob()], 'klanten.xlsx')
+  }
+
+  function installMetInsert(clients: Client[]) {
+    const inserts: Array<Record<string, unknown>> = []
+    const handlers: SupabaseHandlers = {
+      clients: (state) => {
+        if (state.op === 'insert') {
+          inserts.push(state.payload as Record<string, unknown>)
+          return { data: client({ id: `c${inserts.length}` }), error: null }
+        }
+        return { data: clients, error: null }
+      },
+      employees: () => ({ data: [{ id: 'e1', naam: 'Jan' }], error: null }),
+      obligation_types: () => ({ data: [], error: null }),
+    }
+    const mock = createSupabaseMock(handlers)
+    ;(supabase.from as Mock).mockImplementation(mock.from)
+    ;(supabase.rpc as Mock).mockResolvedValue({ data: 4, error: null })
+    return inserts
+  }
+
+  it('leest het eigen sjabloon in en toont het voorbeeld voor er iets opgeslagen wordt', async () => {
+    const user = userEvent.setup()
+    const inserts = installMetInsert([client()])
+    render(<KlantenlijstPage navigate={vi.fn()} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Importeren uit Excel' }))
+    await user.upload(await screen.findByLabelText(/Excel-bestand/i), await sjabloonBestand())
+
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByRole('table')).toHaveTextContent('Voorbeeld BV')
+    expect(inserts).toHaveLength(0)
+  })
+
+  it('maakt de klanten aan zonder vertrouwelijk of standaard verantwoordelijke', async () => {
+    const user = userEvent.setup()
+    const inserts = installMetInsert([client()])
+    render(<KlantenlijstPage navigate={vi.fn()} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Importeren uit Excel' }))
+    await user.upload(await screen.findByLabelText(/Excel-bestand/i), await sjabloonBestand())
+    await user.click(await screen.findByRole('button', { name: /2 klanten importeren/i }))
+
+    await waitFor(() => expect(inserts).toHaveLength(2))
+    // block_unaudited_confidentiality_change() (migratie 0009) weigert bij een
+    // INSERT elke andere waarde voor een gewone medewerker; de import belooft
+    // ze dus niet.
+    expect(inserts.every((i) => i.vertrouwelijk === false)).toBe(true)
+    expect(inserts.every((i) => i.standaard_verantwoordelijke_id === null)).toBe(true)
+    expect(inserts.every((i) => i.firm_id === 'f1' && i.actief === true)).toBe(true)
+    expect(inserts[0]).toMatchObject({
+      naam: 'Voorbeeld BV',
+      ondernemingsnummer: 'BE0123.456.749',
+      btw_regime: 'periodieke_aangever',
+      btw_aangifte_frequentie: 'kwartaal',
+      mandataris: true,
+    })
+    expect(inserts[1]).toMatchObject({
+      naam: 'Tweede Voorbeeld VZW',
+      ondernemingsnummer: null,
+      btw_regime: 'vrijgesteld_kleine_onderneming',
+      btw_aangifte_frequentie: null,
+    })
+    expect(await screen.findByText(/2 klanten aangemaakt/i)).toBeInTheDocument()
+
+    // De trigger sync_btw_obligations maakt de btw-verplichtingen aan, maar
+    // niet de taken. Zonder deze oproep zou een geïmporteerde klant met een
+    // lege kalender achterblijven.
+    expect((supabase.rpc as Mock).mock.calls.filter((c) => c[0] === 'sync_client_tasks')).toHaveLength(2)
+  })
+})

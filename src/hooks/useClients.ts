@@ -65,11 +65,33 @@ export function useClients(initialFilters: ClientFilters = DEFAULT_FILTERS) {
     load()
   }, [load])
 
-  async function createClient(input: Omit<Client, 'id' | 'firm_id' | 'created_at'> & { firm_id: string }) {
+  /** Eén klant wegschrijven, zonder de lijst opnieuw op te halen. Bestaat
+   *  apart voor de Excel-import: die maakt tot honderden klanten na elkaar
+   *  aan, en één herlaadronde per rij zou dat scherm onbruikbaar traag maken.
+   *  De import herlaadt zelf één keer als ze klaar is. */
+  async function insertClient(input: Omit<Client, 'id' | 'firm_id' | 'created_at'> & { firm_id: string }) {
     const { data, error: err } = await supabase.from('clients').insert(input).select().single()
     if (err) throw err
-    await load()
     return data as Client
+  }
+
+  async function createClient(input: Omit<Client, 'id' | 'firm_id' | 'created_at'> & { firm_id: string }) {
+    const nieuw = await insertClient(input)
+    await load()
+    return nieuw
+  }
+
+  /** De ondernemingsnummers van alle klanten die deze medewerker mag zien —
+   *  ongefilterd, want een dubbel nummer moet ook opvallen tegenover een
+   *  gearchiveerde klant. Niet waterdicht: RLS verbergt vertrouwelijke
+   *  dossiers, dus de unieke index (firm_id, ondernemingsnummer) blijft de
+   *  echte bewaker. Dit dient enkel om het dubbel werk vóóraf te tonen. */
+  async function haalOndernemingsnummers(): Promise<string[]> {
+    const { data, error: err } = await supabase.from('clients').select('ondernemingsnummer')
+    if (err) throw err
+    return ((data ?? []) as Array<{ ondernemingsnummer: string | null }>)
+      .map((rij) => rij.ondernemingsnummer)
+      .filter((nummer): nummer is string => typeof nummer === 'string' && nummer.length > 0)
   }
 
   async function updateClient(id: string, updates: Partial<Omit<Client, 'id' | 'firm_id' | 'created_at'>>) {
@@ -78,5 +100,16 @@ export function useClients(initialFilters: ClientFilters = DEFAULT_FILTERS) {
     await load()
   }
 
-  return { clients, loading, error, filters, setFilters, reload: load, createClient, updateClient }
+  return {
+    clients,
+    loading,
+    error,
+    filters,
+    setFilters,
+    reload: load,
+    createClient,
+    insertClient,
+    updateClient,
+    haalOndernemingsnummers,
+  }
 }
