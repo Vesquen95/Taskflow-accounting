@@ -390,3 +390,197 @@ describe('useTaskInstances — bulk met verslag per taak', () => {
     expect(verslag?.mislukt[0].taskId).toBe('t2')
   })
 })
+
+/**
+ * Paginering hoort aan de serverkant: 250 rijen ophalen om er 50 te tonen
+ * schaalt niet mee met ~100 dossiers (bevinding M-2). Het exacte totaal komt
+ * uit dezelfde query mee, zodat een afgekapte lijst niet als een volledige
+ * lijst kan lezen.
+ */
+describe('useTaskInstances — serverside paginering en echte tellingen', () => {
+  function selectOpties(state: ChainState | undefined) {
+    return state?.calls.find((c) => c.method === 'select')?.args[1] as
+      | { count?: string; head?: boolean }
+      | undefined
+  }
+
+  /** De aparte kop-telling van de achterstand herken je aan head: true. */
+  function isTelling(state: ChainState) {
+    return selectOpties(state)?.head === true
+  }
+
+  function installVerzameld(resultaat: { data: unknown; error: unknown; count?: number | null }) {
+    const states: ChainState[] = []
+    install({
+      task_instances: (state) => {
+        states.push(state)
+        return resultaat
+      },
+    })
+    return states
+  }
+
+  it('vraagt één schijf van de gevraagde paginagrootte op via range(), niet de hele lijst', async () => {
+    const states = installVerzameld({ data: [task()], error: null, count: 247 })
+
+    const { result } = renderHook(() => useTaskInstances({ pagina: 1, paginaGrootte: 50 }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(states[0].calls).toContainEqual({ method: 'range', args: [0, 49] })
+    expect(states[0].calls.some((c) => c.method === 'limit')).toBe(false)
+  })
+
+  it('pagina 3 vraagt de derde schijf op', async () => {
+    const states = installVerzameld({ data: [], error: null, count: 247 })
+
+    const { result } = renderHook(() => useTaskInstances({ pagina: 3, paginaGrootte: 50 }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(states[0].calls).toContainEqual({ method: 'range', args: [100, 149] })
+  })
+
+  it('zonder paginagrootte blijft de query onbegrensd (bestaande schermen)', async () => {
+    const states = installVerzameld({ data: [], error: null, count: 3 })
+
+    const { result } = renderHook(() => useTaskInstances({}))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(states[0].calls.some((c) => c.method === 'range')).toBe(false)
+  })
+
+  it('vraagt het exacte totaal op en geeft dat terug, niet het aantal opgehaalde rijen', async () => {
+    const states = installVerzameld({ data: [task()], error: null, count: 247 })
+
+    const { result } = renderHook(() => useTaskInstances({ pagina: 1, paginaGrootte: 50 }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(selectOpties(states[0])?.count).toBe('exact')
+    expect(result.current.tasks).toHaveLength(1)
+    expect(result.current.totaal).toBe(247)
+  })
+
+  it('sorteert deterministisch (due_date, dan id) zodat geen rij tussen twee paginas verdwijnt', async () => {
+    const states = installVerzameld({ data: [], error: null, count: 0 })
+
+    const { result } = renderHook(() => useTaskInstances({ pagina: 2, paginaGrootte: 50 }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const orders = states[0].calls.filter((c) => c.method === 'order')
+    expect(orders[0].args[0]).toBe('due_date')
+    expect(orders[1].args[0]).toBe('id')
+  })
+
+  it('dueVanaf verbergt de achterstand serverside, met een ondergrens op due_date', async () => {
+    const states = installVerzameld({ data: [], error: null, count: 0 })
+
+    const { result } = renderHook(() => useTaskInstances({ dueVanaf: '2026-08-29' }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(states[0].calls).toContainEqual({ method: 'gte', args: ['due_date', '2026-08-29'] })
+  })
+
+  it('telt de achterstand apart, met dezelfde filters maar zonder de ondergrens', async () => {
+    const states: ChainState[] = []
+    install({
+      task_instances: (state) => {
+        states.push(state)
+        const telling = state.calls.find((c) => c.method === 'select')?.args[1] as
+          | { head?: boolean }
+          | undefined
+        if (telling?.head) return { data: null, error: null, count: 12 }
+        return { data: [], error: null, count: 30 }
+      },
+    })
+
+    const { result } = renderHook(() =>
+      useTaskInstances({
+        toegewezenAan: 'e1',
+        dueVanaf: '2026-08-29',
+        telAchterstandVoor: '2026-08-29',
+        pagina: 1,
+        paginaGrootte: 50,
+      })
+    )
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const telling = states.find(isTelling)
+    expect(telling).toBeDefined()
+    // Dezelfde afbakening als de lijst zelf...
+    expect(telling?.calls).toContainEqual({ method: 'eq', args: ['toegewezen_medewerker_id', 'e1'] })
+    // ...maar precies zonder de ondergrens die de achterstand wegfiltert.
+    expect(telling?.calls.some((c) => c.method === 'gte')).toBe(false)
+    expect(telling?.calls).toContainEqual({ method: 'lt', args: ['due_date', '2026-08-29'] })
+    expect(telling?.calls.some((c) => c.method === 'range')).toBe(false)
+
+    expect(result.current.achterstandAantal).toBe(12)
+    expect(result.current.totaal).toBe(30)
+  })
+
+  it('telt de achterstand niet wanneer het scherm er niet om vraagt', async () => {
+    const states = installVerzameld({ data: [], error: null, count: 0 })
+
+    const { result } = renderHook(() => useTaskInstances({}))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(states).toHaveLength(1)
+    expect(result.current.achterstandAantal).toBeNull()
+  })
+
+  it('geeft geen totaal terug zolang de zoekterm client-side filtert (dat getal zou liegen)', async () => {
+    installVerzameld({ data: [task()], error: null, count: 247 })
+
+    const { result } = renderHook(() => useTaskInstances({ zoekterm: 'acme' }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.totaal).toBeNull()
+  })
+})
+
+/**
+ * Een deadline handmatig verzetten (bevinding L). De databank doet de rest:
+ * migratie 0013 zet due_date_handmatig_op en schrijft de logregel
+ * 'due_date_herberekend'. De app mag dus enkel due_date sturen — en zeker
+ * niet due_date_wettelijk, want dat weigert de trigger.
+ */
+describe('useTaskInstances — deadline handmatig verzetten', () => {
+  it('stuurt enkel due_date naar de databank, op één taak', async () => {
+    let updateState: ChainState | undefined
+    install({
+      task_instances: (state) => {
+        if (state.op === 'update') updateState = state
+        return { data: [], error: null, count: 0 }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.updateDueDate('t1', '2026-10-05')
+    })
+
+    expect(updateState?.payload).toEqual({ due_date: '2026-10-05' })
+    expect(updateState?.calls).toContainEqual({ method: 'eq', args: ['id', 't1'] })
+  })
+
+  it('gooit door wanneer de databank de wijziging weigert', async () => {
+    install({
+      task_instances: (state) => {
+        if (state.op === 'update') {
+          return {
+            data: null,
+            error: new Error('Wijziging van de deadline vereist een ingelogde, gekoppelde medewerker'),
+          }
+        }
+        return { data: [], error: null, count: 0 }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await expect(result.current.updateDueDate('t1', '2026-10-05')).rejects.toThrow(
+      /ingelogde, gekoppelde medewerker/
+    )
+  })
+})

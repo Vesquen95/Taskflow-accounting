@@ -117,6 +117,14 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     await reload()
   }
 
+  /** Zie useTaskInstances.updateDueDate: enkel due_date; migratie 0013 zet de
+   *  markering en schrijft de logregel. */
+  async function updateTaskDueDate(taskId: string, dueDate: string) {
+    const { error: err } = await supabase.from('task_instances').update({ due_date: dueDate }).eq('id', taskId)
+    if (err) throw err
+    await reload()
+  }
+
   async function markReviewHandled(taskId: string) {
     const { error: err } = await supabase.from('task_instances').update({ review_vereist: false }).eq('id', taskId)
     if (err) throw err
@@ -387,6 +395,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           onStatusChange={updateTaskStatus}
           onReassign={reassignTask}
           onMarkReviewHandled={markReviewHandled}
+          onDueDateChange={updateTaskDueDate}
         />
       )}
       {showArchive && (

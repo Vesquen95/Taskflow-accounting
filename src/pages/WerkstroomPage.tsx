@@ -52,6 +52,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
     setFilters,
     reload,
     updateStatus,
+    updateDueDate,
     reassign,
     bulkReassign,
     bulkUpdateStatus,
@@ -189,6 +190,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
           onStatusChange={updateStatus}
           onReassign={reassign}
           onMarkReviewHandled={markReviewHandled}
+          onDueDateChange={updateDueDate}
         />
       )}
     </div>

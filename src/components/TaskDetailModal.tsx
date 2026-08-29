@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { StatusBadge } from './StatusBadge'
 import { UrgencyBadge } from './UrgencyBadge'
-import { formatDate, formatDateTime } from '../lib/urgency'
+import { dagenVerschil, formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import type { Employee, TaskInstanceWithRelations, TaskStatus, TaskStatusLog } from '../types'
 import { reportError } from '../lib/errorMessage'
 import {
   annulatieActie,
+  EINDSTATUSSEN,
   STATUS_LABEL,
   statusActieFoutmelding,
   statusContext,
@@ -26,6 +27,9 @@ interface TaskDetailModalProps {
   onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>
   onReassign: (taskId: string, employeeId: string) => Promise<void>
   onMarkReviewHandled: (taskId: string) => Promise<void>
+  /** Optioneel: schermen die een deadline laten verzetten geven dit mee.
+   *  Zonder handler blijft de deadline een leesbaar gegeven. */
+  onDueDateChange?: (taskId: string, dueDate: string) => Promise<void>
 }
 
 const EVENT_LABEL: Record<string, string> = {
@@ -46,6 +50,17 @@ const TRIGGER_BRON_LABEL: Record<string, string> = {
   av_opvolging_automatisch: 'door de AV-opvolging',
 }
 
+/** Hoever wijkt de afgesproken deadline af van de wettelijke datum? Dat
+ *  verschil is de hele reden om beide te tonen. */
+function afwijkingTekst(wettelijk: string, effectief: string): string {
+  const dagen = dagenVerschil(wettelijk, effectief)
+  if (dagen === 0) return 'zelfde dag als de wettelijke datum'
+  const woord = Math.abs(dagen) === 1 ? 'dag' : 'dagen'
+  return dagen > 0
+    ? `${dagen} ${woord} na de wettelijke datum`
+    : `${Math.abs(dagen)} ${woord} vóór de wettelijke datum`
+}
+
 /** De historiek toont wie iets deed, niet alleen wat er gebeurde. */
 type TaskStatusLogWithActor = TaskStatusLog & {
   actor: Pick<Employee, 'id' | 'naam'> | null
@@ -58,6 +73,7 @@ export function TaskDetailModal({
   onStatusChange,
   onReassign,
   onMarkReviewHandled,
+  onDueDateChange,
 }: TaskDetailModalProps) {
   const { employee } = useCurrentEmployee()
   const [log, setLog] = useState<TaskStatusLogWithActor[]>([])
@@ -65,6 +81,7 @@ export function TaskDetailModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reassignTo, setReassignTo] = useState(task.toegewezen_medewerker_id)
+  const [nieuweDeadline, setNieuweDeadline] = useState(task.due_date)
 
   useEffect(() => {
     let active = true
@@ -115,6 +132,31 @@ export function TaskDetailModal({
     }
   }
 
+  // De wettelijke datum is een ijkpunt, geen instelling: hij verschuift niet
+  // mee (migratie 0013 weigert dat zelfs buiten de kalenderpijplijn om).
+  const isWettelijk = task.obligation_type?.categorie === 'wettelijk'
+  const handmatigVerzet = task.due_date_handmatig_op !== null
+  const afgesloten = EINDSTATUSSEN.includes(task.status)
+  const magVerzetten = Boolean(onDueDateChange) && !afgesloten
+  const naWettelijkeDatum = isWettelijk && nieuweDeadline > task.due_date_wettelijk
+
+  async function handleDueDate() {
+    if (!onDueDateChange || !nieuweDeadline || nieuweDeadline === task.due_date) return
+    setBusy(true)
+    setError(null)
+    try {
+      // Enkel de effectieve datum: due_date_handmatig_op en de logregel komen
+      // van de databank (0013). Sluiten na afloop, want de taak in dit scherm
+      // is dan verouderd — de lijst eronder herlaadt.
+      await onDueDateChange(task.id, nieuweDeadline)
+      onClose()
+    } catch (err) {
+      setError(reportError(err, 'De deadline verzetten is mislukt'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleReassign() {
     if (reassignTo === task.toegewezen_medewerker_id) return
     setBusy(true)
@@ -139,6 +181,11 @@ export function TaskDetailModal({
               Review vereist
             </span>
           )}
+          {handmatigVerzet && (
+            <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+              Afgesproken deadline
+            </span>
+          )}
         </div>
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
@@ -157,12 +204,19 @@ export function TaskDetailModal({
             <dt className="text-xs font-medium uppercase text-slate-400">Deadline</dt>
             <dd className="text-slate-800">
               {formatDate(task.due_date)}
-              {task.due_date_verschoven && (
+              {task.due_date_verschoven && !handmatigVerzet && (
                 <span className="ml-1 text-xs text-slate-400">
                   (wettelijk: {formatDate(task.due_date_wettelijk)}, verschoven door weekend/feestdag)
                 </span>
               )}
               {task.voorlopige_datum && <span className="ml-1 text-xs text-amber-600">(voorlopige datum)</span>}
+              {handmatigVerzet && (
+                <span className="mt-0.5 block text-xs text-amber-700">
+                  {`Handmatig verzet op ${formatDateTime(task.due_date_handmatig_op)} — wettelijk: ${formatDate(
+                    task.due_date_wettelijk
+                  )} (${afwijkingTekst(task.due_date_wettelijk, task.due_date)})`}
+                </span>
+              )}
             </dd>
           </div>
           <div>
@@ -207,6 +261,55 @@ export function TaskDetailModal({
             </button>
           </div>
         </div>
+
+        {magVerzetten && (
+          <div className="space-y-1.5 rounded-md border border-slate-200 p-3">
+            <label htmlFor="nieuwe-deadline" className="text-xs font-medium uppercase text-slate-400">
+              Nieuwe deadline
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="nieuwe-deadline"
+                type="date"
+                value={nieuweDeadline}
+                onChange={(e) => setNieuweDeadline(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              />
+              <button
+                type="button"
+                disabled={busy || !nieuweDeadline || nieuweDeadline === task.due_date}
+                onClick={handleDueDate}
+                className="whitespace-nowrap rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Deadline verzetten
+              </button>
+            </div>
+            {/* Voor een wettelijke verplichting is dit geen administratieve
+                handeling maar een besluit: de wettelijke datum blijft staan en
+                te laat indienen heeft gevolgen. Dat hoort op het scherm, niet
+                in een handleiding. */}
+            <p className="text-xs text-slate-500">
+              {isWettelijk
+                ? `Je verzet de werkdatum van het kantoor. Dat verschuift de wettelijke deadline niet: de wettelijke datum blijft ${formatDate(
+                    task.due_date_wettelijk
+                  )}, en later indienen dan die datum kan boetes of nalatigheidsintresten opleveren. Dit is een besluit, geen correctie.`
+                : `Deze taak heeft geen wettelijke deadline; de datum is een afspraak van het kantoor. Ter vergelijking blijft de oorspronkelijk berekende datum ${formatDate(
+                    task.due_date_wettelijk
+                  )} bewaard.`}
+            </p>
+            {naWettelijkeDatum && (
+              <p
+                role="alert"
+                aria-label="Datum na de wettelijke deadline"
+                className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs font-medium text-red-800"
+              >
+                {`De gekozen datum ligt na de wettelijke deadline van ${formatDate(
+                  task.due_date_wettelijk
+                )}. De verplichting is dan te laat ingediend; de wettelijke datum schuift niet mee.`}
+              </p>
+            )}
+          </div>
+        )}
 
         {task.review_vereist && (
           <button

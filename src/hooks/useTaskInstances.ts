@@ -20,8 +20,21 @@ export interface TaskInstanceFilters {
   /** Alleen taken zonder verplichtingstype -- de ad-hoc ingang. */
   adhocOnly?: boolean
   /** Bovengrens van het deadlinevenster (ISO-datum, inclusief). Er is geen
-   *  ondergrens: wat te laat is hoort in elk venster thuis. */
+   *  ondergrens tenzij een scherm er expliciet om vraagt (`dueVanaf`): wat te
+   *  laat is hoort in elk venster thuis. */
   dueTot?: string
+  /** Ondergrens van het deadlinevenster (ISO-datum, inclusief). Enkel voor
+   *  het scherm dat de historische achterstand bewust wegfiltert; zet dan ook
+   *  `telAchterstandVoor`, anders verdwijnt werk zonder dat iemand het ziet. */
+  dueVanaf?: string
+  /** Serverside paginering, 1-gebaseerd. Zonder `paginaGrootte` blijft de
+   *  query onbegrensd (het oude gedrag van de smalle werkstroomschermen). */
+  pagina?: number
+  paginaGrootte?: number
+  /** Tel apart hoeveel taken vóór deze ISO-datum vervallen zijn — met
+   *  dezelfde afbakening als de lijst, maar zonder `dueVanaf`. Zo kan het
+   *  scherm zeggen hoeveel achterstand het verbergt. */
+  telAchterstandVoor?: string
   /** Nog niet bevragen. Een scherm dat zijn filters pas kent na een eerste
    *  ronde (de werkstromen halen hun verplichtingstypes uit de catalogus) zou
    *  anders eerst een query afvuren die het meteen weer overdoet. */
@@ -42,6 +55,8 @@ const SELECT_WITH_RELATIONS =
  * useClientDetail op, met een eigen query. */
 export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
   const [tasks, setTasks] = useState<TaskInstanceWithRelations[]>([])
+  const [totaal, setTotaal] = useState<number | null>(null)
+  const [achterstandAantal, setAchterstandAantal] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<TaskInstanceFilters>(initialFilters)
@@ -53,39 +68,82 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
     setLoading(true)
     setError(null)
     try {
-      let query = supabase
-        .from('task_instances')
-        .select(SELECT_WITH_RELATIONS)
-        .in('status', NOT_FINAL)
+      // Eén plek waar de afbakening staat, want de lijst en de telling van de
+      // achterstand moeten exact dezelfde taken zien. Enkel de ondergrens
+      // verschilt: die telling gaat juist over wat de lijst wegfiltert.
+      const afgebakend = (
+        kolommen: string,
+        opties: { count: 'exact'; head?: boolean },
+        metOndergrens: boolean
+      ) => {
+        let query = supabase
+          .from('task_instances')
+          .select(kolommen, opties)
+          .in('status', NOT_FINAL)
 
-      if (filters.toegewezenAan && filters.toegewezenAan !== 'alle') {
-        query = query.eq('toegewezen_medewerker_id', filters.toegewezenAan)
-      }
-      if (filters.adhocOnly) {
-        query = query.is('obligation_type_id', null)
-      } else if (filters.obligationTypeIds) {
-        query = query.in('obligation_type_id', filters.obligationTypeIds)
-      }
-      if (filters.dueTot) {
-        query = query.lte('due_date', filters.dueTot)
+        if (filters.toegewezenAan && filters.toegewezenAan !== 'alle') {
+          query = query.eq('toegewezen_medewerker_id', filters.toegewezenAan)
+        }
+        if (filters.adhocOnly) {
+          query = query.is('obligation_type_id', null)
+        } else if (filters.obligationTypeIds) {
+          query = query.in('obligation_type_id', filters.obligationTypeIds)
+        }
+        if (filters.dueTot) {
+          query = query.lte('due_date', filters.dueTot)
+        }
+        if (metOndergrens && filters.dueVanaf) {
+          query = query.gte('due_date', filters.dueVanaf)
+        }
+        return query
       }
 
-      const { data, error: err } = await query.order('due_date', { ascending: true })
-      if (err) throw err
+      // Op due_date én id sorteren: zonder tweede sleutel is de volgorde van
+      // taken met dezelfde deadline niet vastgelegd, en dan kan een rij bij
+      // het bladeren tussen twee pagina's door vallen of dubbel verschijnen.
+      let lijst = afgebakend(SELECT_WITH_RELATIONS, { count: 'exact' }, true)
+        .order('due_date', { ascending: true })
+        .order('id', { ascending: true })
 
-      let rows = (data ?? []) as unknown as TaskInstanceWithRelations[]
-      if (filters.zoekterm && filters.zoekterm.trim().length > 0) {
-        const term = filters.zoekterm.trim().toLowerCase()
+      const grootte = filters.paginaGrootte
+      if (grootte && grootte > 0) {
+        const van = (Math.max(1, filters.pagina ?? 1) - 1) * grootte
+        lijst = lijst.range(van, van + grootte - 1)
+      }
+
+      const [lijstRes, achterstandRes] = await Promise.all([
+        lijst,
+        filters.telAchterstandVoor
+          ? afgebakend('id', { count: 'exact', head: true }, false).lt(
+              'due_date',
+              filters.telAchterstandVoor
+            )
+          : Promise.resolve(null),
+      ])
+
+      if (lijstRes.error) throw lijstRes.error
+      if (achterstandRes?.error) throw achterstandRes.error
+
+      let rows = (lijstRes.data ?? []) as unknown as TaskInstanceWithRelations[]
+      const zoekterm = filters.zoekterm?.trim().toLowerCase()
+      if (zoekterm) {
         rows = rows.filter(
           (t) =>
-            t.client?.naam?.toLowerCase().includes(term) ||
-            t.obligation_type?.naam?.toLowerCase().includes(term) ||
-            (t.title ?? '').toLowerCase().includes(term)
+            t.client?.naam?.toLowerCase().includes(zoekterm) ||
+            t.obligation_type?.naam?.toLowerCase().includes(zoekterm) ||
+            (t.title ?? '').toLowerCase().includes(zoekterm)
         )
       }
       setTasks(rows)
+      // De zoekterm filtert client-side, dus het servertotaal slaat dan op een
+      // ruimere verzameling dan wat op het scherm staat. Liever geen getal dan
+      // een getal dat niet bij de lijst hoort.
+      setTotaal(zoekterm || typeof lijstRes.count !== 'number' ? null : lijstRes.count)
+      setAchterstandAantal(achterstandRes ? achterstandRes.count ?? 0 : null)
     } catch (err) {
       setError(reportError(err, 'Kon taken niet laden'))
+      setTotaal(null)
+      setAchterstandAantal(null)
     } finally {
       setLoading(false)
     }
@@ -146,6 +204,22 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
     return bulkPatch(taskIds, { status })
   }
 
+  /**
+   * Een deadline handmatig verzetten (bevinding L). Enkel `due_date` gaat mee:
+   * migratie 0013 zet zelf `due_date_handmatig_op`, schrijft de logregel
+   * 'due_date_herberekend' met oude en nieuwe datum, en weigert een wijziging
+   * van `due_date_wettelijk` buiten de kalenderpijplijn om. De app hoort daar
+   * niets aan toe te voegen — die datum blijft de wettelijke.
+   */
+  async function updateDueDate(taskId: string, dueDate: string) {
+    const { error: err } = await supabase
+      .from('task_instances')
+      .update({ due_date: dueDate })
+      .eq('id', taskId)
+    if (err) throw err
+    await load()
+  }
+
   async function markReviewHandled(taskId: string) {
     const { error: err } = await supabase
       .from('task_instances')
@@ -157,12 +231,19 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
 
   return {
     tasks,
+    /** Het werkelijke aantal rijen achter de filters, niet het aantal
+     *  opgehaalde rijen. Null wanneer de zoekterm client-side filtert. */
+    totaal,
+    /** Aantal taken dat vóór `filters.telAchterstandVoor` vervalt, ook als de
+     *  lijst ze wegfiltert. Null wanneer het scherm er niet om vroeg. */
+    achterstandAantal,
     loading,
     error,
     filters,
     setFilters,
     reload: load,
     updateStatus,
+    updateDueDate,
     reassign,
     bulkReassign,
     bulkUpdateStatus,

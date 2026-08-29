@@ -505,3 +505,131 @@ describe('TaskDetailModal — afronden in één klik', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * Bevinding L — een deadline handmatig verzetten. De databank kan dit al
+ * volledig (migratie 0013: due_date_handmatig_op, logregel
+ * 'due_date_herberekend', due_date_wettelijk blijft onaangeroerd); enkel het
+ * scherm bood het niet aan.
+ */
+describe('TaskDetailModal — deadline handmatig verzetten (bevinding L)', () => {
+  const onDueDateChange = vi.fn()
+
+  beforeEach(() => {
+    onDueDateChange.mockReset()
+    onDueDateChange.mockResolvedValue(undefined)
+  })
+
+  function toon(overrides: Partial<TaskInstanceWithRelations> = {}, metHandler = true) {
+    mockEmployee.mockReturnValue(employee({ id: 'e1' }))
+    render(
+      <TaskDetailModal
+        task={task({ status: 'open', ...overrides })}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+        onDueDateChange={metHandler ? onDueDateChange : undefined}
+      />
+    )
+  }
+
+  it('stuurt enkel de nieuwe effectieve deadline door', async () => {
+    const user = userEvent.setup()
+    toon({ due_date: '2026-09-20', due_date_wettelijk: '2026-09-20' })
+
+    const veld = await screen.findByLabelText(/Nieuwe deadline/i)
+    expect(veld).toHaveValue('2026-09-20')
+    await user.clear(veld)
+    await user.type(veld, '2026-10-05')
+    await user.click(screen.getByRole('button', { name: /Deadline verzetten/i }))
+
+    expect(onDueDateChange).toHaveBeenCalledWith('t1', '2026-10-05')
+  })
+
+  it('houdt de wettelijke datum zichtbaar, zodat de afwijking te zien is', async () => {
+    toon({ due_date: '2026-09-20', due_date_wettelijk: '2026-09-20' })
+
+    expect(await screen.findByText(/wettelijke datum blijft 20 sep 2026/i)).toBeInTheDocument()
+  })
+
+  it('zegt bij een wettelijke verplichting dat dit een besluit is, met gevolgen', async () => {
+    toon({ obligation_type: { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', werkstroom: 'btw' } })
+
+    expect(await screen.findByText(/verschuift de wettelijke deadline niet/i)).toBeInTheDocument()
+    expect(screen.getByText(/boete/i)).toBeInTheDocument()
+  })
+
+  it('waarschuwt scherper zodra de gekozen datum ná de wettelijke deadline ligt', async () => {
+    const user = userEvent.setup()
+    toon({ due_date: '2026-09-20', due_date_wettelijk: '2026-09-20' })
+
+    const veld = await screen.findByLabelText(/Nieuwe deadline/i)
+    expect(screen.queryByRole('alert', { name: /na de wettelijke deadline/i })).not.toBeInTheDocument()
+
+    await user.clear(veld)
+    await user.type(veld, '2026-10-05')
+
+    const waarschuwing = await screen.findByRole('alert', { name: /na de wettelijke deadline/i })
+    expect(waarschuwing).toHaveTextContent(/20 sep 2026/)
+  })
+
+  it('laat een service-taak met rust: geen wettelijke waarschuwing', async () => {
+    const user = userEvent.setup()
+    toon({
+      due_date: '2026-09-20',
+      due_date_wettelijk: '2026-09-20',
+      vereist_goedkeuring: false,
+      obligation_type: { id: 'ot9', code: 'rapportering', naam: 'Kwartaalrapport', categorie: 'service', werkstroom: 'rapportering' },
+    })
+
+    const veld = await screen.findByLabelText(/Nieuwe deadline/i)
+    await user.clear(veld)
+    await user.type(veld, '2026-10-05')
+
+    expect(screen.queryByText(/boete/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert', { name: /na de wettelijke deadline/i })).not.toBeInTheDocument()
+  })
+
+  it('toont een reeds verzette deadline als afspraak, met de afwijking t.o.v. de wettelijke datum', async () => {
+    toon({
+      due_date: '2026-10-05',
+      due_date_wettelijk: '2026-09-20',
+      due_date_handmatig_op: '2026-08-29T10:00:00Z',
+    })
+
+    expect(await screen.findByText(/handmatig verzet/i)).toBeInTheDocument()
+    expect(screen.getByText(/15 dagen na de wettelijke datum/i)).toBeInTheDocument()
+  })
+
+  it('biedt het verzetten niet aan op een afgesloten taak', async () => {
+    toon({ status: 'ingediend_afgerond' })
+
+    await screen.findByText('BTW-aangifte')
+    expect(screen.queryByLabelText(/Nieuwe deadline/i)).not.toBeInTheDocument()
+  })
+
+  it('biedt het verzetten niet aan wanneer het scherm geen handler meegeeft', async () => {
+    toon({}, false)
+
+    await screen.findByText('BTW-aangifte')
+    expect(screen.queryByLabelText(/Nieuwe deadline/i)).not.toBeInTheDocument()
+  })
+
+  it('toont de weigering van de databank in plaats van te doen alsof het lukte', async () => {
+    const user = userEvent.setup()
+    onDueDateChange.mockRejectedValueOnce(
+      new Error('Wijziging van de deadline vereist een ingelogde, gekoppelde medewerker')
+    )
+    toon({ due_date: '2026-09-20', due_date_wettelijk: '2026-09-20' })
+
+    const veld = await screen.findByLabelText(/Nieuwe deadline/i)
+    await user.clear(veld)
+    await user.type(veld, '2026-10-05')
+    await user.click(screen.getByRole('button', { name: /Deadline verzetten/i }))
+
+    expect(await screen.findByText(/ingelogde, gekoppelde medewerker/)).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+})

@@ -22,7 +22,13 @@ export interface ChainState {
   calls: Array<{ method: string; args: unknown[] }>
 }
 
-type HandlerResult = { data: unknown; error: unknown }
+type HandlerResult = {
+  data: unknown
+  error: unknown
+  /** Zoals PostgREST met `select(..., { count: 'exact' })`: het werkelijke
+   *  aantal rijen dat aan de filters voldoet, los van de opgevraagde schijf. */
+  count?: number | null
+}
 type Handler = (state: ChainState) => HandlerResult | Promise<HandlerResult>
 
 export type SupabaseHandlers = Record<string, Handler>
@@ -109,6 +115,10 @@ function createQueryBuilder(handlers: SupabaseHandlers, table: string) {
     }),
     limit: vi.fn((...args: unknown[]) => {
       state.calls.push({ method: 'limit', args })
+      return builder
+    }),
+    range: vi.fn((...args: unknown[]) => {
+      state.calls.push({ method: 'range', args })
       return builder
     }),
     single: vi.fn(() => resolve()),

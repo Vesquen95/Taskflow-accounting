@@ -75,6 +75,17 @@ export function bandVerdientBadge(band: UrgencyBand): band is Exclude<UrgencyBan
   return band !== null && !STILLE_BANDEN.includes(band)
 }
 
+/**
+ * Aantal dagen tussen twee ISO-dagen; positief wanneer `tot` later valt.
+ * Gebruikt om te tonen hoever een handmatig afgesproken deadline van de
+ * wettelijke datum afwijkt.
+ */
+export function dagenVerschil(vanIso: string, totIso: string): number {
+  const van = startOfDay(new Date(`${vanIso}T00:00:00`))
+  const tot = startOfDay(new Date(`${totIso}T00:00:00`))
+  return Math.round((tot.getTime() - van.getTime()) / (1000 * 60 * 60 * 24))
+}
+
 export function formatDate(date: string | null): string {
   if (!date) return ''
   const d = new Date(`${date}T00:00:00`)

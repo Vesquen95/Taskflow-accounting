@@ -79,7 +79,10 @@ export const VENSTERS: { key: VensterKey; label: string }[] = [
   { key: 'alles', label: 'Alles' },
 ]
 
-function isoDatum(d: Date): string {
+/** Een datum als ISO-dag (JJJJ-MM-DD) in de lokale tijdzone. Bewust niet
+ *  toISOString(): die zet om naar UTC en levert in de Belgische zomertijd voor
+ *  een datum kort na middernacht de dag ervoor op. */
+export function isoDatum(d: Date): string {
   const jaar = d.getFullYear()
   const maand = String(d.getMonth() + 1).padStart(2, '0')
   const dag = String(d.getDate()).padStart(2, '0')
