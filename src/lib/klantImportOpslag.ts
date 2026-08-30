@@ -57,10 +57,11 @@ export interface ImportVerslag {
  *                  overgeslagen (die stonden al als ongeldig in het voorbeeld).
  * @param maakKlant Maakt één klant aan en geeft het nieuwe id terug; gooit bij
  *                  een fout.
- * @param genereerTaken Optioneel: zet de taken van de nieuwe klant klaar
- *                  (sync_client_tasks). De trigger sync_btw_obligations maakt
- *                  wel de btw-verplichtingen aan, maar niet de taakinstanties;
- *                  zonder deze stap staat een geïmporteerde klant met een lege
+ * @param zetVerplichtingen Optioneel: vinkt de verplichtingen van de rij aan en
+ *                  zet daarna de taken klaar (sync_client_tasks). Beide horen
+ *                  bij elkaar: de trigger sync_btw_obligations maakt wel de
+ *                  btw-verplichtingen aan, maar geen taakinstanties, en zonder
+ *                  deze stap staat een geïmporteerde klant met een lege
  *                  kalender tot de maandelijkse horizonronde langskomt.
  *                  Mislukt dit, dan blijft de klant "aangemaakt" — hij staat er
  *                  immers — met een waarschuwing erbij.
@@ -68,7 +69,7 @@ export interface ImportVerslag {
 export async function voerKlantImportUit(
   rijen: ImportRij[],
   maakKlant: (klant: NieuweKlant) => Promise<string>,
-  genereerTaken?: (clientId: string) => Promise<void>
+  zetVerplichtingen?: (clientId: string, verplichtingen: string[]) => Promise<void>
 ): Promise<ImportVerslag> {
   const teDoen = rijen.filter((rij): rij is ImportRij & { klant: NieuweKlant } => rij.klant !== null)
 
@@ -95,15 +96,15 @@ export async function voerKlantImportUit(
       const clientId = await maakKlant(rij.klant)
 
       let waarschuwing: string | null = null
-      if (genereerTaken) {
+      if (zetVerplichtingen) {
         try {
-          await genereerTaken(clientId)
+          await zetVerplichtingen(clientId, rij.verplichtingen)
         } catch (err) {
           // Telt bewust niet mee voor het afbreken: de klanten worden wél
           // aangemaakt, dus doorgaan is hier de juiste keuze.
           waarschuwing = errorMessage(
             err,
-            'De klant is aangemaakt, maar zijn taken konden niet gegenereerd worden. Open het klantdossier en sla het op om dat alsnog te doen'
+            'De klant is aangemaakt, maar zijn verplichtingen en taken konden niet gezet worden. Open het klantdossier en sla het op om dat alsnog te doen'
           )
         }
       }

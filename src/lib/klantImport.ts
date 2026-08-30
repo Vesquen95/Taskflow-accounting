@@ -23,9 +23,17 @@ import type { BtwFrequentie, BtwRegime } from '../types'
  *    een INSERT enkel toe voor een kantoorbeheerder, en dan nog met een
  *    logregel per veld. Een importbestand is de verkeerde plek voor die
  *    beslissing; ze hoort in het klantformulier, na het aanmaken.
- *  - verplichtingen aanvinken: de btw-taken volgen automatisch uit het
- *    btw-regime (trigger sync_btw_obligations, migratie 0004); de rest blijft
- *    het klantformulier.
+ *  - de btw-verplichtingen aanvinken: die volgen automatisch uit het
+ *    btw-regime (trigger sync_btw_obligations, migratie 0004). Een kolom
+ *    ervoor zou beloven dat je ze los kunt zetten, en dat kan niet.
+ *  - de neerlegging bij de NBB: die taak hangt aan de algemene vergadering en
+ *    wordt door de motor mee aangemaakt zodra een klant een AV heeft (de
+ *    voorlopige datum is AV + 30 dagen, en wordt echt berekend zodra de AV
+ *    afgerond is). Een eigen kolom zou een vinkje zijn dat niets doet.
+ *  - de parameters van een verplichting (de statutaire AV-datum, de
+ *    doorlooptijd van de jaarafsluiting, de rapporteringsfrequentie): die
+ *    krijgen de standaardwaarden en horen daarna in het klantdossier thuis.
+ *    Ze hier per kolom vragen maakt van een klantenlijst een formulier.
  */
 
 /** Grens op wat we van buiten aanvaarden. Een klantenlijst van 500 rijen is
@@ -41,6 +49,23 @@ export const MAX_RIJEN = 1000
 const MAX_NAAM_LENGTE = 200
 const MAX_RECHTSVORM_LENGTE = 100
 
+/** De verplichtingen die per kolom aan of uit gezet kunnen worden. De sleutel
+ *  is de code uit obligation_types: zo kan er geen vertaaltabel tussen het
+ *  sjabloon en de databank scheef gaan staan.
+ *
+ *  Niet in deze lijst: btw_aangifte en btw_klantenlisting (volgen uit het
+ *  btw-regime) en neerlegging_jaarrekening (hangt aan de AV). Zie de
+ *  toelichting bovenaan dit bestand. */
+export type VerplichtingSleutel =
+  | 'algemene_vergadering'
+  | 'jaarafsluiting'
+  | 'aangifte_venb_pb'
+  | 'va_venb'
+  | 'rapportering'
+  | 'fiche_281_20'
+  | 'fiche_281_45'
+  | 'fiche_281_50'
+
 export type KolomSleutel =
   | 'naam'
   | 'ondernemingsnummer'
@@ -50,9 +75,13 @@ export type KolomSleutel =
   | 'btw_regime'
   | 'btw_aangifte_frequentie'
   | 'mandataris'
+  | VerplichtingSleutel
 
 export interface Kolom {
   sleutel: KolomSleutel
+  /** Gezet op de kolommen die een verplichting aan- of uitzetten. Ja/Nee, en
+   *  leeg telt als Nee. */
+  verplichting?: true
   /** De kop zoals ze in het sjabloon staat. */
   kop: string
   /** Moet de kolom in het bestand staan? (Niet: moet elke cel gevuld zijn.) */
@@ -78,6 +107,91 @@ const FREQUENTIE_LABELS: Record<BtwFrequentie, string> = {
 
 const REGIME_KEUZES = Object.values(REGIME_LABELS)
 const FREQUENTIE_KEUZES = Object.values(FREQUENTIE_LABELS)
+
+/** Een kolom per verplichting, zodat een geïmporteerde klant niet daarna nog
+ *  één voor één geopend moet worden. Ja/Nee; leeg telt als Nee.
+ *
+ *  De parameters krijgen dezelfde standaardwaarden als wanneer je het vakje in
+ *  het klantformulier aanvinkt. Voor de algemene vergadering betekent dat:
+ *  geen statutaire datum, en dan rekent de motor met de wettelijke uiterste
+ *  datum (boekjaareinde + zes maanden). Dat is een echte datum, maar zelden de
+ *  dag waarop de vergadering werkelijk plaatsvindt — vandaar de uitleg in het
+ *  sjabloon. */
+const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
+  {
+    sleutel: 'algemene_vergadering',
+    kop: 'Algemene vergadering',
+    vereist: false,
+    verplichting: true,
+    uitleg:
+      'Ja of Nee. De neerlegging bij de NBB komt hier vanzelf bij: die taak hangt aan de algemene vergadering. Zonder statutaire datum rekent Taskflow met de wettelijke uiterste datum (zes maanden na het boekjaareinde); vul de statuten daarna in het klantdossier in.',
+    synoniemen: ['av', 'algemenevergaderingav', 'jaarvergadering'],
+    breedte: 22,
+  },
+  {
+    sleutel: 'jaarafsluiting',
+    kop: 'Jaarafsluiting',
+    vereist: false,
+    verplichting: true,
+    uitleg: 'Ja of Nee. Standaard klaar binnen 3 maanden na het boekjaareinde; per klant aan te passen in het dossier.',
+    synoniemen: ['afsluiting', 'jaarrekening'],
+    breedte: 16,
+  },
+  {
+    sleutel: 'aangifte_venb_pb',
+    kop: 'Aangifte VenB',
+    vereist: false,
+    verplichting: true,
+    uitleg: 'Ja of Nee.',
+    synoniemen: ['venb', 'aangiftevenbpb', 'vennootschapsbelasting'],
+    breedte: 16,
+  },
+  {
+    sleutel: 'va_venb',
+    kop: 'Voorafbetalingen',
+    vereist: false,
+    verplichting: true,
+    uitleg: 'Ja of Nee. Levert VA1 tot en met VA4 per boekjaar op.',
+    synoniemen: ['va', 'vas', 'voorafbetaling', 'vavenb'],
+    breedte: 18,
+  },
+  {
+    sleutel: 'rapportering',
+    kop: 'Rapportering',
+    vereist: false,
+    verplichting: true,
+    uitleg: 'Ja of Nee. Standaard per kwartaal, 10 dagen na de periode; per klant aan te passen in het dossier.',
+    synoniemen: ['periodiekerapportering'],
+    breedte: 16,
+  },
+  {
+    sleutel: 'fiche_281_20',
+    kop: 'Fiche 281.20',
+    vereist: false,
+    verplichting: true,
+    uitleg: 'Ja of Nee. Bezoldigingen van bedrijfsleiders; uiterlijk eind februari van het jaar erna.',
+    synoniemen: ['28120', 'fiche28120', 'bedrijfsleiders'],
+    breedte: 15,
+  },
+  {
+    sleutel: 'fiche_281_45',
+    kop: 'Fiche 281.45',
+    vereist: false,
+    verplichting: true,
+    uitleg: 'Ja of Nee. Auteursrechten; uiterlijk eind februari van het jaar erna.',
+    synoniemen: ['28145', 'fiche28145', 'auteursrechten'],
+    breedte: 15,
+  },
+  {
+    sleutel: 'fiche_281_50',
+    kop: 'Fiche 281.50',
+    vereist: false,
+    verplichting: true,
+    uitleg: 'Ja of Nee. Commissies, makelaarslonen en erelonen; uiterlijk 30 juni van het jaar erna.',
+    synoniemen: ['28150', 'fiche28150', 'erelonen', 'commissies'],
+    breedte: 15,
+  },
+]
 
 export const KOLOMMEN: readonly Kolom[] = [
   {
@@ -145,12 +259,15 @@ export const KOLOMMEN: readonly Kolom[] = [
     synoniemen: [],
     breedte: 12,
   },
+  ...VERPLICHTING_KOLOMMEN,
 ]
 
 /**
  * De ingevulde voorbeeldrijen van het sjabloon. Twee, omdat één rij niet laat
  * zien dat de aangiftefrequentie leeg hoort te blijven zodra het regime geen
  * periodieke aangever is — precies de fout die de databank achteraf weigert.
+ * De tweede rij toont meteen ook dat een verplichtingskolom leeg mag blijven:
+ * dat telt als Nee.
  */
 export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
   {
@@ -162,6 +279,14 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     btw_regime: REGIME_LABELS.periodieke_aangever,
     btw_aangifte_frequentie: FREQUENTIE_LABELS.kwartaal,
     mandataris: 'Ja',
+    algemene_vergadering: 'Ja',
+    jaarafsluiting: 'Ja',
+    aangifte_venb_pb: 'Ja',
+    va_venb: 'Ja',
+    rapportering: 'Ja',
+    fiche_281_20: 'Ja',
+    fiche_281_45: 'Nee',
+    fiche_281_50: 'Ja',
   },
   {
     naam: 'Tweede Voorbeeld VZW',
@@ -172,6 +297,14 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     btw_regime: REGIME_LABELS.vrijgesteld_kleine_onderneming,
     btw_aangifte_frequentie: '',
     mandataris: 'Nee',
+    algemene_vergadering: 'Ja',
+    jaarafsluiting: 'Ja',
+    aangifte_venb_pb: 'Nee',
+    va_venb: 'Nee',
+    rapportering: '',
+    fiche_281_20: 'Nee',
+    fiche_281_45: 'Nee',
+    fiche_281_50: 'Nee',
   },
 ]
 
@@ -196,6 +329,10 @@ export interface ImportRij {
   ruw: Record<KolomSleutel, string>
   /** De klant die opgeslagen wordt, of null wanneer de rij fouten heeft. */
   klant: NieuweKlant | null
+  /** De verplichtingen die aangevinkt staan, als code uit obligation_types.
+   *  Los van `klant` gehouden: dat object bevat precies de kolommen van de
+   *  tabel clients en niets anders. */
+  verplichtingen: VerplichtingSleutel[]
   fouten: string[]
   /** Aangepast maar wel opgeslagen: aannames die zichtbaar moeten zijn. */
   waarschuwingen: string[]
@@ -521,13 +658,31 @@ function leesFrequentie(
   return frequentie
 }
 
-function leesMandataris(ruw: string, fouten: string[]): boolean | null {
+/** Ja/Nee uit een cel. Leeg telt als Nee; alles wat geen van beide is, is een
+ *  fout en geen stille Nee -- "Jz" mag niet als "die klant doet dit niet"
+ *  doorgaan. */
+function leesJaNee(ruw: string, kolomKop: string, fouten: string[]): boolean | null {
   if (ruw === '') return false
   const genormaliseerd = normaliseerKop(ruw)
   if (JA_WAARDEN.includes(genormaliseerd)) return true
   if (NEE_WAARDEN.includes(genormaliseerd)) return false
-  fouten.push(`Mandataris "${kort(ruw, 20)}" is geen geldige waarde. Vul Ja of Nee in, of laat leeg voor Nee.`)
+  fouten.push(`${kolomKop} "${kort(ruw, 20)}" is geen geldige waarde. Vul Ja of Nee in, of laat leeg voor Nee.`)
   return null
+}
+
+/** De aangevinkte verplichtingen van deze rij. Een onleesbare cel is een fout
+ *  op de rij: bij een compliancetaak is "we hebben het maar overgeslagen" de
+ *  slechtste uitkomst. */
+function leesVerplichtingen(
+  ruw: Record<KolomSleutel, string>,
+  fouten: string[]
+): VerplichtingSleutel[] {
+  const codes: VerplichtingSleutel[] = []
+  for (const kolom of VERPLICHTING_KOLOMMEN) {
+    const aan = leesJaNee(ruw[kolom.sleutel], kolom.kop, fouten)
+    if (aan) codes.push(kolom.sleutel as VerplichtingSleutel)
+  }
+  return codes
 }
 
 interface DubbelControle {
@@ -582,7 +737,8 @@ function leesRij(ruw: Record<KolomSleutel, string>, excelRij: number, dubbels: D
   const boekjaar = leesBoekjaareinde(ruw.boekjaar_einde_maand, ruw.boekjaar_einde_dag, fouten, waarschuwingen)
   const regime = leesRegime(ruw.btw_regime, fouten)
   const frequentie = leesFrequentie(ruw.btw_aangifte_frequentie, regime, fouten)
-  const mandataris = leesMandataris(ruw.mandataris, fouten)
+  const mandataris = leesJaNee(ruw.mandataris, 'Mandataris', fouten)
+  const verplichtingen = leesVerplichtingen(ruw, fouten)
 
   const geldig =
     fouten.length === 0 && naam !== null && boekjaar !== null && regime !== null && mandataris !== null && frequentie !== 'fout'
@@ -592,6 +748,7 @@ function leesRij(ruw: Record<KolomSleutel, string>, excelRij: number, dubbels: D
     ruw,
     fouten,
     waarschuwingen,
+    verplichtingen,
     klant: geldig
       ? {
           naam: naam as string,

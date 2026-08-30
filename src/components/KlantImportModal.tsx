@@ -52,6 +52,16 @@ function toonWaarde(rij: ImportRij, sleutel: keyof NieuweKlant): string {
   return String(waarde)
 }
 
+/** Wat er straks voor deze klant aangevinkt wordt, in de woorden van het
+ *  sjabloon. Zonder deze kolom blijft een vinkje in Excel onzichtbaar tot na
+ *  het opslaan -- en dan staat er al een dossier met de verkeerde deadlines. */
+function verplichtingenTekst(rij: ImportRij): string {
+  if (rij.verplichtingen.length === 0) return 'Geen'
+  return rij.verplichtingen
+    .map((code) => KOLOMMEN.find((k) => k.sleutel === code)?.kop ?? code)
+    .join(', ')
+}
+
 function VoorbeeldTabel({ rijen }: { rijen: ImportRij[] }) {
   return (
     <div className="max-h-[45vh] overflow-auto rounded-lg border border-slate-200">
@@ -65,6 +75,7 @@ function VoorbeeldTabel({ rijen }: { rijen: ImportRij[] }) {
             <th className="px-2 py-1.5">Boekjaar</th>
             <th className="px-2 py-1.5">BTW</th>
             <th className="px-2 py-1.5">Mandataris</th>
+            <th className="px-2 py-1.5">Verplichtingen</th>
             <th className="px-2 py-1.5">Beoordeling</th>
           </tr>
         </thead>
@@ -85,7 +96,7 @@ function VoorbeeldTabel({ rijen }: { rijen: ImportRij[] }) {
                   ? `${rij.klant.btw_regime}${rij.klant.btw_aangifte_frequentie ? ` (${rij.klant.btw_aangifte_frequentie})` : ''}`
                   : ruweCel(rij, 'btw_regime', 40)}
               </td>
-              <td className="px-2 py-1.5 text-slate-600">{toonWaarde(rij, 'mandataris')}</td>
+              <td className="px-2 py-1.5 text-slate-600">{verplichtingenTekst(rij)}</td>
               <td className="px-2 py-1.5">
                 {rij.klant === null ? (
                   <ul className="space-y-0.5 text-red-700">
@@ -156,8 +167,10 @@ function Verslag({ verslag }: { verslag: ImportVerslag }) {
       )}
       {verslag.gelukt.length > 0 && (
         <p className="text-xs text-slate-500">
-          De btw-taken van deze klanten zijn automatisch aangemaakt op basis van hun btw-regime. Vertrouwelijkheid, een
-          standaard verantwoordelijke en de overige verplichtingen vul je per klant aan in het klantdossier.
+          De taken staan klaar: de btw-taken volgen uit het btw-regime, de overige uit de verplichtingen die je in het
+          bestand aanvinkte. De neerlegging bij de NBB komt mee met de algemene vergadering. Vertrouwelijkheid, een
+          standaard verantwoordelijke, de statutaire AV-datum en de overige instellingen per verplichting vul je aan in
+          het klantdossier.
         </p>
       )}
     </div>
@@ -167,7 +180,7 @@ function Verslag({ verslag }: { verslag: ImportVerslag }) {
 export function KlantImportModal({
   bestaandeOndernemingsnummers,
   maakKlant,
-  genereerTaken,
+  zetVerplichtingen,
   onKlaar,
   onClose,
 }: {
@@ -176,7 +189,7 @@ export function KlantImportModal({
   bestaandeOndernemingsnummers: string[]
   maakKlant: (klant: NieuweKlant) => Promise<string>
   /** Zet de taken van een net aangemaakte klant klaar (sync_client_tasks). */
-  genereerTaken?: (clientId: string) => Promise<void>
+  zetVerplichtingen?: (clientId: string, verplichtingen: string[]) => Promise<void>
   /** Aangeroepen na de import met het aantal aangemaakte klanten. */
   onKlaar: (aantalAangemaakt: number) => void
   onClose: () => void
@@ -205,7 +218,7 @@ export function KlantImportModal({
   async function importeer(voorbeeld: ImportVoorbeeld) {
     setFout(null)
     setStap({ naam: 'opslaan', voorbeeld })
-    const verslag = await voerKlantImportUit(voorbeeld.rijen, maakKlant, genereerTaken)
+    const verslag = await voerKlantImportUit(voorbeeld.rijen, maakKlant, zetVerplichtingen)
     setStap({ naam: 'verslag', verslag })
     onKlaar(verslag.gelukt.length)
   }

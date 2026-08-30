@@ -34,6 +34,7 @@ function rij(excelRij: number, naam: string, fouten: string[] = []): ImportRij {
     klant: fouten.length === 0 ? klant(naam) : null,
     fouten,
     waarschuwingen: [],
+    verplichtingen: [],
   }
 }
 
@@ -146,15 +147,15 @@ describe('KlantImportModal — verslag na de import', () => {
     expect(onKlaar).toHaveBeenCalledWith(1)
   })
 
-  it('meldt een klant die er staat maar wiens taken niet gegenereerd raakten', async () => {
-    const genereerTaken = vi.fn().mockRejectedValue({ code: '42501', message: 'geen toegang' })
-    toon({ genereerTaken })
+  it('meldt een klant die er staat maar wiens verplichtingen niet gezet raakten', async () => {
+    const zetVerplichtingen = vi.fn().mockRejectedValue({ code: '42501', message: 'geen toegang' })
+    toon({ zetVerplichtingen })
     const user = await kiesBestand()
     await user.click(await screen.findByRole('button', { name: /2 klanten importeren/i }))
 
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('2 klanten aangemaakt')
-    expect(dialog).toHaveTextContent(/taken konden niet gegenereerd worden/i)
+    expect(dialog).toHaveTextContent(/verplichtingen en taken konden niet gezet worden/i)
     expect(dialog).toHaveTextContent('Rij 2')
   })
 
@@ -183,5 +184,37 @@ describe('KlantImportModal — sjabloon en foute bestanden', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('groter dan 2 MB')
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+})
+
+describe('KlantImportModal — het voorbeeld toont welke verplichtingen meekomen', () => {
+  it('noemt per rij de aangevinkte verplichtingen', async () => {
+    // Zonder deze kolom is het vinkje in Excel onzichtbaar tot na het opslaan,
+    // en dan staat er al een dossier met de verkeerde deadlines in.
+    leesKlantenBestand.mockResolvedValue({
+      ...VOORBEELD,
+      rijen: [
+        {
+          ...rij(2, 'Acme BV'),
+          verplichtingen: ['algemene_vergadering', 'va_venb'],
+        },
+      ],
+      aantalGeldig: 1,
+    })
+    toon()
+    await kiesBestand()
+
+    const tabel = await screen.findByRole('table')
+    expect(within(tabel).getByText(/Algemene vergadering/)).toBeInTheDocument()
+    expect(within(tabel).getByText(/Voorafbetalingen/)).toBeInTheDocument()
+  })
+
+  it('zegt het wanneer een rij geen enkele verplichting aanvinkt', async () => {
+    leesKlantenBestand.mockResolvedValue({ ...VOORBEELD, rijen: [rij(2, 'Acme BV')], aantalGeldig: 1 })
+    toon()
+    await kiesBestand()
+
+    const tabel = await screen.findByRole('table')
+    expect(within(tabel).getByText(/^Geen$/)).toBeInTheDocument()
   })
 })

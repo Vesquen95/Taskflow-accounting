@@ -5,6 +5,7 @@ import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { ClientFormModal, type ClientFormValues } from '../components/ClientFormModal'
 import { useObligationTypes } from '../hooks/useObligationTypes'
 import { saveClientObligations, syncClientTasks } from '../lib/clientObligations'
+import { metStandaardParameters } from '../lib/obligationParameters'
 import type { NieuweKlant } from '../lib/klantImport'
 import { reportError } from '../lib/errorMessage'
 import { ErrorState } from '../components/ErrorState'
@@ -90,6 +91,29 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
       actief: true,
     })
     return nieuw.id
+  }
+
+  /** De verplichtingen van een geïmporteerde klant aanvinken, en meteen zijn
+   *  taken laten aanmaken.
+   *
+   *  Zelfde weg als het klantformulier (saveClientObligations), zodat een
+   *  geïmporteerde klant niet anders in de databank staat dan een handmatig
+   *  aangemaakte: dezelfde standaardparameters, dezelfde afsluitende
+   *  taakgeneratie. Ook een rij zonder één aangevinkte verplichting komt hier
+   *  langs — dan is er niets aan te vinken, maar de btw-taken (die uit het
+   *  regime volgen) moeten wel gegenereerd worden. */
+  async function zetVerplichtingenUitImport(clientId: string, codes: string[]): Promise<void> {
+    const selecties = obligationTypes.map((type) => ({
+      obligation_type_id: type.id,
+      gekozen: codes.includes(type.code),
+      standaard_toegewezen_medewerker_id: '',
+      parameters: codes.includes(type.code) ? metStandaardParameters(type.code, {}) : {},
+    }))
+    if (selecties.some((sel) => sel.gekozen)) {
+      await saveClientObligations(clientId, selecties, codePerTypeId)
+      return
+    }
+    await syncClientTasks(clientId)
   }
 
   return (
@@ -249,9 +273,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
           <KlantImportModal
             bestaandeOndernemingsnummers={importNummers}
             maakKlant={maakKlantUitImport}
-            genereerTaken={async (clientId) => {
-              await syncClientTasks(clientId)
-            }}
+            zetVerplichtingen={zetVerplichtingenUitImport}
             onKlaar={() => reload()}
             onClose={() => setImportNummers(null)}
           />

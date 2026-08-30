@@ -13,7 +13,7 @@ function rij(excelRij: number, naam: string, geldig = true): ImportRij {
     btw_aangifte_frequentie: null,
     mandataris: false,
   }
-  return { excelRij, ruw: {} as ImportRij['ruw'], klant: geldig ? klant : null, fouten: geldig ? [] : ['stuk'], waarschuwingen: [] }
+  return { excelRij, ruw: {} as ImportRij['ruw'], klant: geldig ? klant : null, fouten: geldig ? [] : ['stuk'], waarschuwingen: [], verplichtingen: [] }
 }
 
 describe('voerKlantImportUit', () => {
@@ -65,13 +65,13 @@ describe('voerKlantImportUit', () => {
     expect(volgorde).toEqual(['A', 'B', 'C'])
   })
 
-  it('laat na elke aangemaakte klant zijn taken genereren', async () => {
+  it('zet na elke aangemaakte klant zijn verplichtingen en taken', async () => {
     const maak = vi.fn(async () => 'client-id')
     const genereer = vi.fn().mockResolvedValue(undefined)
 
     const verslag = await voerKlantImportUit([rij(2, 'Acme BV'), rij(3, 'Beta NV')], maak, genereer)
 
-    expect(genereer.mock.calls).toEqual([['client-id'], ['client-id']])
+    expect(genereer.mock.calls).toEqual([['client-id', []], ['client-id', []]])
     expect(verslag.gelukt.every((u) => u.waarschuwing === null)).toBe(true)
   })
 

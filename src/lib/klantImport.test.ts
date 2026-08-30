@@ -10,8 +10,12 @@ import {
 
 const KOPPEN = KOLOMMEN.map((k) => k.kop)
 
-/** Een geldige voorbeeldrij, in de kolomvolgorde van het sjabloon. */
-const GOEDE_RIJ: unknown[] = ['Acme BV', 'BE0123.456.749', 'BV', 12, 31, 'Periodieke aangever', 'Kwartaal', 'Ja']
+/** Een geldige voorbeeldrij, in de kolomvolgorde van het sjabloon: eerst de
+ *  velden van de klant, dan een cel per verplichting. */
+const GOEDE_RIJ: unknown[] = [
+  'Acme BV', 'BE0123.456.749', 'BV', 12, 31, 'Periodieke aangever', 'Kwartaal', 'Ja',
+  'Ja', 'Ja', 'Ja', 'Ja', 'Nee', '', '', '',
+]
 
 /** Bouwt een bladmatrix: kopregel + de meegegeven rijen. */
 function blad(...rijen: unknown[][]): unknown[][] {
@@ -308,5 +312,62 @@ describe('kiesBlad', () => {
 
   it('weigert een werkboek zonder bladen', () => {
     expect(() => kiesBlad([])).toThrow(KlantImportFout)
+  })
+})
+
+describe('leesKlantRijen — de verplichtingen per klant', () => {
+  it('geeft de aangevinkte verplichtingen terug als code', () => {
+    // De reden dat deze kolommen bestaan: anders moet elk geïmporteerd
+    // dossier daarna nog één voor één opengezet worden.
+    const rij = leesKlantRijen(blad(GOEDE_RIJ)).rijen[0]
+    expect(rij.verplichtingen).toEqual([
+      'algemene_vergadering',
+      'jaarafsluiting',
+      'aangifte_venb_pb',
+      'va_venb',
+    ])
+  })
+
+  it('telt een lege cel als Nee', () => {
+    const rij = leesKlantRijen(blad(metVeld('algemene_vergadering', ''))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.verplichtingen).not.toContain('algemene_vergadering')
+  })
+
+  it('aanvaardt de gebruikelijke schrijfwijzen voor ja', () => {
+    for (const waarde of ['ja', 'JA', 'x', 'X', 1, true]) {
+      const rij = leesKlantRijen(blad(metVeld('rapportering', waarde))).rijen[0]
+      expect(rij.fouten).toEqual([])
+      expect(rij.verplichtingen).toContain('rapportering')
+    }
+  })
+
+  it('maakt van een onleesbare cel een fout en niet stilzwijgend een Nee', () => {
+    // Bij een wettelijke verplichting is "we hebben het maar overgeslagen" de
+    // slechtste uitkomst: dan mist het dossier een deadline zonder dat iemand
+    // het merkt.
+    const rij = leesKlantRijen(blad(metVeld('fiche_281_50', 'misschien'))).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toContain('Fiche 281.50')
+    expect(rij.fouten.join(' ')).toMatch(/Ja of Nee/i)
+  })
+
+  it('biedt geen kolom aan voor iets wat de databank zelf beheert', () => {
+    const sleutels = KOLOMMEN.map((k) => k.sleutel)
+    // btw_aangifte en btw_klantenlisting volgen uit het btw-regime
+    // (sync_btw_obligations); de neerlegging hangt aan de AV en wordt door de
+    // motor meegemaakt. Een kolom ervoor zou een vinkje zijn dat niets doet.
+    expect(sleutels).not.toContain('btw_aangifte')
+    expect(sleutels).not.toContain('btw_klantenlisting')
+    expect(sleutels).not.toContain('neerlegging_jaarrekening')
+  })
+
+  it('leest een oud bestand zonder verplichtingskolommen gewoon in', () => {
+    // Wie het sjabloon van vóór deze uitbreiding gebruikt, mag niet stranden:
+    // die klanten komen binnen zonder verplichtingen, precies zoals voorheen.
+    const oudeKoppen = KOLOMMEN.filter((k) => !k.verplichting).map((k) => k.kop)
+    const voorbeeld = leesKlantRijen([oudeKoppen, GOEDE_RIJ.slice(0, oudeKoppen.length)])
+    expect(voorbeeld.rijen[0].fouten).toEqual([])
+    expect(voorbeeld.rijen[0].verplichtingen).toEqual([])
   })
 })
