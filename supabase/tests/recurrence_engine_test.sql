@@ -4275,4 +4275,424 @@ begin
   raise notice 'PASS 34.8: heractiveren levert nieuwe taken op (%), geen dubbels, geen herrijzenis', v_nieuw;
 end $$;
 
+
+-- ============================================================
+-- Sectie 35 (0027/0028): de fiches 281.20, 281.45 en 281.50.
+--
+-- Het kantoor: "ik heb nog extra taken gevonden die we moeten aanvullen.
+-- Fiches 281.20 - 281.45 - 281.50."
+--
+-- Twee dingen moeten hier vastliggen, want ze zijn allebei onzichtbaar fout
+-- te krijgen:
+--
+--   * de fiches lopen op het INKOMSTENJAAR en niet op het boekjaar. Een
+--     vennootschap met een boekjaar tot 30 juni dient haar fiches nog altijd
+--     per kalenderjaar in. Wie dit aan het boekjaar hangt, krijgt voor elk
+--     niet-kalenderdossier een deadline die er plausibel uitziet en fout is.
+--   * "eind februari" is de 29e in een schrikkeljaar. Een vaste 28 zou drie
+--     jaar op vier kloppen -- precies het soort fout dat pas in 2028 opvalt.
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid;
+  v_dec uuid; v_juni uuid;
+  v_ot_20 uuid; v_ot_45 uuid; v_ot_50 uuid;
+  v_n int; v_d date;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's35@test.local', now());
+  insert into public.firms (naam) values ('Sectie 35 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S35 Beheerder', 's35@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select id into v_ot_20 from public.obligation_types where code = 'fiche_281_20';
+  select id into v_ot_45 from public.obligation_types where code = 'fiche_281_45';
+  select id into v_ot_50 from public.obligation_types where code = 'fiche_281_50';
+
+  if v_ot_20 is null or v_ot_45 is null or v_ot_50 is null then
+    raise exception 'FAIL 35.0: de drie fiches staan niet in de catalogus';
+  end if;
+
+  -- 35.1 Ze horen in hun eigen werkstroom, niet tussen de afsluitingstaken.
+  select count(*) into v_n from public.obligation_types
+   where code like 'fiche_281_%' and werkstroom = 'fiches';
+  if v_n <> 3 then
+    raise exception 'FAIL 35.1: % van de 3 fiches staan in de werkstroom fiches', v_n;
+  end if;
+  raise notice 'PASS 35.1: de drie fiches staan in hun eigen werkstroom';
+
+  -- Twee dossiers met een verschillend boekjaar, verder identiek.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S35 December', 12, 31, 'geen', true) returning id into v_dec;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S35 Juni', 6, 30, 'geen', true) returning id into v_juni;
+
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_dec, v_ot_20, true, current_date),
+           (v_dec, v_ot_45, true, current_date),
+           (v_dec, v_ot_50, true, current_date),
+           (v_juni, v_ot_20, true, current_date),
+           (v_juni, v_ot_50, true, current_date);
+
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+
+  -- 35.2 Het boekjaar doet er niet toe: dezelfde deadlines voor beide klanten.
+  select count(*) into v_n
+  from public.task_instances a
+  join public.task_instances b
+    on b.client_id = v_juni and b.obligation_type_id = a.obligation_type_id
+   and b.periode_label = a.periode_label
+  where a.client_id = v_dec
+    and a.obligation_type_id in (v_ot_20, v_ot_50)
+    and a.due_date_wettelijk <> b.due_date_wettelijk;
+  if v_n <> 0 then
+    raise exception 'FAIL 35.2: % fiche-taken kregen een andere datum door het boekjaar', v_n;
+  end if;
+  raise notice 'PASS 35.2: de fiches volgen het inkomstenjaar, niet het boekjaar';
+
+  -- 35.3 De periode is het kalenderjaar.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_dec and obligation_type_id in (v_ot_20, v_ot_45, v_ot_50)
+     and (extract(month from periode_start) <> 1 or extract(day from periode_start) <> 1
+       or extract(month from periode_eind) <> 12 or extract(day from periode_eind) <> 31);
+  if v_n <> 0 then
+    raise exception 'FAIL 35.3: % fiche-taken hebben geen kalenderjaar als periode', v_n;
+  end if;
+  raise notice 'PASS 35.3: elke fiche-taak loopt van 1 januari tot 31 december';
+
+  -- 35.4 281.20 en 281.45: eind februari van het jaar erna.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_dec and obligation_type_id in (v_ot_20, v_ot_45)
+     and due_date_wettelijk <> (make_date(periode_label::int + 1, 3, 1) - 1);
+  if v_n <> 0 then
+    raise exception 'FAIL 35.4: % taken van 281.20/281.45 staan niet op eind februari', v_n;
+  end if;
+  raise notice 'PASS 35.4: 281.20 en 281.45 vallen eind februari van het jaar erna';
+
+  -- 35.5 En dan de 29e in een schrikkeljaar. Inkomstenjaar 2027 -> 29/02/2028.
+  select due_date_wettelijk into v_d from public.task_instances
+   where client_id = v_dec and obligation_type_id = v_ot_20 and periode_label = '2027';
+  if v_d is not null and v_d <> date '2028-02-29' then
+    raise exception 'FAIL 35.5: inkomstenjaar 2027 kreeg % in plaats van 29/02/2028', v_d;
+  end if;
+  raise notice 'PASS 35.5: een schrikkeljaar levert de 29e op (%)', coalesce(v_d::text, 'buiten het venster');
+
+  -- 35.6 281.50: 30 juni van het jaar erna.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_dec and obligation_type_id = v_ot_50
+     and due_date_wettelijk <> make_date(periode_label::int + 1, 6, 30);
+  if v_n <> 0 then
+    raise exception 'FAIL 35.6: % taken van 281.50 staan niet op 30 juni', v_n;
+  end if;
+  raise notice 'PASS 35.6: 281.50 valt op 30 juni van het jaar erna';
+
+  -- 35.7 Wie de fiche niet aangevinkt heeft, krijgt er ook geen taak voor.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_juni and obligation_type_id = v_ot_45;
+  if v_n <> 0 then
+    raise exception 'FAIL 35.7: er kwamen % taken voor een niet-aangevinkte fiche', v_n;
+  end if;
+  raise notice 'PASS 35.7: een niet-aangevinkte fiche levert geen taken op';
+
+  -- 35.8 Herhalen verandert niets.
+  select count(*) into v_n from public.task_instances
+   where client_id in (v_dec, v_juni) and obligation_type_id in (v_ot_20, v_ot_45, v_ot_50);
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+  if (select count(*) from public.task_instances
+       where client_id in (v_dec, v_juni) and obligation_type_id in (v_ot_20, v_ot_45, v_ot_50)) <> v_n then
+    raise exception 'FAIL 35.8: een tweede ronde maakte extra fiche-taken aan';
+  end if;
+  raise notice 'PASS 35.8: een tweede ronde levert geen dubbele fiche-taken op (% taken)', v_n;
+end $$;
+
+-- ============================================================
+-- Sectie 36 (0029/0030): de jaarafsluiting vóór de algemene vergadering.
+--
+-- Het kantoor: "kan je de jaarafsluiting instellen dat dit een maand voor de
+-- algemene vergadering kan zijn, tweede optie. kan ook eventueel vroeger door
+-- een maand aan te duiden."
+--
+-- De aanleiding is concreet: bij een dossier met boekjaareinde 31/12 en een AV
+-- op 29 maart gaf de oude vaste doorlooptijd van drie maanden 31 maart -- twee
+-- dagen ná de vergadering waar de boeken goedgekeurd worden.
+--
+-- Het lastige zit niet in de berekening maar in wat eromheen hangt:
+--   * bestaande dossiers mogen niet verschuiven zolang niemand iets kiest;
+--   * een taak die er al staat moet wél mee verschuiven zodra iemand kiest --
+--     anders staat de instelling er en volgt de kalender niet;
+--   * de AV-datum en de jaarafsluiting mogen nooit uit elkaar lopen;
+--   * een handmatig afgesproken deadline wordt nooit stil overschreven.
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid; v_klant uuid;
+  v_ot_ja uuid; v_ot_av uuid;
+  v_co_ja uuid; v_co_av uuid;
+  v_taak uuid; v_be date;
+  v_oud date; v_nieuw date; v_av date; v_n int;
+  v_review boolean; v_reden text;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's36@test.local', now());
+  insert into public.firms (naam) values ('Sectie 36 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S36 Beheerder', 's36@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select id into v_ot_ja from public.obligation_types where code = 'jaarafsluiting';
+  select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S36 Klant', 12, 31, 'geen', true) returning id into v_klant;
+
+  -- Een dossier zoals het er vandaag bijligt: alleen sla_maanden, geen basis.
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters)
+    values (v_klant, v_ot_ja, true, current_date, '{"sla_maanden": 3}'::jsonb)
+    returning id into v_co_ja;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters)
+    values (v_klant, v_ot_av, true, current_date, '{"av_vorm":"vaste_datum","av_maand":5,"av_dag":15}'::jsonb)
+    returning id into v_co_av;
+
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+
+  -- 36.1 Zonder basis blijft alles zoals het was: boekjaareinde + sla_maanden.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_ja
+     and due_date_wettelijk <> (periode_eind + interval '3 months')::date;
+  if v_n <> 0 then
+    raise exception 'FAIL 36.1: % taken verschoven terwijl er niets gekozen was', v_n;
+  end if;
+  raise notice 'PASS 36.1: een dossier zonder basis houdt zijn oude deadline';
+
+  select id, periode_eind, due_date_wettelijk into v_taak, v_be, v_oud
+  from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_ja and due_date >= current_date
+   order by due_date limit 1;
+
+  -- 36.2 Kiezen voor "een maand voor de AV" verzet de taak die er al staat.
+  --      Dit was het gat na 0029: upsert_generated_task laat een bestaande taak
+  --      met rust, dus zonder de herberekening van 0030 gebeurde er niets.
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  update public.client_obligations
+     set parameters = '{"basis":"voor_av","maanden_voor_av":1}'::jsonb
+   where id = v_co_ja;
+  set local role postgres;
+
+  select due_date_wettelijk into v_nieuw from public.task_instances where id = v_taak;
+  v_av := public.av_datum(v_be, '{"av_vorm":"vaste_datum","av_maand":5,"av_dag":15}'::jsonb);
+  if v_nieuw <> (v_av - interval '1 month')::date then
+    raise exception 'FAIL 36.2: de taak staat op % en niet op % (AV %)',
+      v_nieuw, (v_av - interval '1 month')::date, v_av;
+  end if;
+  if v_nieuw = v_oud then
+    raise exception 'FAIL 36.2: de deadline is helemaal niet verschoven (%)', v_oud;
+  end if;
+  raise notice 'PASS 36.2: de bestaande taak schoof van % naar % (AV %)', v_oud, v_nieuw, v_av;
+
+  -- 36.3 En de verschuiving staat in de historiek: niets gebeurt in stilte.
+  select count(*) into v_n from public.task_status_log
+   where task_instance_id = v_taak and event_type = 'due_date_herberekend';
+  if v_n = 0 then
+    raise exception 'FAIL 36.3: de verschoven deadline liet geen logregel na';
+  end if;
+  select count(*) into v_n from public.client_change_log
+   where client_id = v_klant and veld = 'jaarafsluiting_berekening';
+  if v_n = 0 then
+    raise exception 'FAIL 36.3: de wijziging staat niet in de historiek van het dossier';
+  end if;
+  raise notice 'PASS 36.3: de verschuiving staat in het takenlog en in het dossier';
+
+  -- 36.4 De AV verzetten trekt de jaarafsluiting mee. Zonder deze weg zou de
+  --      vergadering opschuiven en de afsluiting blijven staan -- en dan wijst
+  --      "een maand voor de AV" naar een vergadering die er niet meer is.
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  update public.client_obligations
+     set parameters = '{"av_vorm":"vaste_datum","av_maand":6,"av_dag":10}'::jsonb
+   where id = v_co_av;
+  set local role postgres;
+
+  select due_date_wettelijk into v_nieuw from public.task_instances where id = v_taak;
+  if v_nieuw <> (make_date(extract(year from v_be)::int + 1, 6, 10) - interval '1 month')::date then
+    raise exception 'FAIL 36.4: de jaarafsluiting volgde de verplaatste AV niet (%)', v_nieuw;
+  end if;
+  raise notice 'PASS 36.4: de AV verzetten trekt de jaarafsluiting mee naar %', v_nieuw;
+
+  -- 36.5 Nooit vóór het boekjaareinde. Je kunt de boeken van een jaar niet
+  --      afsluiten voor dat jaar voorbij is.
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  update public.client_obligations
+     set parameters = '{"basis":"voor_av","maanden_voor_av":6}'::jsonb
+   where id = v_co_ja;
+  set local role postgres;
+
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_ja
+     and due_date >= current_date and due_date_wettelijk < periode_eind;
+  if v_n <> 0 then
+    raise exception 'FAIL 36.5: % taken staan voor hun eigen boekjaareinde', v_n;
+  end if;
+  raise notice 'PASS 36.5: geen enkele afsluiting valt voor het boekjaareinde';
+
+  -- 36.6 Een handmatig afgesproken deadline wordt niet stil overschreven.
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  update public.task_instances set due_date = due_date + 5 where id = v_taak;
+  set local role postgres;
+  select due_date into v_oud from public.task_instances where id = v_taak;
+
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  update public.client_obligations
+     set parameters = '{"basis":"voor_av","maanden_voor_av":2}'::jsonb
+   where id = v_co_ja;
+  set local role postgres;
+
+  select due_date, review_vereist, review_reden into v_nieuw, v_review, v_reden
+  from public.task_instances where id = v_taak;
+  if v_nieuw <> v_oud then
+    raise exception 'FAIL 36.6: de handmatige afspraak werd overschreven (% -> %)', v_oud, v_nieuw;
+  end if;
+  if not v_review then
+    raise exception 'FAIL 36.6: de handmatige afspraak bleef staan zonder review';
+  end if;
+  raise notice 'PASS 36.6: een handmatige deadline blijft staan (%) en krijgt een review', v_nieuw;
+
+  -- 36.7 De parameters worden afgegrensd. Zonder deze controle levert een
+  --      typefout een deadline op die plausibel oogt en nergens op slaat.
+  begin
+    perform set_config('taskflow.test_uid', v_uid::text, true);
+    set local role authenticated;
+    update public.client_obligations set parameters = '{"basis":"voor-av","maanden_voor_av":1}'::jsonb
+     where id = v_co_ja;
+    set local role postgres;
+    raise exception 'FAIL 36.7: een onbekende basis werd aanvaard';
+  exception when check_violation then
+    set local role postgres;
+  end;
+  begin
+    perform set_config('taskflow.test_uid', v_uid::text, true);
+    set local role authenticated;
+    update public.client_obligations set parameters = '{"basis":"voor_av","maanden_voor_av":9}'::jsonb
+     where id = v_co_ja;
+    set local role postgres;
+    raise exception 'FAIL 36.7: negen maanden voor de AV werd aanvaard';
+  exception when check_violation then
+    set local role postgres;
+  end;
+  begin
+    perform set_config('taskflow.test_uid', v_uid::text, true);
+    set local role authenticated;
+    update public.client_obligations set parameters = '{"basis":"voor_av"}'::jsonb
+     where id = v_co_ja;
+    set local role postgres;
+    raise exception 'FAIL 36.7: een ontbrekend aantal maanden werd aanvaard';
+  exception when check_violation then
+    set local role postgres;
+  end;
+  raise notice 'PASS 36.7: een onbekende basis en een aantal buiten 1-6 worden geweigerd';
+end $$;
+
+-- ============================================================
+-- Sectie 37 (0031): de neerlegging wordt niet elke ronde opnieuw geannuleerd.
+--
+-- Gevonden bij het nakijken van de Excel-import. neerlegging_jaarrekening
+-- heeft geen eigen tak in de generator: die taken worden aangemaakt vanuit de
+-- AV-tak, als vervolgtaak met voorloper_taak_id naar de vergadering. Maar de
+-- opruimstap van sync_client_tasks() oordeelde puur op "bestaat er een lopende
+-- client_obligation voor dit verplichtingstype?".
+--
+-- Gevolg bij een klant die wel een AV heeft en geen aangevinkte neerlegging --
+-- en dat is precies wat de import oplevert: elke ronde annuleerde de
+-- neerleggingstaken, en de AV-tak maakte er meteen nieuwe aan. Gemeten op
+-- productie: 3 open / 0 geannuleerd, dan 3/3, dan 3/6. Dat groeit door bij elk
+-- opslaan en bij elke maandelijkse onderhoudsronde.
+--
+-- De regel die dit oplost: een taak met een voorloper wordt bestuurd door die
+-- voorloper. Ze verdwijnt pas wanneer de vergadering zelf weg is -- dan is er
+-- ook echt niets meer na te leggen.
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid; v_klant uuid;
+  v_ot_av uuid; v_ot_nbb uuid; v_co_av uuid;
+  v_open int; v_geann int; v_open2 int; v_geann2 int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's37@test.local', now());
+  insert into public.firms (naam) values ('Sectie 37 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S37 Beheerder', 's37@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
+  select id into v_ot_nbb from public.obligation_types where code = 'neerlegging_jaarrekening';
+
+  -- Een klant zoals de import hem aanmaakt: wel een AV, geen aangevinkte
+  -- neerlegging. De neerleggingstaken komen mee met de vergadering.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S37 Klant', 12, 31, 'geen', true) returning id into v_klant;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot_av, true, current_date) returning id into v_co_av;
+
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  perform public.sync_client_tasks(v_klant);
+  set local role postgres;
+
+  select count(*) filter (where status = 'open'),
+         count(*) filter (where status = 'geannuleerd')
+    into v_open, v_geann
+  from public.task_instances where client_id = v_klant and obligation_type_id = v_ot_nbb;
+
+  if v_open = 0 then
+    raise exception 'FAIL 37.0: de AV leverde geen neerleggingstaken op';
+  end if;
+
+  -- 37.1 Drie rondes na elkaar veranderen niets. Dit is de eigenlijke
+  --      regressie: voorheen kwamen er per ronde net zoveel geannuleerde
+  --      taken bij als er open stonden.
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  perform public.sync_client_tasks(v_klant);
+  perform public.sync_client_tasks(v_klant);
+  perform public.sync_client_tasks(v_klant);
+  set local role postgres;
+
+  select count(*) filter (where status = 'open'),
+         count(*) filter (where status = 'geannuleerd')
+    into v_open2, v_geann2
+  from public.task_instances where client_id = v_klant and obligation_type_id = v_ot_nbb;
+
+  if v_open2 <> v_open or v_geann2 <> v_geann then
+    raise exception
+      'FAIL 37.1: drie rondes veranderden de neerleggingstaken van %/% naar %/% (open/geannuleerd)',
+      v_open, v_geann, v_open2, v_geann2;
+  end if;
+  raise notice 'PASS 37.1: herhaalde rondes laten de % neerleggingstaken met rust', v_open;
+
+  -- 37.2 Maar gaat de vergadering zelf eruit, dan moet de neerlegging mee.
+  --      Anders blijft er een taak staan voor een AV die niet meer bestaat.
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  update public.client_obligations set actief = false, geldig_tot = current_date where id = v_co_av;
+  perform public.sync_client_tasks(v_klant);
+  perform public.sync_client_tasks(v_klant);
+  set local role postgres;
+
+  select count(*) filter (where status = 'open') into v_open2
+  from public.task_instances where client_id = v_klant and obligation_type_id = v_ot_nbb
+   and due_date >= current_date;
+  if v_open2 <> 0 then
+    raise exception 'FAIL 37.2: er bleven % neerleggingstaken open na het afzetten van de AV', v_open2;
+  end if;
+  raise notice 'PASS 37.2: zonder algemene vergadering blijft er geen neerlegging open staan';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
