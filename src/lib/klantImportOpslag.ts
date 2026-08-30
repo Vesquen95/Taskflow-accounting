@@ -29,7 +29,7 @@ import type { ImportRij, NieuweKlant } from './klantImport'
  *  kantoor weet dat die klanten nog moeten. */
 export const MAX_OPEENVOLGENDE_FOUTEN = 5
 
-export const NIET_GEPROBEERD_REDEN =
+const NIET_GEPROBEERD_REDEN =
   'Niet geprobeerd: de import is gestopt nadat het meermaals na elkaar misging.'
 
 export interface ImportUitkomst {

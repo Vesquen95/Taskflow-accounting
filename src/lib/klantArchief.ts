@@ -14,7 +14,7 @@ import type { TaskStatus } from '../types'
  */
 
 /** Statussen die de databank als afgesloten beschouwt: die blijven staan. */
-export const AFGESLOTEN_TAAKSTATUSSEN: readonly TaskStatus[] = ['ingediend_afgerond', 'geannuleerd']
+const AFGESLOTEN_TAAKSTATUSSEN: readonly TaskStatus[] = ['ingediend_afgerond', 'geannuleerd']
 
 /** Werk dat gebeurd is (of al afgesloten) — een archivering raakt dit niet. */
 export function isAfgesloten(status: TaskStatus): boolean {

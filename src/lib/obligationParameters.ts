@@ -36,7 +36,7 @@ export const AV_GEEN_STATUTAIRE_DATUM = '' as const
 /** De AV-velden die bij een vorm horen. Velden van de andere vorm worden
  *  gewist bij het wisselen: een parameter bewaren die nergens meer op het
  *  scherm staat is dezelfde soort onwaarheid, alleen omgekeerd. */
-export const AV_VELDEN_PER_VORM: Record<string, string[]> = {
+const AV_VELDEN_PER_VORM: Record<string, string[]> = {
   vaste_datum: ['av_maand', 'av_dag'],
   nde_weekdag: ['av_maand', 'av_rang', 'av_weekdag'],
 }

@@ -38,8 +38,8 @@ export const MAX_BESTAND_BYTES = 2 * 1024 * 1024
  *  legt de browser plat. */
 export const MAX_RIJEN = 1000
 
-export const MAX_NAAM_LENGTE = 200
-export const MAX_RECHTSVORM_LENGTE = 100
+const MAX_NAAM_LENGTE = 200
+const MAX_RECHTSVORM_LENGTE = 100
 
 export type KolomSleutel =
   | 'naam'
@@ -76,8 +76,8 @@ const FREQUENTIE_LABELS: Record<BtwFrequentie, string> = {
   kwartaal: 'Kwartaal',
 }
 
-export const REGIME_KEUZES = Object.values(REGIME_LABELS)
-export const FREQUENTIE_KEUZES = Object.values(FREQUENTIE_LABELS)
+const REGIME_KEUZES = Object.values(REGIME_LABELS)
+const FREQUENTIE_KEUZES = Object.values(FREQUENTIE_LABELS)
 
 export const KOLOMMEN: readonly Kolom[] = [
   {
@@ -231,7 +231,7 @@ export class KlantImportFout extends Error {
 /** Eén cel als tekst. read-excel-file geeft string, number, boolean, Date of
  *  null terug; alles daarbuiten wordt zo goed mogelijk beschreven zodat het
  *  in de validatie opvalt in plaats van stil te verdwijnen. */
-export function celTekst(waarde: unknown): string {
+function celTekst(waarde: unknown): string {
   if (waarde === null || waarde === undefined) return ''
   if (typeof waarde === 'string') return waarde.trim()
   if (typeof waarde === 'number') return Number.isFinite(waarde) ? String(waarde) : ''
@@ -278,7 +278,7 @@ function cijfersVanOndernemingsnummer(ruw: string): string | null {
 
 /** De sleutel waarop we dubbels herkennen: enkel de cijfers, dus
  *  "0123456749" en "BE0123.456.749" botsen zoals het hoort. */
-export function ondernemingsnummerSleutel(ruw: string): string | null {
+function ondernemingsnummerSleutel(ruw: string): string | null {
   return cijfersVanOndernemingsnummer(ruw)
 }
 
@@ -294,7 +294,7 @@ export function normaliseerOndernemingsnummer(ruw: string): string | null {
 /** Modulo 97-controle van de KBO. Een fout controlegetal is bijna altijd een
  *  typfout, maar we blokkeren de rij er niet mee: het blijft een waarschuwing
  *  omdat de databank dit niet afdwingt en het kantoor het beter weet. */
-export function heeftGeldigControlegetal(nummer: string): boolean {
+function heeftGeldigControlegetal(nummer: string): boolean {
   const cijfers = cijfersVanOndernemingsnummer(nummer)
   if (cijfers === null) return false
   const basis = Number(cijfers.slice(0, 8))
