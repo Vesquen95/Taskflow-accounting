@@ -1,5 +1,5 @@
 import { errorMessage } from './errorMessage'
-import type { ImportRij, NieuweKlant } from './klantImport'
+import type { ImportRij, NieuweKlant, VerplichtingKeuze } from './klantImport'
 
 /**
  * De import wegschrijven, met een verslag per rij.
@@ -69,7 +69,7 @@ export interface ImportVerslag {
 export async function voerKlantImportUit(
   rijen: ImportRij[],
   maakKlant: (klant: NieuweKlant) => Promise<string>,
-  zetVerplichtingen?: (clientId: string, verplichtingen: string[]) => Promise<void>
+  zetVerplichtingen?: (clientId: string, verplichtingen: VerplichtingKeuze[]) => Promise<void>
 ): Promise<ImportVerslag> {
   const teDoen = rijen.filter((rij): rij is ImportRij & { klant: NieuweKlant } => rij.klant !== null)
 

@@ -6,7 +6,7 @@ import { ClientFormModal, type ClientFormValues } from '../components/ClientForm
 import { useObligationTypes } from '../hooks/useObligationTypes'
 import { saveClientObligations, syncClientTasks } from '../lib/clientObligations'
 import { metStandaardParameters } from '../lib/obligationParameters'
-import type { NieuweKlant } from '../lib/klantImport'
+import type { NieuweKlant, VerplichtingKeuze } from '../lib/klantImport'
 import { reportError } from '../lib/errorMessage'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
@@ -102,13 +102,23 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
    *  taakgeneratie. Ook een rij zonder één aangevinkte verplichting komt hier
    *  langs — dan is er niets aan te vinken, maar de btw-taken (die uit het
    *  regime volgen) moeten wel gegenereerd worden. */
-  async function zetVerplichtingenUitImport(clientId: string, codes: string[]): Promise<void> {
-    const selecties = obligationTypes.map((type) => ({
-      obligation_type_id: type.id,
-      gekozen: codes.includes(type.code),
-      standaard_toegewezen_medewerker_id: '',
-      parameters: codes.includes(type.code) ? metStandaardParameters(type.code, {}) : {},
-    }))
+  async function zetVerplichtingenUitImport(
+    clientId: string,
+    verplichtingen: VerplichtingKeuze[]
+  ): Promise<void> {
+    const selecties = obligationTypes.map((type) => {
+      const keuze = verplichtingen.find((v) => v.code === type.code)
+      return {
+        obligation_type_id: type.id,
+        gekozen: keuze !== undefined,
+        standaard_toegewezen_medewerker_id: '',
+        // Het bestand geeft alleen mee wat er echt ingevuld stond; de
+        // standaardwaarden komen er hier bij, langs precies dezelfde helper
+        // als het klantformulier. Zo houdt de import geen tweede set
+        // standaarden bij die na de eerste wijziging uiteenloopt.
+        parameters: keuze ? metStandaardParameters(type.code, keuze.parameters) : {},
+      }
+    })
     if (selecties.some((sel) => sel.gekozen)) {
       await saveClientObligations(clientId, selecties, codePerTypeId)
       return

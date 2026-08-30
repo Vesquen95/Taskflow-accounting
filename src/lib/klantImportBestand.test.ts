@@ -29,6 +29,36 @@ describe('het sjabloon', () => {
     expect(voorbeeld.aantalGeldig).toBe(voorbeeld.rijen.length)
   })
 
+  it('levert uit zijn eigen voorbeeldrijen de instellingen op die het belooft', async () => {
+    // Het sjabloon is tegelijk de uitleg. Een voorbeeldrij die wel inleest maar
+    // iets anders betekent dan er staat, leert honderd rijen lang het verkeerde.
+    const voorbeeld = await leesKlantenBestand(
+      new File([await bouwSjabloonBlob()], SJABLOON_BESTANDSNAAM)
+    )
+    const eerste = voorbeeld.rijen[0].verplichtingen
+    expect(eerste.find((v) => v.code === 'algemene_vergadering')?.parameters).toEqual({
+      av_vorm: 'vaste_datum',
+      av_maand: 5,
+      av_dag: 15,
+    })
+    expect(eerste.find((v) => v.code === 'jaarafsluiting')?.parameters).toEqual({
+      basis: 'voor_av',
+      maanden_voor_av: 1,
+    })
+
+    const tweede = voorbeeld.rijen[1].verplichtingen
+    expect(tweede.find((v) => v.code === 'algemene_vergadering')?.parameters).toMatchObject({
+      av_vorm: 'nde_weekdag',
+      av_rang: 'eerste',
+      av_weekdag: 'maandag',
+      av_maand: 12,
+    })
+    expect(tweede.find((v) => v.code === 'jaarafsluiting')?.parameters).toEqual({
+      basis: 'boekjaar',
+      sla_maanden: 3,
+    })
+  })
+
   it('heeft alle kolomkoppen van het sjabloon in het blad Klanten', async () => {
     const { default: readXlsxFile } = await import('read-excel-file/browser')
     const bladen = await readXlsxFile(await (await bouwSjabloonBlob()).arrayBuffer())

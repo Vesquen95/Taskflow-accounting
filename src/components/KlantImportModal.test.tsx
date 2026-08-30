@@ -196,7 +196,10 @@ describe('KlantImportModal — het voorbeeld toont welke verplichtingen meekomen
       rijen: [
         {
           ...rij(2, 'Acme BV'),
-          verplichtingen: ['algemene_vergadering', 'va_venb'],
+          verplichtingen: [
+            { code: 'algemene_vergadering' as const, parameters: { av_vorm: 'vaste_datum', av_maand: 5, av_dag: 15 } },
+            { code: 'va_venb' as const, parameters: {} },
+          ],
         },
       ],
       aantalGeldig: 1,
@@ -207,6 +210,30 @@ describe('KlantImportModal — het voorbeeld toont welke verplichtingen meekomen
     const tabel = await screen.findByRole('table')
     expect(within(tabel).getByText(/Algemene vergadering/)).toBeInTheDocument()
     expect(within(tabel).getByText(/Voorafbetalingen/)).toBeInTheDocument()
+  })
+
+  it('toont ook de instellingen die het bestand meegaf', async () => {
+    // Zonder dit zie je pas na het opslaan of "1 maand voor AV" ook echt zo
+    // gelezen is -- en dan staat het dossier er al met de verkeerde deadline.
+    leesKlantenBestand.mockResolvedValue({
+      ...VOORBEELD,
+      rijen: [
+        {
+          ...rij(2, 'Acme BV'),
+          verplichtingen: [
+            { code: 'jaarafsluiting' as const, parameters: { basis: 'voor_av', maanden_voor_av: 2 } },
+            { code: 'rapportering' as const, parameters: { frequentie: 'maand', termijn_dagen: 15 } },
+          ],
+        },
+      ],
+      aantalGeldig: 1,
+    })
+    toon()
+    await kiesBestand()
+
+    const tabel = await screen.findByRole('table')
+    expect(within(tabel).getByText(/2 mnd voor AV/)).toBeInTheDocument()
+    expect(within(tabel).getByText(/maand, 15 d/)).toBeInTheDocument()
   })
 
   it('zegt het wanneer een rij geen enkele verplichting aanvinkt', async () => {

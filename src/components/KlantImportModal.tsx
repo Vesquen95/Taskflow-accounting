@@ -9,6 +9,7 @@ import {
   type ImportRij,
   type ImportVoorbeeld,
   type NieuweKlant,
+  type VerplichtingKeuze,
 } from '../lib/klantImport'
 import { SJABLOON_BESTANDSNAAM, downloadSjabloon, leesKlantenBestand } from '../lib/klantImportBestand'
 import { voerKlantImportUit, type ImportVerslag } from '../lib/klantImportOpslag'
@@ -57,10 +58,29 @@ function toonWaarde(rij: ImportRij, sleutel: keyof NieuweKlant): string {
  *  het opslaan -- en dan staat er al een dossier met de verkeerde deadlines. */
 function verplichtingenTekst(rij: ImportRij): string {
   if (rij.verplichtingen.length === 0) return 'Geen'
-  return rij.verplichtingen
-    .map((code) => KOLOMMEN.find((k) => k.sleutel === code)?.kop ?? code)
-    .join(', ')
+  return rij.verplichtingen.map(keuzeTekst).join(', ')
 }
+
+/** De naam van de verplichting, met de instellingen erachter wanneer het
+ *  bestand er meegaf. Zonder die instellingen op het scherm zie je pas na het
+ *  opslaan of "1 maand voor AV" ook echt zo gelezen is. */
+function keuzeTekst(keuze: VerplichtingKeuze): string {
+  const kop = KOLOMMEN.find((k) => k.sleutel === keuze.code)?.kop ?? keuze.code
+  const p = keuze.parameters
+  const delen: string[] = []
+  if (p.basis === 'voor_av') delen.push(`${p.maanden_voor_av} mnd voor AV`)
+  else if (p.basis === 'boekjaar') delen.push(`${p.sla_maanden} mnd na boekjaar`)
+  if (p.av_vorm === 'vaste_datum') delen.push(`${p.av_dag}/${p.av_maand}`)
+  else if (p.av_vorm === 'nde_weekdag') delen.push(`${p.av_rang} ${p.av_weekdag} van ${MAANDNAMEN_KORT[(p.av_maand as number) - 1]}`)
+  if (p.frequentie) delen.push(String(p.frequentie))
+  if (p.termijn_dagen) delen.push(`${p.termijn_dagen} d`)
+  return delen.length === 0 ? kop : `${kop} (${delen.join(', ')})`
+}
+
+const MAANDNAMEN_KORT = [
+  'januari', 'februari', 'maart', 'april', 'mei', 'juni',
+  'juli', 'augustus', 'september', 'oktober', 'november', 'december',
+]
 
 function VoorbeeldTabel({ rijen }: { rijen: ImportRij[] }) {
   return (
@@ -168,9 +188,8 @@ function Verslag({ verslag }: { verslag: ImportVerslag }) {
       {verslag.gelukt.length > 0 && (
         <p className="text-xs text-slate-500">
           De taken staan klaar: de btw-taken volgen uit het btw-regime, de overige uit de verplichtingen die je in het
-          bestand aanvinkte. De neerlegging bij de NBB komt mee met de algemene vergadering. Vertrouwelijkheid, een
-          standaard verantwoordelijke, de statutaire AV-datum en de overige instellingen per verplichting vul je aan in
-          het klantdossier.
+          bestand aanvinkte, met de instellingen die erbij stonden. De neerlegging bij de NBB komt mee met de algemene
+          vergadering. Vertrouwelijkheid en een standaard verantwoordelijke stel je per klant in het dossier in.
         </p>
       )}
     </div>
@@ -189,7 +208,7 @@ export function KlantImportModal({
   bestaandeOndernemingsnummers: string[]
   maakKlant: (klant: NieuweKlant) => Promise<string>
   /** Zet de taken van een net aangemaakte klant klaar (sync_client_tasks). */
-  zetVerplichtingen?: (clientId: string, verplichtingen: string[]) => Promise<void>
+  zetVerplichtingen?: (clientId: string, verplichtingen: VerplichtingKeuze[]) => Promise<void>
   /** Aangeroepen na de import met het aantal aangemaakte klanten. */
   onKlaar: (aantalAangemaakt: number) => void
   onClose: () => void

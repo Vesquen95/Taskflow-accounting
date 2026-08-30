@@ -15,6 +15,7 @@ const KOPPEN = KOLOMMEN.map((k) => k.kop)
 const GOEDE_RIJ: unknown[] = [
   'Acme BV', 'BE0123.456.749', 'BV', 12, 31, 'Periodieke aangever', 'Kwartaal', 'Ja',
   'Ja', 'Ja', 'Ja', 'Ja', 'Nee', '', '', '',
+  '15/05', '1 maand voor AV', '', '',
 ]
 
 /** Bouwt een bladmatrix: kopregel + de meegegeven rijen. */
@@ -192,14 +193,20 @@ describe('leesKlantRijen — normaliseren wat veilig te normaliseren is', () => 
   })
 
   it('leest getallen die als tekst binnenkomen', () => {
-    const rij = leesKlantRijen(blad(metVeld('boekjaar_einde_maand', ' 6 ', metVeld('boekjaar_einde_dag', '30')))).rijen[0]
+    // Ook de AV-datum meeveranderen: 15/05 valt buiten de wettelijke zes
+    // maanden zodra het boekjaar op 30/06 eindigt, en dat is terecht.
+    const rij = leesKlantRijen(
+      blad(metVeld('boekjaar_einde_maand', ' 6 ', metVeld('boekjaar_einde_dag', '30', metVeld('av_datum', ''))))
+    ).rijen[0]
     expect(rij.fouten).toEqual([])
     expect(rij.klant?.boekjaar_einde_maand).toBe(6)
     expect(rij.klant?.boekjaar_einde_dag).toBe(30)
   })
 
   it('leest een maandnaam', () => {
-    const rij = leesKlantRijen(blad(metVeld('boekjaar_einde_maand', 'juni', metVeld('boekjaar_einde_dag', 30)))).rijen[0]
+    const rij = leesKlantRijen(
+      blad(metVeld('boekjaar_einde_maand', 'juni', metVeld('boekjaar_einde_dag', 30, metVeld('av_datum', ''))))
+    ).rijen[0]
     expect(rij.klant?.boekjaar_einde_maand).toBe(6)
   })
 
@@ -320,7 +327,7 @@ describe('leesKlantRijen — de verplichtingen per klant', () => {
     // De reden dat deze kolommen bestaan: anders moet elk geïmporteerd
     // dossier daarna nog één voor één opengezet worden.
     const rij = leesKlantRijen(blad(GOEDE_RIJ)).rijen[0]
-    expect(rij.verplichtingen).toEqual([
+    expect(rij.verplichtingen.map((v) => v.code)).toEqual([
       'algemene_vergadering',
       'jaarafsluiting',
       'aangifte_venb_pb',
@@ -329,16 +336,16 @@ describe('leesKlantRijen — de verplichtingen per klant', () => {
   })
 
   it('telt een lege cel als Nee', () => {
-    const rij = leesKlantRijen(blad(metVeld('algemene_vergadering', ''))).rijen[0]
+    const rij = leesKlantRijen(blad(metVeld('algemene_vergadering', '', metVeld('av_datum', '')))).rijen[0]
     expect(rij.fouten).toEqual([])
-    expect(rij.verplichtingen).not.toContain('algemene_vergadering')
+    expect(rij.verplichtingen.map((v) => v.code)).not.toContain('algemene_vergadering')
   })
 
   it('aanvaardt de gebruikelijke schrijfwijzen voor ja', () => {
     for (const waarde of ['ja', 'JA', 'x', 'X', 1, true]) {
       const rij = leesKlantRijen(blad(metVeld('rapportering', waarde))).rijen[0]
       expect(rij.fouten).toEqual([])
-      expect(rij.verplichtingen).toContain('rapportering')
+      expect(rij.verplichtingen.map((v) => v.code)).toContain('rapportering')
     }
   })
 
@@ -365,9 +372,145 @@ describe('leesKlantRijen — de verplichtingen per klant', () => {
   it('leest een oud bestand zonder verplichtingskolommen gewoon in', () => {
     // Wie het sjabloon van vóór deze uitbreiding gebruikt, mag niet stranden:
     // die klanten komen binnen zonder verplichtingen, precies zoals voorheen.
-    const oudeKoppen = KOLOMMEN.filter((k) => !k.verplichting).map((k) => k.kop)
+    const oudeKoppen = KOLOMMEN.filter((k) => !k.verplichting && !k.instelling).map((k) => k.kop)
     const voorbeeld = leesKlantRijen([oudeKoppen, GOEDE_RIJ.slice(0, oudeKoppen.length)])
     expect(voorbeeld.rijen[0].fouten).toEqual([])
     expect(voorbeeld.rijen[0].verplichtingen).toEqual([])
+  })
+})
+
+describe('leesKlantRijen — de instellingen per verplichting', () => {
+  function keuze(rij: ReturnType<typeof leesKlantRijen>['rijen'][number], code: string) {
+    return rij.verplichtingen.find((v) => v.code === code)
+  }
+
+  it('leest een vaste statutaire AV-datum', () => {
+    const rij = leesKlantRijen(blad(metVeld('av_datum', '15/05'))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(keuze(rij, 'algemene_vergadering')?.parameters).toEqual({
+      av_vorm: 'vaste_datum',
+      av_maand: 5,
+      av_dag: 15,
+    })
+  })
+
+  it('leest een datum met een maandnaam en met verschillende scheidingstekens', () => {
+    for (const waarde of ['15 mei', '15-5', '15.5', '15 5']) {
+      const rij = leesKlantRijen(blad(metVeld('av_datum', waarde))).rijen[0]
+      expect(rij.fouten).toEqual([])
+      expect(keuze(rij, 'algemene_vergadering')?.parameters).toMatchObject({ av_maand: 5, av_dag: 15 })
+    }
+  })
+
+  it('leest een n-de weekdag', () => {
+    const rij = leesKlantRijen(blad(metVeld('av_datum', 'eerste maandag van juni'))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(keuze(rij, 'algemene_vergadering')?.parameters).toEqual({
+      av_vorm: 'nde_weekdag',
+      av_rang: 'eerste',
+      av_weekdag: 'maandag',
+      av_maand: 6,
+    })
+  })
+
+  it('leest ook "laatste vrijdag van mei"', () => {
+    const rij = leesKlantRijen(blad(metVeld('av_datum', 'laatste vrijdag van mei'))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(keuze(rij, 'algemene_vergadering')?.parameters).toMatchObject({
+      av_rang: 'laatste',
+      av_weekdag: 'vrijdag',
+      av_maand: 5,
+    })
+  })
+
+  it('weigert een AV-datum die niet bestaat', () => {
+    const rij = leesKlantRijen(blad(metVeld('av_datum', '31/04'))).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/bestaat niet/i)
+  })
+
+  // enforce_av_parameters() weigert dit ook. Het hier al zeggen scheelt een
+  // rij die er in het voorbeeld geldig uitziet en pas bij het opslaan sneuvelt.
+  it('weigert een AV die buiten de wettelijke zes maanden valt', () => {
+    const rij = leesKlantRijen(blad(metVeld('av_datum', '15/09'))).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/zes maanden/i)
+  })
+
+  it('laat een AV zonder statutaire datum gewoon door', () => {
+    // Bewust geen standaarddatum verzinnen: de motor valt dan terug op de
+    // wettelijke uiterste datum, net als in het klantformulier.
+    const rij = leesKlantRijen(blad(metVeld('av_datum', ''))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(keuze(rij, 'algemene_vergadering')?.parameters).toEqual({})
+  })
+
+  it('leest de jaarafsluiting vóór de algemene vergadering', () => {
+    for (const waarde of ['1 maand voor AV', 'voor av 1', '1 voor AV']) {
+      const rij = leesKlantRijen(blad(metVeld('jaarafsluiting_deadline', waarde))).rijen[0]
+      expect(rij.fouten).toEqual([])
+      expect(keuze(rij, 'jaarafsluiting')?.parameters).toEqual({ basis: 'voor_av', maanden_voor_av: 1 })
+    }
+  })
+
+  it('neemt één maand aan wanneer "voor AV" zonder getal staat', () => {
+    const rij = leesKlantRijen(blad(metVeld('jaarafsluiting_deadline', 'voor AV'))).rijen[0]
+    expect(keuze(rij, 'jaarafsluiting')?.parameters).toEqual({ basis: 'voor_av', maanden_voor_av: 1 })
+  })
+
+  it('leest een doorlooptijd na het boekjaareinde', () => {
+    for (const waarde of ['3', '3 maanden', '3 maanden na boekjaareinde']) {
+      const rij = leesKlantRijen(blad(metVeld('jaarafsluiting_deadline', waarde))).rijen[0]
+      expect(rij.fouten).toEqual([])
+      expect(keuze(rij, 'jaarafsluiting')?.parameters).toEqual({ basis: 'boekjaar', sla_maanden: 3 })
+    }
+  })
+
+  // Dezelfde grenzen als enforce_jaarafsluiting_parameters() (migratie 0029).
+  it('houdt zich aan de grenzen die de databank ook afdwingt', () => {
+    const teVeelVoorAv = leesKlantRijen(blad(metVeld('jaarafsluiting_deadline', '9 maanden voor AV'))).rijen[0]
+    expect(teVeelVoorAv.klant).toBeNull()
+    expect(teVeelVoorAv.fouten.join(' ')).toMatch(/tussen 1 en 6/)
+
+    const teVeelNaBoekjaar = leesKlantRijen(blad(metVeld('jaarafsluiting_deadline', '18'))).rijen[0]
+    expect(teVeelNaBoekjaar.klant).toBeNull()
+    expect(teVeelNaBoekjaar.fouten.join(' ')).toMatch(/tussen 1 en 12/)
+  })
+
+  it('leest de rapporteringsfrequentie en -termijn', () => {
+    const rij = leesKlantRijen(
+      blad(
+        metVeld('rapportering', 'Ja',
+          metVeld('rapportering_frequentie', 'Maand', metVeld('rapportering_termijn', 15)))
+      )
+    ).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(keuze(rij, 'rapportering')?.parameters).toEqual({ frequentie: 'maand', termijn_dagen: 15 })
+  })
+
+  it('weigert een rapporteringstermijn die geen aantal dagen is', () => {
+    const rij = leesKlantRijen(
+      blad(metVeld('rapportering', 'Ja', metVeld('rapportering_termijn', 'snel')))
+    ).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/dagen/i)
+  })
+
+  // Anders staat er een instelling in het bestand die nergens werkt, en dat
+  // merk je pas als de deadline er maanden later naast blijkt te zitten.
+  it('weigert een instelling zonder de bijhorende verplichting', () => {
+    const rij = leesKlantRijen(
+      blad(metVeld('rapportering_frequentie', 'Maand'))
+    ).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/Rapportering.*op Nee staat/i)
+  })
+
+  it('laat lege instellingen de standaardwaarden houden', () => {
+    // Het bestand geeft alleen mee wat er echt stond; de standaarden komen er
+    // bij het opslaan bij, langs dezelfde helper als het klantformulier.
+    const rij = leesKlantRijen(blad(metVeld('jaarafsluiting_deadline', ''))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(keuze(rij, 'jaarafsluiting')?.parameters).toEqual({})
   })
 })

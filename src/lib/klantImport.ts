@@ -30,10 +30,14 @@ import type { BtwFrequentie, BtwRegime } from '../types'
  *    wordt door de motor mee aangemaakt zodra een klant een AV heeft (de
  *    voorlopige datum is AV + 30 dagen, en wordt echt berekend zodra de AV
  *    afgerond is). Een eigen kolom zou een vinkje zijn dat niets doet.
- *  - de parameters van een verplichting (de statutaire AV-datum, de
- *    doorlooptijd van de jaarafsluiting, de rapporteringsfrequentie): die
- *    krijgen de standaardwaarden en horen daarna in het klantdossier thuis.
- *    Ze hier per kolom vragen maakt van een klantenlijst een formulier.
+ *  - vertrouwelijkheid en de standaard verantwoordelijke, zie hierboven.
+ *
+ * De instellingen per verplichting (de statutaire AV-datum, de doorlooptijd
+ * van de jaarafsluiting, de rapporteringsfrequentie) staan wél in het bestand,
+ * elk in een eigen kolom. Ze zijn per dossier verschillend, en zonder die
+ * kolommen moet elk geïmporteerd dossier daarna alsnog één voor één
+ * opengezet worden -- precies wat een import moet vermijden. Een lege cel
+ * betekent overal: de standaardwaarde van het klantformulier.
  */
 
 /** Grens op wat we van buiten aanvaarden. Een klantenlijst van 500 rijen is
@@ -66,6 +70,15 @@ export type VerplichtingSleutel =
   | 'fiche_281_45'
   | 'fiche_281_50'
 
+/** De kolommen die de instellingen van een verplichting dragen. Ze staan los
+ *  van het Ja/Nee-vinkje: een parameter invullen zonder de verplichting aan te
+ *  vinken is een fout, geen stille instelling die nergens werkt. */
+export type ParameterSleutel =
+  | 'av_datum'
+  | 'jaarafsluiting_deadline'
+  | 'rapportering_frequentie'
+  | 'rapportering_termijn'
+
 export type KolomSleutel =
   | 'naam'
   | 'ondernemingsnummer'
@@ -76,12 +89,15 @@ export type KolomSleutel =
   | 'btw_aangifte_frequentie'
   | 'mandataris'
   | VerplichtingSleutel
+  | ParameterSleutel
 
 export interface Kolom {
   sleutel: KolomSleutel
   /** Gezet op de kolommen die een verplichting aan- of uitzetten. Ja/Nee, en
    *  leeg telt als Nee. */
   verplichting?: true
+  /** Gezet op de kolommen die een instelling van zo'n verplichting dragen. */
+  instelling?: true
   /** De kop zoals ze in het sjabloon staat. */
   kop: string
   /** Moet de kolom in het bestand staan? (Niet: moet elke cel gevuld zijn.) */
@@ -193,6 +209,54 @@ const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
   },
 ]
 
+/** De instellingen per verplichting. Ze staan als eigen kolommen naast het
+ *  vinkje en niet ín het vinkje ("Ja" versus "3 maanden"): een kolom die soms
+ *  een ja/nee en soms een instelling bevat is in een lijst van honderd rijen
+ *  niet meer te lezen, en al helemaal niet te sorteren of te filteren.
+ *
+ *  Een lege cel betekent overal: de standaardwaarde, dezelfde die het
+ *  klantformulier invult bij het aanvinken. */
+const PARAMETER_KOLOMMEN: readonly Kolom[] = [
+  {
+    sleutel: 'av_datum',
+    kop: 'AV statutaire datum',
+    vereist: false,
+    instelling: true,
+    uitleg:
+      'Optioneel, alleen bij een aangevinkte algemene vergadering. Een vaste datum ("15/05", "15 mei") of een n-de weekdag ("eerste maandag van juni", "laatste vrijdag van mei"). Leeg laten mag: dan rekent Taskflow met de wettelijke uiterste datum, zes maanden na het boekjaareinde.',
+    synoniemen: ['avdatum', 'statutairedatum', 'datumav', 'avstatuten'],
+    breedte: 28,
+  },
+  {
+    sleutel: 'jaarafsluiting_deadline',
+    kop: 'Jaarafsluiting deadline',
+    vereist: false,
+    instelling: true,
+    uitleg:
+      'Optioneel, alleen bij een aangevinkte jaarafsluiting. Ofwel een aantal maanden na het boekjaareinde ("3", "3 maanden na boekjaareinde", 1 t.e.m. 12), ofwel voor de algemene vergadering ("1 maand voor AV", "voor AV", 1 t.e.m. 6). Leeg = 3 maanden na het boekjaareinde.',
+    synoniemen: ['jaarafsluitingtermijn', 'afsluitingdeadline', 'jaarafsluitingberekening'],
+    breedte: 30,
+  },
+  {
+    sleutel: 'rapportering_frequentie',
+    kop: 'Rapportering frequentie',
+    vereist: false,
+    instelling: true,
+    uitleg: 'Optioneel, alleen bij aangevinkte rapportering. Maand / Kwartaal / Jaar. Leeg = Kwartaal.',
+    synoniemen: ['frequentierapportering', 'rapporteringsfrequentie'],
+    breedte: 22,
+  },
+  {
+    sleutel: 'rapportering_termijn',
+    kop: 'Rapportering termijn (dagen)',
+    vereist: false,
+    instelling: true,
+    uitleg: 'Optioneel, alleen bij aangevinkte rapportering. Aantal dagen na de periode, 1 t.e.m. 90. Leeg = 10.',
+    synoniemen: ['termijnrapportering', 'rapporteringtermijn', 'dagenrapportering'],
+    breedte: 26,
+  },
+]
+
 export const KOLOMMEN: readonly Kolom[] = [
   {
     sleutel: 'naam',
@@ -260,6 +324,7 @@ export const KOLOMMEN: readonly Kolom[] = [
     breedte: 12,
   },
   ...VERPLICHTING_KOLOMMEN,
+  ...PARAMETER_KOLOMMEN,
 ]
 
 /**
@@ -287,6 +352,10 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     fiche_281_20: 'Ja',
     fiche_281_45: 'Nee',
     fiche_281_50: 'Ja',
+    av_datum: '15/05',
+    jaarafsluiting_deadline: '1 maand voor AV',
+    rapportering_frequentie: 'Kwartaal',
+    rapportering_termijn: '10',
   },
   {
     naam: 'Tweede Voorbeeld VZW',
@@ -305,6 +374,10 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     fiche_281_20: 'Nee',
     fiche_281_45: 'Nee',
     fiche_281_50: 'Nee',
+    av_datum: 'eerste maandag van december',
+    jaarafsluiting_deadline: '3',
+    rapportering_frequentie: '',
+    rapportering_termijn: '',
   },
 ]
 
@@ -322,6 +395,16 @@ export interface NieuweKlant {
   mandataris: boolean
 }
 
+/** Eén aangevinkte verplichting, met wat het bestand erover zei. `parameters`
+ *  bevat alléén wat er echt ingevuld stond; de standaardwaarden komen er bij
+ *  het opslaan bij, langs dezelfde weg als in het klantformulier. Ze hier al
+ *  invullen zou betekenen dat de import haar eigen standaarden bijhoudt naast
+ *  die van het formulier, en dan lopen die twee vroeg of laat uiteen. */
+export interface VerplichtingKeuze {
+  code: VerplichtingSleutel
+  parameters: Record<string, unknown>
+}
+
 export interface ImportRij {
   /** Het rijnummer zoals de gebruiker het in Excel ziet (1-gebaseerd). */
   excelRij: number
@@ -329,10 +412,10 @@ export interface ImportRij {
   ruw: Record<KolomSleutel, string>
   /** De klant die opgeslagen wordt, of null wanneer de rij fouten heeft. */
   klant: NieuweKlant | null
-  /** De verplichtingen die aangevinkt staan, als code uit obligation_types.
-   *  Los van `klant` gehouden: dat object bevat precies de kolommen van de
-   *  tabel clients en niets anders. */
-  verplichtingen: VerplichtingSleutel[]
+  /** De verplichtingen die aangevinkt staan, met de instellingen die het
+   *  bestand meegaf. Los van `klant` gehouden: dat object bevat precies de
+   *  kolommen van de tabel clients en niets anders. */
+  verplichtingen: VerplichtingKeuze[]
   fouten: string[]
   /** Aangepast maar wel opgeslagen: aannames die zichtbaar moeten zijn. */
   waarschuwingen: string[]
@@ -670,19 +753,286 @@ function leesJaNee(ruw: string, kolomKop: string, fouten: string[]): boolean | n
   return null
 }
 
-/** De aangevinkte verplichtingen van deze rij. Een onleesbare cel is een fout
- *  op de rij: bij een compliancetaak is "we hebben het maar overgeslagen" de
- *  slechtste uitkomst. */
+// -------------------------------------------------- instellingen
+
+const RANGEN = ['eerste', 'tweede', 'derde', 'vierde', 'laatste']
+const WEEKDAGEN = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag']
+
+const RAPPORTERING_LABELS: Record<string, string> = {
+  maand: 'Maand',
+  kwartaal: 'Kwartaal',
+  jaar: 'Jaar',
+}
+
+const RAPPORTERING_VAN_TEKST: Record<string, string> = {
+  maand: 'maand',
+  maandelijks: 'maand',
+  permaand: 'maand',
+  kwartaal: 'kwartaal',
+  perkwartaal: 'kwartaal',
+  driemaandelijks: 'kwartaal',
+  jaar: 'jaar',
+  jaarlijks: 'jaar',
+  perjaar: 'jaar',
+}
+
+/**
+ * De statutaire AV-datum uit de parameters, zoals av_datum() in de databank
+ * hem berekent (migratie 0020).
+ *
+ * Dit rekenwerk staat hier alleen om vóóraf te kunnen zeggen wat de databank
+ * straks zal antwoorden: enforce_av_parameters() weigert een datum die niet
+ * bestaat of die buiten de wettelijke zes maanden na het boekjaareinde valt.
+ * De databank blijft de baas -- zou dit ooit iets anders zeggen, dan faalt de
+ * rij alsnog bij het opslaan, met de melding van de databank erbij.
+ */
+function berekenAvDatum(
+  boekjaarEinde: { jaar: number; maand: number; dag: number },
+  parameters: Record<string, unknown>
+): Date | null {
+  const vorm = parameters.av_vorm as string | undefined
+  const maand = parameters.av_maand as number | undefined
+  if (!vorm || !maand) return null
+  const be = new Date(boekjaarEinde.jaar, boekjaarEinde.maand - 1, boekjaarEinde.dag)
+
+  // Twee pogingen: de maand in het jaar van het boekjaareinde, en zo nodig
+  // dezelfde maand een jaar later. De AV valt per definitie ná het
+  // boekjaareinde.
+  for (const extra of [0, 1]) {
+    const jaar = boekjaarEinde.jaar + extra
+    let kandidaat: Date | null = null
+
+    if (vorm === 'vaste_datum') {
+      const dag = parameters.av_dag as number | undefined
+      if (!dag) return null
+      const laatsteDag = new Date(jaar, maand, 0).getDate()
+      if (dag > laatsteDag) return null
+      kandidaat = new Date(jaar, maand - 1, dag)
+    } else {
+      const rang = parameters.av_rang as string | undefined
+      const weekdagIndex = WEEKDAGEN.indexOf((parameters.av_weekdag as string) ?? '')
+      if (!rang || weekdagIndex === -1) return null
+      // isodow: maandag = 1 ... zondag = 7.
+      const doel = weekdagIndex + 1
+      if (rang === 'laatste') {
+        const laatste = new Date(jaar, maand, 0)
+        const isodow = laatste.getDay() === 0 ? 7 : laatste.getDay()
+        kandidaat = new Date(jaar, maand - 1, laatste.getDate() - ((isodow - doel + 7) % 7))
+      } else {
+        const eerste = new Date(jaar, maand - 1, 1)
+        const isodow = eerste.getDay() === 0 ? 7 : eerste.getDay()
+        const stap = ['eerste', 'tweede', 'derde', 'vierde'].indexOf(rang)
+        if (stap === -1) return null
+        kandidaat = new Date(jaar, maand - 1, 1 + ((doel - isodow + 7) % 7) + stap * 7)
+      }
+    }
+
+    if (kandidaat > be) return kandidaat
+  }
+  return null
+}
+
+/** De statutaire AV-datum uit de cel. Leeg mag: dan is er geen statutaire
+ *  datum en valt de motor terug op de wettelijke uiterste datum -- dezelfde
+ *  regel als in het klantformulier, waar een plausibel ogende standaarddatum
+ *  bewust ontbreekt. */
+function leesAvDatum(
+  ruw: string,
+  boekjaar: Boekjaareinde | null,
+  fouten: string[]
+): Record<string, unknown> | null {
+  if (ruw === '') return null
+
+  const parameters: Record<string, unknown> = {}
+  const genormaliseerd = normaliseerKop(ruw)
+
+  // "eerste maandag van juni", "laatste vrijdag mei"
+  const rang = RANGEN.find((r) => genormaliseerd.startsWith(r))
+  if (rang) {
+    const rest = genormaliseerd.slice(rang.length)
+    const weekdag = WEEKDAGEN.find((w) => rest.startsWith(w))
+    const maandNaam = weekdag ? MAANDNAMEN.find((m) => rest.endsWith(m)) : undefined
+    if (!weekdag || !maandNaam) {
+      fouten.push(
+        `AV statutaire datum "${kort(ruw, 40)}" is onvolledig. Schrijf bijvoorbeeld "eerste maandag van juni".`
+      )
+      return null
+    }
+    parameters.av_vorm = 'nde_weekdag'
+    parameters.av_rang = rang
+    parameters.av_weekdag = weekdag
+    parameters.av_maand = MAANDNAMEN.indexOf(maandNaam) + 1
+  } else {
+    // "15/05", "15-5", "15 mei"
+    const cijfers = ruw.match(/^\s*(\d{1,2})\s*[-/.\s]\s*(\d{1,2})\s*$/)
+    const metNaam = ruw.match(/^\s*(\d{1,2})\s*[-/.\s]?\s*([a-zA-Z]+)\s*$/)
+    let dag: number | null = null
+    let maand: number | null = null
+    if (cijfers) {
+      dag = Number(cijfers[1])
+      maand = Number(cijfers[2])
+    } else if (metNaam) {
+      dag = Number(metNaam[1])
+      const index = MAANDNAMEN.indexOf(normaliseerKop(metNaam[2]))
+      maand = index === -1 ? null : index + 1
+    }
+    if (dag === null || maand === null || maand < 1 || maand > 12 || dag < 1 || dag > 31) {
+      fouten.push(
+        `AV statutaire datum "${kort(ruw, 40)}" is geen datum. Schrijf "15/05", "15 mei" of "eerste maandag van juni".`
+      )
+      return null
+    }
+    if (dag > DAGEN_PER_MAAND[maand - 1]) {
+      fouten.push(
+        `AV statutaire datum ${dag}/${maand} bestaat niet: ${MAANDNAMEN[maand - 1]} heeft hoogstens ${DAGEN_PER_MAAND[maand - 1]} dagen.`
+      )
+      return null
+    }
+    parameters.av_vorm = 'vaste_datum'
+    parameters.av_maand = maand
+    parameters.av_dag = dag
+  }
+
+  // De wettelijke termijn, dezelfde controle als enforce_av_parameters().
+  // Zonder deze zou de rij er geldig uitzien en pas bij het opslaan sneuvelen.
+  if (boekjaar) {
+    const jaar = new Date().getFullYear()
+    const be = { jaar, maand: boekjaar.maand, dag: boekjaar.dag }
+    const av = berekenAvDatum(be, parameters)
+    if (av === null) {
+      fouten.push(
+        `AV statutaire datum "${kort(ruw, 40)}" levert geen bruikbare datum op voor een boekjaar dat op ${boekjaar.dag}/${boekjaar.maand} eindigt.`
+      )
+      return null
+    }
+    const uiterste = new Date(jaar, boekjaar.maand - 1 + 6, boekjaar.dag)
+    if (av > uiterste) {
+      fouten.push(
+        `AV statutaire datum "${kort(ruw, 40)}" valt buiten de wettelijke termijn: de algemene vergadering moet binnen zes maanden na het boekjaareinde (${boekjaar.dag}/${boekjaar.maand}) gehouden worden.`
+      )
+      return null
+    }
+  }
+
+  return parameters
+}
+
+/** De deadline van de jaarafsluiting: een aantal maanden na het boekjaareinde,
+ *  of een aantal maanden vóór de algemene vergadering (migratie 0029). De
+ *  grenzen zijn die van de databank: 1-12 na het boekjaareinde, 1-6 voor de
+ *  AV, want de AV valt zelf uiterlijk zes maanden na het boekjaareinde. */
+function leesJaarafsluitingDeadline(ruw: string, fouten: string[]): Record<string, unknown> | null {
+  if (ruw === '') return null
+
+  const genormaliseerd = normaliseerKop(ruw)
+  const getal = ruw.match(/\d+/)
+  const aantal = getal ? Number(getal[0]) : null
+  const voorAv = genormaliseerd.includes('voor') && genormaliseerd.includes('av')
+
+  if (voorAv) {
+    const maanden = aantal ?? 1
+    if (maanden < 1 || maanden > 6) {
+      fouten.push(
+        `Jaarafsluiting deadline "${kort(ruw, 40)}": het aantal maanden voor de algemene vergadering moet tussen 1 en 6 liggen. De AV valt zelf uiterlijk zes maanden na het boekjaareinde.`
+      )
+      return null
+    }
+    return { basis: 'voor_av', maanden_voor_av: maanden }
+  }
+
+  if (aantal === null) {
+    fouten.push(
+      `Jaarafsluiting deadline "${kort(ruw, 40)}" is niet te lezen. Schrijf een aantal maanden na het boekjaareinde ("3") of voor de vergadering ("1 maand voor AV").`
+    )
+    return null
+  }
+  if (aantal < 1 || aantal > 12) {
+    fouten.push(
+      `Jaarafsluiting deadline "${kort(ruw, 40)}": de doorlooptijd moet tussen 1 en 12 maanden na het boekjaareinde liggen.`
+    )
+    return null
+  }
+  return { basis: 'boekjaar', sla_maanden: aantal }
+}
+
+function leesRapporteringFrequentie(ruw: string, fouten: string[]): string | null {
+  if (ruw === '') return null
+  const frequentie = RAPPORTERING_VAN_TEKST[normaliseerKop(ruw)]
+  if (!frequentie) {
+    fouten.push(
+      `Rapportering frequentie "${kort(ruw, 30)}" is geen geldige waarde. Kies uit: ${Object.values(RAPPORTERING_LABELS).join(', ')}.`
+    )
+    return null
+  }
+  return frequentie
+}
+
+function leesRapporteringTermijn(ruw: string, fouten: string[]): number | null {
+  if (ruw === '') return null
+  const dagen = Number(ruw.replace(',', '.'))
+  if (!Number.isInteger(dagen) || dagen < 1 || dagen > 90) {
+    fouten.push(
+      `Rapportering termijn "${kort(ruw, 30)}" is geen aantal dagen. Vul een getal van 1 tot en met 90 in.`
+    )
+    return null
+  }
+  return dagen
+}
+
+/** De aangevinkte verplichtingen van deze rij, met hun instellingen. Een
+ *  onleesbare cel is een fout op de rij: bij een compliancetaak is "we hebben
+ *  het maar overgeslagen" de slechtste uitkomst. */
 function leesVerplichtingen(
   ruw: Record<KolomSleutel, string>,
+  boekjaar: Boekjaareinde | null,
   fouten: string[]
-): VerplichtingSleutel[] {
-  const codes: VerplichtingSleutel[] = []
+): VerplichtingKeuze[] {
+  const keuzes: VerplichtingKeuze[] = []
   for (const kolom of VERPLICHTING_KOLOMMEN) {
     const aan = leesJaNee(ruw[kolom.sleutel], kolom.kop, fouten)
-    if (aan) codes.push(kolom.sleutel as VerplichtingSleutel)
+    if (aan) keuzes.push({ code: kolom.sleutel as VerplichtingSleutel, parameters: {} })
   }
-  return codes
+
+  const bij = (code: VerplichtingSleutel) => keuzes.find((k) => k.code === code)
+
+  /** Een instelling zonder haar verplichting is een fout en geen stille
+   *  waarde: wie de kolom invult verwacht dat ze iets doet. */
+  function eisAangevinkt(sleutel: ParameterSleutel, code: VerplichtingSleutel): VerplichtingKeuze | null {
+    if (ruw[sleutel] === '') return null
+    const keuze = bij(code)
+    if (!keuze) {
+      const kop = PARAMETER_KOLOMMEN.find((k) => k.sleutel === sleutel)!.kop
+      const verplichting = VERPLICHTING_KOLOMMEN.find((k) => k.sleutel === code)!.kop
+      fouten.push(`${kop} is ingevuld terwijl "${verplichting}" op Nee staat. Zet de verplichting op Ja of maak de cel leeg.`)
+      return null
+    }
+    return keuze
+  }
+
+  const avKeuze = eisAangevinkt('av_datum', 'algemene_vergadering')
+  if (avKeuze) {
+    const parameters = leesAvDatum(ruw.av_datum, boekjaar, fouten)
+    if (parameters) avKeuze.parameters = parameters
+  }
+
+  const jaKeuze = eisAangevinkt('jaarafsluiting_deadline', 'jaarafsluiting')
+  if (jaKeuze) {
+    const parameters = leesJaarafsluitingDeadline(ruw.jaarafsluiting_deadline, fouten)
+    if (parameters) jaKeuze.parameters = parameters
+  }
+
+  const rapFrequentie = eisAangevinkt('rapportering_frequentie', 'rapportering')
+  if (rapFrequentie) {
+    const frequentie = leesRapporteringFrequentie(ruw.rapportering_frequentie, fouten)
+    if (frequentie) rapFrequentie.parameters.frequentie = frequentie
+  }
+  const rapTermijn = eisAangevinkt('rapportering_termijn', 'rapportering')
+  if (rapTermijn) {
+    const dagen = leesRapporteringTermijn(ruw.rapportering_termijn, fouten)
+    if (dagen !== null) rapTermijn.parameters.termijn_dagen = dagen
+  }
+
+  return keuzes
 }
 
 interface DubbelControle {
@@ -738,7 +1088,7 @@ function leesRij(ruw: Record<KolomSleutel, string>, excelRij: number, dubbels: D
   const regime = leesRegime(ruw.btw_regime, fouten)
   const frequentie = leesFrequentie(ruw.btw_aangifte_frequentie, regime, fouten)
   const mandataris = leesJaNee(ruw.mandataris, 'Mandataris', fouten)
-  const verplichtingen = leesVerplichtingen(ruw, fouten)
+  const verplichtingen = leesVerplichtingen(ruw, boekjaar, fouten)
 
   const geldig =
     fouten.length === 0 && naam !== null && boekjaar !== null && regime !== null && mandataris !== null && frequentie !== 'fout'
