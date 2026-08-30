@@ -90,7 +90,7 @@ describe('ObligationPicker — getoonde standaardwaarden staan ook echt in param
 
     const sla = screen.getByLabelText('Klaar binnen (maanden na boekjaareinde)') as HTMLInputElement
     expect(sla.value).toBe('3')
-    expect(parametersVan('ot-jaar')).toEqual({ sla_maanden: 3 })
+    expect(parametersVan('ot-jaar')).toEqual({ basis: 'boekjaar', sla_maanden: 3 })
   })
 
   it('vult een bestaande verplichting aan zonder een ingevulde waarde te overschrijven', async () => {
@@ -129,11 +129,11 @@ describe('ObligationPicker — getoonde standaardwaarden staan ook echt in param
     await user.clear(sla)
     // Tijdens het typen mag het veld even leeg staan; er wordt dan niets
     // gewijzigd, en bij het verlaten verschijnt de bewaarde waarde weer.
-    expect(parametersVan('ot-jaar')).toEqual({ sla_maanden: 3 })
+    expect(parametersVan('ot-jaar')).toEqual({ basis: 'boekjaar', sla_maanden: 3 })
     await user.tab()
 
     expect(sla.value).toBe('3')
-    expect(parametersVan('ot-jaar')).toEqual({ sla_maanden: 3 })
+    expect(parametersVan('ot-jaar')).toEqual({ basis: 'boekjaar', sla_maanden: 3 })
   })
 
   it('bewaart een aangepaste SLA', async () => {
@@ -145,6 +145,65 @@ describe('ObligationPicker — getoonde standaardwaarden staan ook echt in param
     await user.type(sla, '{Backspace}6')
 
     expect(sla.value).toBe('6')
-    expect(parametersVan('ot-jaar')).toEqual({ sla_maanden: 6 })
+    expect(parametersVan('ot-jaar')).toEqual({ basis: 'boekjaar', sla_maanden: 6 })
+  })
+})
+
+describe('ObligationPicker — de jaarafsluiting voor de algemene vergadering', () => {
+  it('wisselt naar het AV-getal en laat de doorlooptijd verdwijnen', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('checkbox', { name: /Jaarafsluiting/ }))
+    await user.selectOptions(screen.getByLabelText('Deadline jaarafsluiting'), 'voor_av')
+
+    const maanden = screen.getByLabelText('Maanden voor de algemene vergadering') as HTMLInputElement
+    expect(maanden.value).toBe('1')
+    // sla_maanden moet echt weg zijn. Bleef het staan, dan zou het scherm iets
+    // anders tonen dan wat de motor gebruikt zodra iemand terugschakelt.
+    expect(parametersVan('ot-jaar')).toEqual({ basis: 'voor_av', maanden_voor_av: 1 })
+    expect(screen.queryByLabelText('Klaar binnen (maanden na boekjaareinde)')).toBeNull()
+  })
+
+  it('bewaart een ander aantal maanden voor de vergadering', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('checkbox', { name: /Jaarafsluiting/ }))
+    await user.selectOptions(screen.getByLabelText('Deadline jaarafsluiting'), 'voor_av')
+    await user.type(screen.getByLabelText('Maanden voor de algemene vergadering'), '{Backspace}2')
+
+    expect(parametersVan('ot-jaar')).toEqual({ basis: 'voor_av', maanden_voor_av: 2 })
+  })
+
+  it('komt terug op de doorlooptijd bij het terugschakelen', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('checkbox', { name: /Jaarafsluiting/ }))
+    const keuze = screen.getByLabelText('Deadline jaarafsluiting')
+    await user.selectOptions(keuze, 'voor_av')
+    await user.selectOptions(keuze, 'boekjaar')
+
+    expect(parametersVan('ot-jaar')).toEqual({ basis: 'boekjaar', sla_maanden: 3 })
+    expect(screen.queryByLabelText('Maanden voor de algemene vergadering')).toBeNull()
+  })
+
+  it('opent een bestaande AV-gebaseerde verplichting op die keuze', async () => {
+    render(
+      <Harness
+        initieel={legeSelecties(obligationTypes).map((s) =>
+          s.obligation_type_id === 'ot-jaar'
+            ? { ...s, gekozen: true, parameters: { basis: 'voor_av', maanden_voor_av: 3 } }
+            : s
+        )}
+      />
+    )
+
+    const keuze = screen.getByLabelText('Deadline jaarafsluiting') as HTMLSelectElement
+    expect(keuze.value).toBe('voor_av')
+    expect((screen.getByLabelText('Maanden voor de algemene vergadering') as HTMLInputElement).value).toBe('3')
+    // Het openen van een dossier mag er niets bij schrijven.
+    expect(parametersVan('ot-jaar')).toEqual({ basis: 'voor_av', maanden_voor_av: 3 })
   })
 })

@@ -4,6 +4,10 @@ import type { ObligationSelection } from '../lib/clientObligations'
 import {
   AV_GEEN_STATUTAIRE_DATUM,
   avParametersVoorVorm,
+  JAARAFSLUITING_BASIS_BOEKJAAR,
+  JAARAFSLUITING_BASIS_VOOR_AV,
+  jaarafsluitingBasis,
+  jaarafsluitingParametersVoorBasis,
   metParameter,
   metStandaardParameters,
   metStandaardParametersVoorSelecties,
@@ -126,17 +130,13 @@ export function ObligationPicker({
                   )}
 
                   {type.code === 'jaarafsluiting' && (
-                    <label className="flex items-center gap-2 text-xs text-slate-600">
-                      Klaar binnen
-                      <GetalVeld
-                        label="Klaar binnen (maanden na boekjaareinde)"
-                        min={1}
-                        max={12}
-                        waarde={getal(sel.parameters.sla_maanden, STANDAARD_PARAMETERS.jaarafsluiting.sla_maanden as number)}
-                        onWijzig={(n) => wijzigParameter(type.id, 'sla_maanden', n)}
-                      />
-                      maanden na het boekjaareinde
-                    </label>
+                    <JaarafsluitingVelden
+                      parameters={sel.parameters}
+                      onBasis={(basis) =>
+                        zetParameters(type.id, jaarafsluitingParametersVoorBasis(sel.parameters, basis))
+                      }
+                      onParameter={(k, v) => wijzigParameter(type.id, k, v)}
+                    />
                   )}
 
                   {type.code === 'rapportering' && (
@@ -193,6 +193,81 @@ export function ObligationPicker({
         })}
       </div>
     </fieldset>
+  )
+}
+
+/**
+ * De jaarafsluiting rekent op twee manieren (migratie 0029). De keuze staat
+ * vooraan, want ze bepaalt welk getal eronder betekenis heeft; een scherm dat
+ * allebei de getallen tegelijk toont laat de gebruiker een waarde invullen die
+ * niets doet.
+ *
+ * "Voor de algemene vergadering" is de reden dat dit bestaat: de boeken
+ * worden op die vergadering goedgekeurd, dus ze moeten daarvoor klaar zijn.
+ */
+function JaarafsluitingVelden({
+  parameters,
+  onBasis,
+  onParameter,
+}: {
+  parameters: ObligationParameters
+  onBasis: (basis: string) => void
+  onParameter: (sleutel: string, waarde: unknown) => void
+}) {
+  const basis = jaarafsluitingBasis(parameters)
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+      <label className="flex items-center gap-2">
+        Deadline
+        <select
+          aria-label="Deadline jaarafsluiting"
+          value={basis}
+          onChange={(e) => onBasis(e.target.value)}
+          className={veldKlasse()}
+        >
+          <option value={JAARAFSLUITING_BASIS_BOEKJAAR}>maanden na het boekjaareinde</option>
+          <option value={JAARAFSLUITING_BASIS_VOOR_AV}>maanden voor de algemene vergadering</option>
+        </select>
+      </label>
+
+      {basis === JAARAFSLUITING_BASIS_VOOR_AV ? (
+        <label className="flex items-center gap-2">
+          <GetalVeld
+            label="Maanden voor de algemene vergadering"
+            min={1}
+            max={6}
+            waarde={getal(parameters.maanden_voor_av, 1)}
+            onWijzig={(n) => onParameter('maanden_voor_av', n)}
+          />
+          maanden voor de algemene vergadering
+        </label>
+      ) : (
+        <label className="flex items-center gap-2">
+          Klaar binnen
+          <GetalVeld
+            label="Klaar binnen (maanden na boekjaareinde)"
+            min={1}
+            max={12}
+            waarde={getal(parameters.sla_maanden, 3)}
+            onWijzig={(n) => onParameter('sla_maanden', n)}
+          />
+          maanden na het boekjaareinde
+        </label>
+      )}
+
+      {basis === JAARAFSLUITING_BASIS_VOOR_AV && (
+        // Zonder statutaire AV-datum rekent de motor met de wettelijke uiterste
+        // datum (boekjaareinde + 6 maanden). Dat is een echte datum, maar zelden
+        // de dag waarop de vergadering werkelijk plaatsvindt -- en dan schuift
+        // de afsluiting mee.
+        <p className="w-full text-[11px] text-slate-500">
+          Is er bij de algemene vergadering geen statutaire datum ingevuld, dan
+          rekent Taskflow met de wettelijke uiterste datum: zes maanden na het
+          boekjaareinde.
+        </p>
+      )}
+    </div>
   )
 }
 

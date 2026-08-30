@@ -444,7 +444,7 @@ describe('ClientFormModal — jaarafsluiting: de getoonde SLA staat ook echt in 
 
     const sel = ingediendeWaarden().obligations.find((o) => o.obligation_type_id === 'ot-jaar')
     expect(String(sel?.parameters.sla_maanden ?? '')).toBe(veld.value)
-    expect(sel?.parameters).toEqual({ sla_maanden: 3 })
+    expect(sel?.parameters).toEqual({ basis: 'boekjaar', sla_maanden: 3 })
   })
 
   it('vult een bestaande jaarafsluiting zonder parameters aan met wat het scherm toont', async () => {

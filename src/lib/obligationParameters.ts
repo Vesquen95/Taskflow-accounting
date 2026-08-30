@@ -21,8 +21,73 @@ export type ObligationParameters = Record<string, unknown>
  *  'kwartaal')`, `coalesce(termijn_dagen, 10)`). Ze tonen én bewaren is dus
  *  precies hetzelfde gedrag, alleen zichtbaar en aanpasbaar. */
 export const STANDAARD_PARAMETERS: Record<string, ObligationParameters> = {
-  jaarafsluiting: { sla_maanden: 3 },
   rapportering: { frequentie: 'kwartaal', termijn_dagen: 10 },
+}
+
+/**
+ * De jaarafsluiting rekent op twee manieren, en dat is geen detail van het
+ * scherm maar een keuze per dossier (migratie 0029).
+ *
+ * `boekjaar`  boekjaareinde + `sla_maanden`      -- een afgesproken doorlooptijd
+ * `voor_av`   AV-datum - `maanden_voor_av`       -- klaar voor de vergadering
+ *
+ * De tweede is waarom dit bestaat: de boeken worden op de algemene
+ * vergadering goedgekeurd, dus ze moeten daarvoor klaar zijn. Met een vaste
+ * doorlooptijd van drie maanden viel de afsluiting bij een AV halverwege
+ * maart net erna -- een deadline die er correct uitzag en te laat was.
+ *
+ * Een verplichting zonder `basis` is een dossier van voor 0029 en rekent
+ * vanaf het boekjaareinde; die mogen hier niet stil van deadline veranderen.
+ */
+export const JAARAFSLUITING_BASIS_BOEKJAAR = 'boekjaar'
+export const JAARAFSLUITING_BASIS_VOOR_AV = 'voor_av'
+
+/** Per basis: het veld dat erbij hoort en de standaardwaarde ervan. De motor
+ *  hanteert dezelfde waarden wanneer de parameter ontbreekt (0029:
+ *  `coalesce(sla_maanden, 3)`, `coalesce(maanden_voor_av, 1)`). */
+const JAARAFSLUITING_VELD: Record<string, { sleutel: string; standaard: number }> = {
+  [JAARAFSLUITING_BASIS_BOEKJAAR]: { sleutel: 'sla_maanden', standaard: 3 },
+  [JAARAFSLUITING_BASIS_VOOR_AV]: { sleutel: 'maanden_voor_av', standaard: 1 },
+}
+
+/** Welke basis er opgeslagen staat. Alles wat geen herkende waarde is telt
+ *  als de boekjaarbasis -- dat is wat de motor ook doet, en de twee mogen
+ *  niet uit elkaar lopen. */
+export function jaarafsluitingBasis(parameters: ObligationParameters): string {
+  return parameters.basis === JAARAFSLUITING_BASIS_VOOR_AV
+    ? JAARAFSLUITING_BASIS_VOOR_AV
+    : JAARAFSLUITING_BASIS_BOEKJAAR
+}
+
+/** De parameters na het kiezen van een basis: het veld van die basis blijft
+ *  (of krijgt de standaardwaarde), dat van de andere gaat weg. Een achtergebleven
+ *  `sla_maanden` naast `basis: 'voor_av'` staat nergens meer op het scherm en
+ *  wordt tóch weer gebruikt zodra iemand terugschakelt. */
+export function jaarafsluitingParametersVoorBasis(
+  huidig: ObligationParameters,
+  basis: string
+): ObligationParameters {
+  const veld = JAARAFSLUITING_VELD[basis] ?? JAARAFSLUITING_VELD[JAARAFSLUITING_BASIS_BOEKJAAR]
+  const volgend: ObligationParameters = {}
+  for (const [sleutel, waarde] of Object.entries(huidig)) {
+    if (sleutel === 'basis') continue
+    if (sleutel === 'sla_maanden' || sleutel === 'maanden_voor_av') continue
+    volgend[sleutel] = waarde
+  }
+  volgend.basis = basis
+  volgend[veld.sleutel] = huidig[veld.sleutel] ?? veld.standaard
+  return volgend
+}
+
+/** Dezelfde inhoud? Dan geeft de aanvuller het oorspronkelijke object terug,
+ *  want het formulier vult aan vanuit een effect dat op referentie kijkt. */
+function zelfdeParameters(a: ObligationParameters, b: ObligationParameters): boolean {
+  const sleutelsA = Object.keys(a)
+  const sleutelsB = Object.keys(b)
+  return (
+    sleutelsA.length === sleutelsB.length &&
+    sleutelsA.every((sleutel) => Object.is(a[sleutel], b[sleutel]))
+  )
 }
 
 /** `algemene_vergadering` staat bewust NIET in STANDAARD_PARAMETERS. De
@@ -45,6 +110,13 @@ const AV_VELDEN_PER_VORM: Record<string, string[]> = {
  *  overschrijven die al ingevuld is (een bestaande klant bewerken mag niets
  *  stilletjes wijzigen). */
 export function metStandaardParameters(code: string, huidig: ObligationParameters): ObligationParameters {
+  if (code === 'jaarafsluiting') {
+    // Niet via STANDAARD_PARAMETERS: welke waarde ontbreekt hangt hier af van
+    // de gekozen basis. Een vaste lijst zou een dossier dat op de AV rekent
+    // opnieuw een doorlooptijd geven.
+    const aangevuld = jaarafsluitingParametersVoorBasis(huidig, jaarafsluitingBasis(huidig))
+    return zelfdeParameters(huidig, aangevuld) ? huidig : aangevuld
+  }
   const standaard = STANDAARD_PARAMETERS[code]
   if (!standaard) return huidig
   const ontbreekt = Object.keys(standaard).filter((sleutel) => huidig[sleutel] === undefined)
