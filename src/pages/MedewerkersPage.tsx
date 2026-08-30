@@ -8,8 +8,8 @@ import { reportError } from '../lib/errorMessage'
  * goedkeuringsrecht, uitnodigen van collega's, en (de)activeren. Het
  * offboarding-blok (§3 punt 6) leeft in de database (trigger) — deze pagina
  * toont gewoon de foutmelding als een deactivatie wordt geweigerd omdat de
- * medewerker nog open taken heeft; herverdelen gebeurt via de Werklijst
- * (bulkactie). */
+ * medewerker nog open taken heeft; herverdelen gebeurt met de bulkactie in
+ * een werkstroom of in de kalender. */
 export function MedewerkersPage() {
   const { employees, loading, error, reload, inviteEmployee, updateEmployee } = useEmployees()
   const [naam, setNaam] = useState('')
