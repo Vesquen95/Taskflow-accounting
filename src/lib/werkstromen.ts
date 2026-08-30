@@ -1,8 +1,8 @@
 import type { ObligationType, TaskInstanceWithRelations, Werkstroom } from '../types'
 
-/** De ingangen van de app. De vier werkstromen komen uit de catalogus
- *  (migratie 0022); 'adhoc' is de vijfde en bestaat niet als enumwaarde —
- *  ad-hoc taken hebben geen verplichtingstype. */
+/** De ingangen van de app. De werkstromen komen uit de catalogus (migratie
+ *  0022, uitgebreid met 'fiches' in 0027); 'adhoc' is de laatste en bestaat
+ *  niet als enumwaarde — ad-hoc taken hebben geen verplichtingstype. */
 type Ingang = Werkstroom | 'adhoc'
 
 export interface IngangDefinitie {
@@ -31,6 +31,12 @@ export const INGANGEN: IngangDefinitie[] = [
     pad: 'vennootschapsbelasting',
     label: 'Vennootschapsbelasting',
     omschrijving: 'Voorafbetalingen en de aangifte — per boekjaar.',
+  },
+  {
+    key: 'fiches',
+    pad: 'fiches',
+    label: 'Fiches',
+    omschrijving: 'Fiches 281.20, 281.45 en 281.50 — lopen per inkomstenjaar.',
   },
   {
     key: 'rapportering',

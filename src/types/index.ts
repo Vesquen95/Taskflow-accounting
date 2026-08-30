@@ -69,10 +69,16 @@ export interface Client {
   created_at: string
 }
 
-/** De vier stromen waarin het kantoor zijn werk afwerkt (migratie 0022,
- *  docs/PLAN.md §10). Ad-hoc taken hebben geen verplichtingstype en dus geen
- *  werkstroom; die vormen in de app een vijfde ingang. */
-export type Werkstroom = 'btw' | 'afsluiting' | 'vennootschapsbelasting' | 'rapportering'
+/** De stromen waarin het kantoor zijn werk afwerkt (migratie 0022, uitgebreid
+ *  met 'fiches' in 0027; docs/PLAN.md §10). Ad-hoc taken hebben geen
+ *  verplichtingstype en dus geen werkstroom; die vormen in de app een laatste
+ *  ingang. */
+export type Werkstroom =
+  | 'btw'
+  | 'afsluiting'
+  | 'vennootschapsbelasting'
+  | 'fiches'
+  | 'rapportering'
 
 export interface ObligationType {
   id: string

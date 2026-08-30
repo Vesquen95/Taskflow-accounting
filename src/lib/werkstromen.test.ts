@@ -14,6 +14,8 @@ const types: ObligationType[] = [
   { id: 'ot-lst', code: 'btw_klantenlisting', naam: 'BTW-klantenlisting', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: null, werkstroom: 'btw' },
   { id: 'ot-jaf', code: 'jaarafsluiting', naam: 'Jaarafsluiting', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: null, werkstroom: 'afsluiting' },
   { id: 'ot-va', code: 'va_venb', naam: 'Voorafbetaling', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: null, werkstroom: 'vennootschapsbelasting' },
+  { id: 'ot-f20', code: 'fiche_281_20', naam: 'Fiche 281.20', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: 'jaarlijks', werkstroom: 'fiches' },
+  { id: 'ot-f50', code: 'fiche_281_50', naam: 'Fiche 281.50', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: 'jaarlijks', werkstroom: 'fiches' },
 ]
 
 function taak(id: string, due_date: string): TaskInstanceWithRelations {
@@ -21,12 +23,13 @@ function taak(id: string, due_date: string): TaskInstanceWithRelations {
 }
 
 describe('INGANGEN', () => {
-  it('heeft de vier werkstromen plus ad-hoc, elk met een uniek pad', () => {
-    expect(INGANGEN).toHaveLength(5)
+  it('heeft de vijf werkstromen plus ad-hoc, elk met een uniek pad', () => {
+    expect(INGANGEN).toHaveLength(6)
     expect(INGANGEN.map((i) => i.key)).toEqual([
       'btw',
       'afsluiting',
       'vennootschapsbelasting',
+      'fiches',
       'rapportering',
       'adhoc',
     ])
@@ -51,6 +54,16 @@ describe('typesInWerkstroom', () => {
 
   it('geeft een lege lijst voor een stroom zonder types', () => {
     expect(typesInWerkstroom(types, 'rapportering')).toEqual([])
+  })
+
+  // De fiches lopen op het inkomstenjaar en niet op het boekjaar; ze horen
+  // daarom in een eigen stroom en niet tussen de afsluitingstaken.
+  it('houdt de fiches in hun eigen stroom', () => {
+    expect(typesInWerkstroom(types, 'fiches').map((t) => t.code)).toEqual([
+      'fiche_281_20',
+      'fiche_281_50',
+    ])
+    expect(typesInWerkstroom(types, 'afsluiting').map((t) => t.code)).not.toContain('fiche_281_20')
   })
 })
 
