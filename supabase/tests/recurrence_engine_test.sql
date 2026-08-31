@@ -4695,4 +4695,89 @@ begin
   raise notice 'PASS 37.2: zonder algemene vergadering blijft er geen neerlegging open staan';
 end $$;
 
+
+-- ============================================================
+-- Sectie 38 (0032): geen functie staat per ongeluk open via de API.
+--
+-- Gevonden bij de securityronde. Supabase zet elke functie in het schema
+-- `public` automatisch open op /rest/v1/rpc. "Geen revoke geschreven" betekent
+-- daar dus niet "intern", maar "voor iedereen aanroepbaar". In 0029 en 0030
+-- was die revoke vergeten, en één van die functies --
+-- herbereken_jaarafsluiting_taken_voor() -- is SECURITY DEFINER, neemt een
+-- willekeurige client_id en verzette wettelijke deadlines. Nagespeeld op
+-- productie: een gewone medewerker verzette er in één aanroep drie, voor een
+-- dossier waar can_access_client() niet eens aan te pas kwam.
+--
+-- Deze sectie bewaakt de regel in plaats van het ene geval: een functie die
+-- een trigger teruggeeft hoort nooit rechtstreeks aanroepbaar te zijn, en
+-- interne SECURITY DEFINER-functies die schrijven ook niet. Zo valt de
+-- volgende vergeten revoke om op een test in plaats van op een linter die
+-- niemand leest.
+-- ============================================================
+do $$
+declare
+  v_open text;
+  v_n int;
+begin
+  -- 38.1 Geen enkele triggerfunctie is aanroepbaar door anon of authenticated.
+  select string_agg(p.proname, ', ' order by p.proname), count(*)
+    into v_open, v_n
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.prorettype = 'trigger'::regtype
+    and (has_function_privilege('anon', p.oid, 'EXECUTE')
+      or has_function_privilege('authenticated', p.oid, 'EXECUTE'));
+  if v_n > 0 then
+    raise exception 'FAIL 38.1: % triggerfunctie(s) staan open via de API: %', v_n, v_open;
+  end if;
+  raise notice 'PASS 38.1: geen enkele triggerfunctie is via de API aanroepbaar';
+
+  -- 38.2 De interne motorfuncties evenmin. Ze schrijven allemaal taken of
+  --      deadlines; wat de app nodig heeft loopt via sync_client_tasks() en
+  --      generate_task_instances(), en die controleren zelf de toegang.
+  select string_agg(naam, ', ' order by naam), count(*) into v_open, v_n
+  from (
+    select p.proname as naam
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in ('generate_task_instances_intern', 'herbereken_jaarafsluiting_taken_voor',
+                        'upsert_generated_task')
+      and (has_function_privilege('anon', p.oid, 'EXECUTE')
+        or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
+  ) x;
+  if v_n > 0 then
+    raise exception 'FAIL 38.2: % interne motorfunctie(s) staan open via de API: %', v_n, v_open;
+  end if;
+  raise notice 'PASS 38.2: de interne motorfuncties zijn niet via de API aanroepbaar';
+
+  -- 38.3 Elke SECURITY DEFINER-functie heeft een vaste search_path. Zonder die
+  --      vaste waarde bepaalt de aanroeper welke tabellen de functie ziet.
+  select string_agg(p.proname, ', ' order by p.proname), count(*)
+    into v_open, v_n
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.prosecdef
+    and not exists (
+      select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%'
+    );
+  if v_n > 0 then
+    raise exception 'FAIL 38.3: % SECURITY DEFINER-functie(s) zonder vaste search_path: %', v_n, v_open;
+  end if;
+  raise notice 'PASS 38.3: elke SECURITY DEFINER-functie heeft een vaste search_path';
+
+  -- 38.4 En de functie die dit aan het licht bracht, controleert nu ook zelf
+  --      de toegang -- twee sloten, want de revoke alleen sluit dit gat wel,
+  --      maar een volgende aanroeper binnen de databank zou er anders zo langs.
+  if position('can_access_client' in (
+    select pg_get_functiondef(oid) from pg_proc
+     where proname = 'herbereken_jaarafsluiting_taken_voor'
+  )) = 0 then
+    raise exception 'FAIL 38.4: herbereken_jaarafsluiting_taken_voor() controleert de toegang niet';
+  end if;
+  raise notice 'PASS 38.4: de herberekening controleert zelf of je het dossier mag zien';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

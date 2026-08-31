@@ -5,7 +5,7 @@ import type { Mock } from 'vitest'
 import { supabase } from '../lib/supabase'
 import { createSupabaseMock, type ChainState, type SupabaseHandlers } from '../test/supabaseMock'
 import { WerkstroomPage } from './WerkstroomPage'
-import { ingangVoorPad } from '../lib/werkstromen'
+import { ingangVoorPad, vensterTot } from '../lib/werkstromen'
 import type { ObligationType, TaskInstanceWithRelations } from '../types'
 
 vi.mock('../lib/supabase', () => ({
@@ -138,19 +138,26 @@ describe('WerkstroomPage', () => {
     expect(taskCalls).toHaveLength(1)
   })
 
-  it('begrenst het deadlinevenster bovenaan en verruimt het bij een andere keuze', async () => {
+  it('begrenst het deadlinevenster bovenaan en volgt de gekozen keuze', async () => {
     install([task()])
     render(<WerkstroomPage ingang={btw} />)
 
-    await waitFor(() => expect(argsVan(laatsteQuery(), 'lte', 'due_date')).toBeDefined())
-    const smal = argsVan(laatsteQuery(), 'lte', 'due_date')![1] as string
+    // De eerste ronde staat op "deze week".
+    await waitFor(() =>
+      expect(argsVan(laatsteQuery(), 'lte', 'due_date')![1]).toBe(vensterTot('deze_week'))
+    )
 
     await userEvent.selectOptions(screen.getByLabelText('Deadlinevenster'), 'deze_maand')
 
-    await waitFor(() => {
-      const nu = argsVan(laatsteQuery(), 'lte', 'due_date')![1] as string
-      expect(nu >= smal).toBe(true)
-    })
+    // Precies de bovengrens van het gekozen venster, en niet "ergens ruimer".
+    // Die vergelijking hield het niet: op de laatste dag van een maand loopt
+    // "deze week" door tot in de volgende maand en is "deze maand" dus de
+    // smallere van de twee. Dat is juist -- elk venster is een einddatum, geen
+    // rangorde -- maar een test die op ruimer-of-gelijk toetst valt er één keer
+    // per maand over.
+    await waitFor(() =>
+      expect(argsVan(laatsteQuery(), 'lte', 'due_date')![1]).toBe(vensterTot('deze_maand'))
+    )
   })
 
   it('laat het venster helemaal los bij "Alles"', async () => {
