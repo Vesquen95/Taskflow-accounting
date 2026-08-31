@@ -33,7 +33,7 @@ export function Modal({ title, onClose, children, footer, breed = false }: Modal
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={`max-h-[90vh] w-full overflow-y-auto rounded-xl bg-white p-6 shadow-xl ${breed ? 'max-w-5xl' : 'max-w-lg'}`}
+        className={`max-h-[90vh] w-full overflow-y-auto rounded-xl bg-white p-4 shadow-xl sm:p-6 ${breed ? 'max-w-5xl' : 'max-w-lg'}`}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 id="modal-title" className="text-lg font-semibold text-slate-900">

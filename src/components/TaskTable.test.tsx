@@ -1,8 +1,9 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TaskTable } from './TaskTable'
 import type { Employee, TaskInstanceWithRelations } from '../types'
+import { stelSchermIn } from '../test/kleinScherm'
 
 function employee(overrides: Partial<Employee> = {}): Employee {
   return {
@@ -478,5 +479,73 @@ describe('TaskTable — bulkverslag per taak', () => {
     await zetStatus(user, 'in_uitvoering')
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Geen verbinding/)
+  })
+})
+
+describe('TaskTable op een telefoon', () => {
+  let herstel: (() => void) | null = null
+
+  beforeEach(() => {
+    herstel = stelSchermIn(true)
+  })
+  afterEach(() => {
+    herstel?.()
+    herstel = null
+  })
+
+  it('vervangt de tabel door kaarten in plaats van zeven kolommen te laten schuiven', () => {
+    render(
+      <TaskTable
+        tasks={[task({ id: 't1', client: { id: 'c1', naam: 'Klant A', vertrouwelijk: false, actief: true } })]}
+        employees={employees}
+        onOpenTask={onOpenTask}
+      />
+    )
+
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.getByRole('list')).toBeInTheDocument()
+    expect(screen.getByText('Klant A')).toBeInTheDocument()
+  })
+
+  it('toont elke taak precies één keer', () => {
+    // De eerste opzet zette beide varianten in de DOM en verborg er één met
+    // CSS. Een schermlezer las dan elke taak twee keer voor, en er bestonden
+    // twee knoppen voor dezelfde status.
+    render(
+      <TaskTable
+        tasks={[task({ id: 't1', client: { id: 'c1', naam: 'Klant A', vertrouwelijk: false, actief: true } })]}
+        employees={employees}
+        onOpenTask={onOpenTask}
+        currentEmployee={employee()}
+        onStatusChange={vi.fn().mockResolvedValue(undefined)}
+      />
+    )
+
+    expect(screen.getAllByText('Klant A')).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /Status Open/i })).toHaveLength(1)
+  })
+
+  it('biedt geen aanvinkvakjes of bulkacties aan', () => {
+    // Bewust: onderweg zoek je op en verzet je een status. Aanvinken en in
+    // bulk toewijzen is bureauwerk, en op een duim is het vooral misklikken.
+    render(
+      <TaskTable
+        tasks={[task()]}
+        employees={employees}
+        onOpenTask={onOpenTask}
+        onBulkReassign={vi.fn()}
+        onBulkStatus={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByRole('checkbox')).toBeNull()
+  })
+
+  it('houdt de tabel op een computer', () => {
+    herstel?.()
+    herstel = stelSchermIn(false)
+    render(<TaskTable tasks={[task()]} employees={employees} onOpenTask={onOpenTask} />)
+
+    expect(screen.getByRole('table')).toBeInTheDocument()
   })
 })

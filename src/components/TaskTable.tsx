@@ -7,6 +7,8 @@ import { UrgencyBadge } from './UrgencyBadge'
 import { formatDate } from '../lib/urgency'
 import { taakNaam } from '../lib/taakLabel'
 import { EmptyState } from './EmptyState'
+import { TaakKaart } from './TaakKaart'
+import { useKleinScherm } from '../hooks/useKleinScherm'
 
 interface TaskTableProps {
   tasks: TaskInstanceWithRelations[]
@@ -35,6 +37,11 @@ export function TaskTable({
   onStatusChange,
   showClientColumn = true,
 }: TaskTableProps) {
+  // Eén grens voor de hele app (zie src/hooks/useKleinScherm.ts). Op de hook
+  // schakelen en niet op CSS-klassen: met `hidden md:block` staan beide
+  // varianten tegelijk in de DOM, en dan leest een schermlezer elke taak twee
+  // keer en bestaan er twee knoppen voor dezelfde status.
+  const kleinScherm = useKleinScherm()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [statusFout, setStatusFout] = useState<string | null>(null)
   // Op de zichtbare rijen, niet op de omvang van de set: na een bulkactie kan
@@ -67,8 +74,38 @@ export function TaskTable({
     return <EmptyState title="Geen taken gevonden voor deze filters." />
   }
 
+  // Op een telefoon: een kaart per taak. Zeven kolommen passen niet op 390
+  // pixels, en zijwaarts schuiven om de deadline te zien is geen lezen maar
+  // zoeken. Aanvinken en bulkacties staan hier bewust niet -- dat is
+  // bureauwerk, en het kantoor vroeg voor onderweg alleen opzoeken en de
+  // status verzetten.
+  if (kleinScherm) {
+    return (
+      <>
+        {statusFout && (
+          <p role="alert" className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {statusFout}
+          </p>
+        )}
+        <ul className="space-y-2">
+          {tasks.map((task) => (
+            <TaakKaart
+              key={task.id}
+              task={task}
+              onOpen={onOpenTask}
+              currentEmployee={currentEmployee}
+              onStatusChange={onStatusChange}
+              onStatusFout={setStatusFout}
+            />
+          ))}
+        </ul>
+      </>
+    )
+  }
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <>
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
       {statusFout && (
         <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           {statusFout}
@@ -160,6 +197,7 @@ export function TaskTable({
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   )
 }

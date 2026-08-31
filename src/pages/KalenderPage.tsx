@@ -112,7 +112,7 @@ export function KalenderPage() {
     (index === 0 && pagina > 1) || (index === grouped.length - 1 && heeftVolgende)
 
   return (
-    <div className="p-6">
+    <div className="p-4 lg:p-6">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Kalender</h1>

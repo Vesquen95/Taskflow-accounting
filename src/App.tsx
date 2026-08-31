@@ -9,6 +9,8 @@ import { AccountDeactivatedScreen } from './components/AccountDeactivatedScreen'
 import { WerkstroomPage } from './pages/WerkstroomPage'
 import { ingangVoorPad } from './lib/werkstromen'
 import { KalenderPage } from './pages/KalenderPage'
+import { TelefoonPage } from './pages/TelefoonPage'
+import { useKleinScherm } from './hooks/useKleinScherm'
 import { KlantenlijstPage } from './pages/KlantenlijstPage'
 import { KlantDossierPage } from './pages/KlantDossierPage'
 import { WorkloadDashboardPage } from './pages/WorkloadDashboardPage'
@@ -27,6 +29,11 @@ function AuthenticatedApp({ onDeactivated }: { onDeactivated: () => void }) {
   const { employee, loading } = useCurrentEmployee()
   const { signOut } = useAuth()
   const [route, navigate] = useRoute()
+  // Op een telefoon is het hoofdscherm een ander scherm, geen ingekrompen
+  // kalender: de kalender toont de spreiding van deadlines over maanden, en
+  // dat is precies wat op 390 pixels niet leesbaar is. Zie
+  // src/pages/TelefoonPage.tsx.
+  const kleinScherm = useKleinScherm()
 
   // Security guard (not just a UI nicety): a kantoorbeheerder can
   // deactivate a colleague at any time, but that colleague's existing
@@ -54,7 +61,7 @@ function AuthenticatedApp({ onDeactivated }: { onDeactivated: () => void }) {
   let zichtbareView = route.view
   const naarHoofdscherm = () => {
     zichtbareView = 'kalender'
-    return <KalenderPage />
+    return kleinScherm ? <TelefoonPage /> : <KalenderPage />
   }
 
   switch (route.view) {

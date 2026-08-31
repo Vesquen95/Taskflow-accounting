@@ -133,7 +133,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
 
   if (error) {
     return (
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <ErrorState message={error} onRetry={reload} />
       </div>
     )
@@ -154,7 +154,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
   const teAnnuleren = telTeAnnulerenTaken(tasks)
 
   return (
-    <div className="p-6">
+    <div className="p-4 lg:p-6">
       <button type="button" onClick={() => navigate('klanten')} className="mb-3 text-sm text-slate-500 hover:text-slate-800">
         ← Terug naar klantenlijst
       </button>

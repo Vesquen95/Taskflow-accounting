@@ -127,7 +127,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 lg:p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Klanten</h1>
@@ -167,7 +167,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
             placeholder="Naam, ondernemingsnummer…"
             value={filters.zoekterm ?? ''}
             onChange={(e) => setFilters((f) => ({ ...f, zoekterm: e.target.value }))}
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
           />
         </div>
         <div>
@@ -179,7 +179,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
             id="klanten-status"
             value={String(filters.actief)}
             onChange={(e) => setFilters((f) => ({ ...f, actief: e.target.value === 'alle' ? 'alle' : e.target.value === 'true' }))}
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
           >
             <option value="true">Actief</option>
             <option value="false">Gearchiveerd</option>
@@ -192,7 +192,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
             id="klanten-mandataris"
             value={String(filters.mandataris)}
             onChange={(e) => setFilters((f) => ({ ...f, mandataris: e.target.value === 'alle' ? 'alle' : e.target.value === 'true' }))}
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
           >
             <option value="alle">Alle</option>
             <option value="true">Ja</option>
@@ -205,7 +205,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
             id="klanten-verantwoordelijke"
             value={filters.verantwoordelijkeId ?? 'alle'}
             onChange={(e) => setFilters((f) => ({ ...f, verantwoordelijkeId: e.target.value }))}
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
           >
             <option value="alle">Alle</option>
             {employees.map((emp) => (

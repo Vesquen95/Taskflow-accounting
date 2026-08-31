@@ -138,7 +138,7 @@ export function WettelijkeKalenderPage() {
 
   if (error) {
     return (
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <ErrorState message={error} onRetry={reload} />
       </div>
     )

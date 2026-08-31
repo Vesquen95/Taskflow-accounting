@@ -96,7 +96,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
   const foutmelding = typesFout ?? error
 
   return (
-    <div className="p-6">
+    <div className="p-4 lg:p-6">
       <div className="mb-4">
         <h1 className="text-xl font-semibold text-slate-900">{ingang.label}</h1>
         <p className="text-sm text-slate-500">{ingang.omschrijving}</p>
@@ -111,7 +111,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
             id="venster"
             value={venster}
             onChange={(e) => setVenster(e.target.value as VensterKey)}
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
           >
             {VENSTERS.map((v) => (
               <option key={v.key} value={v.key}>
@@ -128,7 +128,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
             id="medewerker"
             value={filters.toegewezenAan ?? 'alle'}
             onChange={(e) => setFilters((f) => ({ ...f, toegewezenAan: e.target.value }))}
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
           >
             <option value="alle">Alle medewerkers</option>
             {employees.map((emp) => (
@@ -148,7 +148,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
             placeholder="Klant, verplichting…"
             value={filters.zoekterm ?? ''}
             onChange={(e) => setFilters((f) => ({ ...f, zoekterm: e.target.value }))}
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
           />
         </div>
         {/* Het venster is een einddatum en geen periode. Zonder die uitleg leest

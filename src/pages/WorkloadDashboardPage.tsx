@@ -31,7 +31,7 @@ export function WorkloadDashboardPage() {
   }, [employees, tasks])
 
   return (
-    <div className="p-6">
+    <div className="p-4 lg:p-6">
       <div className="mb-4">
         <h1 className="text-xl font-semibold text-slate-900">Workload-dashboard</h1>
         <p className="text-sm text-slate-500">Capaciteit en achterstand per medewerker, kantoorbreed.</p>

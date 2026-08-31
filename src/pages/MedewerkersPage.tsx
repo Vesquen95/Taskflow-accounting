@@ -61,14 +61,14 @@ export function MedewerkersPage() {
 
   if (error) {
     return (
-      <div className="p-6">
+      <div className="p-4 lg:p-6">
         <ErrorState message={error} onRetry={reload} />
       </div>
     )
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 lg:p-6">
       <div className="mb-4">
         <h1 className="text-xl font-semibold text-slate-900">Medewerkers</h1>
         <p className="text-sm text-slate-500">Collega's uitnodigen, rollen en goedkeuringsrecht beheren.</p>
