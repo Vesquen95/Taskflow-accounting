@@ -34,6 +34,9 @@ const obligationTypes: ObligationType[] = [
   { id: 'ot-av', code: 'algemene_vergadering', naam: 'Algemene vergadering', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: 'jaarlijks', werkstroom: 'afsluiting' },
   { id: 'ot-jaar', code: 'jaarafsluiting', naam: 'Jaarafsluiting', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: 'jaarlijks', werkstroom: 'afsluiting' },
   { id: 'ot-rap', code: 'rapportering', naam: 'Periodieke rapportering', categorie: 'service', deadline_mechanisme: 'formule', standaard_periodiciteit: 'kwartaal', werkstroom: 'rapportering' },
+  { id: 'ot-venb', code: 'aangifte_venb_pb', naam: 'Aangifte VenB', categorie: 'wettelijk', deadline_mechanisme: 'jaarlijkse_kalender', standaard_periodiciteit: 'jaarlijks', werkstroom: 'vennootschapsbelasting' },
+  { id: 'ot-rpb', code: 'aangifte_rpb', naam: 'Aangifte RPB', categorie: 'wettelijk', deadline_mechanisme: 'jaarlijkse_kalender', standaard_periodiciteit: 'jaarlijks', werkstroom: 'vennootschapsbelasting' },
+  { id: 'ot-va', code: 'va_venb', naam: 'Voorafbetaling VenB (VA1-VA4)', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: 'kwartaal', werkstroom: 'vennootschapsbelasting' },
 ]
 
 /** Het vak is een gestuurd component; deze schil houdt de staat vast zoals
@@ -205,5 +208,80 @@ describe('ObligationPicker — de jaarafsluiting voor de algemene vergadering', 
     expect((screen.getByLabelText('Maanden voor de algemene vergadering') as HTMLInputElement).value).toBe('3')
     // Het openen van een dossier mag er niets bij schrijven.
     expect(parametersVan('ot-jaar')).toEqual({ basis: 'voor_av', maanden_voor_av: 3 })
+  })
+})
+
+describe('ObligationPicker — verplichtingen die niet samen kunnen', () => {
+  it('zet de VenB-aangifte uit zodra je de RPB aanvinkt', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('checkbox', { name: /^Aangifte VenB/ }))
+    await user.click(screen.getByRole('checkbox', { name: /^Aangifte RPB/ }))
+
+    // Zichtbaar uit, niet stil blijven staan tot de databank het afwijst.
+    expect(screen.getByRole('checkbox', { name: /^Aangifte VenB/ })).not.toBeChecked()
+    expect(bewaard.selections.find((s) => s.obligation_type_id === 'ot-venb')?.gekozen).toBe(false)
+    expect(bewaard.selections.find((s) => s.obligation_type_id === 'ot-rpb')?.gekozen).toBe(true)
+  })
+
+  it('zet ook de voorafbetalingen uit bij de RPB', async () => {
+    // Het kantoor: "als je RPB aanduidt is het beter om geen VA's aan te
+    // bieden". Die horen bij de vennootschapsbelasting.
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('checkbox', { name: /^Voorafbetaling/ }))
+    await user.click(screen.getByRole('checkbox', { name: /^Aangifte RPB/ }))
+
+    expect(screen.getByRole('checkbox', { name: /^Voorafbetaling/ })).not.toBeChecked()
+    expect(bewaard.selections.find((s) => s.obligation_type_id === 'ot-va')?.gekozen).toBe(false)
+  })
+
+  it('biedt de voorafbetalingen niet meer aan onder de RPB, en zegt waarom', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('checkbox', { name: /^Aangifte RPB/ }))
+
+    expect(screen.getByRole('checkbox', { name: /^Voorafbetaling/ })).toBeDisabled()
+    expect(screen.getByText(/gaat niet samen met Aangifte RPB/)).toBeInTheDocument()
+  })
+
+  it('laat de twee aangiftes elkaar met één klik vervangen', async () => {
+    // Allebei blokkeren zou betekenen dat je eerst moet afvinken voor je kunt
+    // omschakelen -- drie handelingen voor één beslissing.
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('checkbox', { name: /^Aangifte RPB/ }))
+    expect(screen.getByRole('checkbox', { name: /^Aangifte VenB/ })).toBeEnabled()
+
+    await user.click(screen.getByRole('checkbox', { name: /^Aangifte VenB/ }))
+    expect(screen.getByRole('checkbox', { name: /^Aangifte VenB/ })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /^Aangifte RPB/ })).not.toBeChecked()
+  })
+
+  it('laat de VenB en de voorafbetalingen wél samengaan', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('checkbox', { name: /^Aangifte VenB/ }))
+    await user.click(screen.getByRole('checkbox', { name: /^Voorafbetaling/ }))
+
+    expect(screen.getByRole('checkbox', { name: /^Aangifte VenB/ })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /^Voorafbetaling/ })).toBeChecked()
+  })
+
+  it('geeft de voorafbetalingen weer vrij zodra de RPB eraf gaat', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    const rpb = screen.getByRole('checkbox', { name: /^Aangifte RPB/ })
+    await user.click(rpb)
+    expect(screen.getByRole('checkbox', { name: /^Voorafbetaling/ })).toBeDisabled()
+
+    await user.click(rpb)
+    expect(screen.getByRole('checkbox', { name: /^Voorafbetaling/ })).toBeEnabled()
   })
 })

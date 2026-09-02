@@ -528,10 +528,29 @@ describe('leesKlantRijen — de instellingen per verplichting', () => {
 describe('leesKlantRijen — de aangifte RPB', () => {
   it('leest de RPB als eigen verplichting', () => {
     const rij = leesKlantRijen(
-      blad(metVeld('aangifte_rpb', 'Ja', metVeld('aangifte_venb_pb', 'Nee')))
+      blad(metVeld('aangifte_rpb', 'Ja',
+        metVeld('aangifte_venb_pb', 'Nee', metVeld('va_venb', 'Nee'))))
     ).rijen[0]
     expect(rij.fouten).toEqual([])
     expect(rij.verplichtingen.map((v) => v.code)).toContain('aangifte_rpb')
+  })
+
+  // Het kantoor: "als je RPB aanduidt is het beter om geen VA's aan te
+  // bieden". De voorafbetalingen horen bij de vennootschapsbelasting.
+  it('weigert voorafbetalingen naast de RPB', () => {
+    const rij = leesKlantRijen(
+      blad(metVeld('aangifte_rpb', 'Ja', metVeld('aangifte_venb_pb', 'Nee')))
+    ).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/Voorafbetalingen horen bij de vennootschapsbelasting/i)
+  })
+
+  it('laat voorafbetalingen wél toe naast de VenB', () => {
+    const rij = leesKlantRijen(blad(GOEDE_RIJ)).rijen[0]
+    expect(rij.fouten).toEqual([])
+    const codes = rij.verplichtingen.map((v) => v.code)
+    expect(codes).toContain('aangifte_venb_pb')
+    expect(codes).toContain('va_venb')
   })
 
   // De databank weigert dit ook (migratie 0034). Het hier al zeggen scheelt

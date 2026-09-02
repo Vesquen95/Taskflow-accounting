@@ -21,6 +21,32 @@ import {
  *  worden bij het opslaan. */
 const AFGELEID_UIT_BTW_REGIME = ['btw_aangifte', 'btw_klantenlisting']
 
+/** Verplichtingen die niet samen kunnen (migratie 0035). Het scherm mag niet
+ *  aanbieden wat de databank daarna weigert -- en belangrijker: wie hier een
+ *  vinkje zet dat straks sneuvelt, denkt intussen dat het geregeld is.
+ *
+ *  De rechtsvorm speelt geen rol. Een VZW kan evengoed onderworpen zijn aan de
+ *  vennootschapsbelasting; wat telt is wat je hier aanduidt. */
+const BOTST_MET: Record<string, string[]> = {
+  aangifte_venb_pb: ['aangifte_rpb'],
+  aangifte_rpb: ['aangifte_venb_pb', 'va_venb'],
+  va_venb: ['aangifte_rpb'],
+}
+
+/** Wat er niet langer aangeboden wordt zolang iets anders aanstaat.
+ *
+ *  Bewust maar één richting, en niet elk botsend paar. De twee aangiftes
+ *  moeten elkaar met één klik kunnen vervangen: blokkeer je ze allebei, dan
+ *  moet je eerst afvinken voor je kunt omschakelen -- en met de
+ *  voorafbetalingen er nog bij zijn dat drie handelingen voor één beslissing,
+ *  waarbij de melding telkens maar één van de blokkades noemt.
+ *
+ *  De voorafbetalingen zijn geen keuze naast de RPB maar een gevolg van de
+ *  vennootschapsbelasting. Die verdwijnen dus wél. */
+const NIET_BESCHIKBAAR_BIJ: Record<string, string> = {
+  va_venb: 'aangifte_rpb',
+}
+
 const MAANDEN = [
   'januari', 'februari', 'maart', 'april', 'mei', 'juni',
   'juli', 'augustus', 'september', 'oktober', 'november', 'december',
@@ -79,7 +105,24 @@ export function ObligationPicker({
       wijzig(type.id, { gekozen: false })
       return
     }
-    wijzig(type.id, { gekozen: true, parameters: metStandaardParameters(type.code, huidig?.parameters ?? {}) })
+    // Wat hiermee botst gaat meteen uit, zichtbaar: je ziet het vinkje
+    // wegvallen en de reden eronder verschijnen. Dat is eerlijker dan het
+    // laten staan tot de databank het bij het opslaan afwijst.
+    const botsend = BOTST_MET[type.code] ?? []
+    const botsendeIds = new Set(
+      obligationTypes.filter((t) => botsend.includes(t.code)).map((t) => t.id)
+    )
+    onChange(
+      selections.map((sel) => {
+        if (sel.obligation_type_id === type.id) {
+          return { ...sel, gekozen: true, parameters: metStandaardParameters(type.code, huidig?.parameters ?? {}) }
+        }
+        if (botsendeIds.has(sel.obligation_type_id) && sel.gekozen) {
+          return { ...sel, gekozen: false }
+        }
+        return sel
+      })
+    )
   }
 
   return (
@@ -99,13 +142,28 @@ export function ObligationPicker({
             (type.code === 'btw_aangifte' && btwRegime === 'periodieke_aangever') ||
             (type.code === 'btw_klantenlisting' && btwRegime !== 'geen')
 
+          // Staat datgene aan waardoor deze verplichting niet meer van
+          // toepassing is? Dan is het vakje niet beschikbaar, met de reden
+          // erbij. Is deze zelf aangevinkt -- dat kan alleen bij oudere
+          // gegevens -- dan blokkeren we niets: dan moet je het juist kunnen
+          // rechtzetten.
+          const blokkeerder = NIET_BESCHIKBAAR_BIJ[type.code]
+          const botstMet =
+            !sel.gekozen && blokkeerder
+              ? obligationTypes.find(
+                  (ander) =>
+                    ander.code === blokkeerder &&
+                    selections.some((s) => s.obligation_type_id === ander.id && s.gekozen)
+                )
+              : undefined
+
           return (
             <div key={type.id} className="rounded-md border border-slate-100 bg-slate-50/60 px-3 py-2">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={afgeleid ? actiefViaBtw : sel.gekozen}
-                  disabled={afgeleid}
+                  disabled={afgeleid || botstMet !== undefined}
                   onChange={(e) => wijzigGekozen(type, e.target.checked)}
                 />
                 <span className="font-medium text-slate-800">{type.naam}</span>
@@ -116,6 +174,9 @@ export function ObligationPicker({
                 )}
                 {afgeleid && (
                   <span className="text-xs text-slate-400">volgt uit het btw-regime</span>
+                )}
+                {botstMet && (
+                  <span className="text-xs text-slate-400">gaat niet samen met {botstMet.naam}</span>
                 )}
               </label>
 

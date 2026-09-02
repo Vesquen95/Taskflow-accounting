@@ -169,7 +169,7 @@ const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
     vereist: false,
     verplichting: true,
     uitleg:
-      'Ja of Nee. De rechtspersonenbelasting, voor VZW\'s, IVZW\'s en stichtingen. Een klant valt onder de vennootschapsbelasting óf onder de rechtspersonenbelasting, dus niet samen met "Aangifte VenB".',
+      'Ja of Nee. De aangifte in de rechtspersonenbelasting. Een dossier valt onder de vennootschapsbelasting óf onder de rechtspersonenbelasting, dus niet samen met "Aangifte VenB". De rechtsvorm bepaalt dat niet: ook een VZW kan onder de vennootschapsbelasting vallen. Voorafbetalingen horen er niet bij.',
     synoniemen: ['rpb', 'aangifterpb', 'rechtspersonenbelasting'],
     breedte: 16,
   },
@@ -1016,7 +1016,12 @@ function leesVerplichtingen(
   // pas bij het opslaan sneuvelt.
   if (bij('aangifte_venb_pb') && bij('aangifte_rpb')) {
     fouten.push(
-      'Aangifte VenB en Aangifte RPB staan allebei op Ja. Een klant valt onder de vennootschapsbelasting óf onder de rechtspersonenbelasting, niet onder allebei.'
+      'Aangifte VenB en Aangifte RPB staan allebei op Ja. Een dossier valt onder de vennootschapsbelasting óf onder de rechtspersonenbelasting, niet onder allebei.'
+    )
+  }
+  if (bij('aangifte_rpb') && bij('va_venb')) {
+    fouten.push(
+      'Aangifte RPB en Voorafbetalingen staan allebei op Ja. Voorafbetalingen horen bij de vennootschapsbelasting; in de rechtspersonenbelasting bestaan ze niet.'
     )
   }
 

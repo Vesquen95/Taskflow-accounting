@@ -4882,19 +4882,24 @@ begin
 end $$;
 
 -- ============================================================
--- Sectie 40 (0034): de aangifte RPB, en één aangifte per dossier.
+-- Sectie 40 (0034/0035): de aangifte RPB, en wat er niet naast kan.
 --
--- Een VZW valt onder de rechtspersonenbelasting in plaats van de
--- vennootschapsbelasting. Nooit onder allebei -- en dat laatste is de reden
--- dat hier een slot op zit: een dossier met twee aangiftes ziet er op het
--- scherm volkomen normaal uit, en je merkt het pas als er twee keer een
--- deadline aankomt.
+-- Een dossier valt onder de vennootschapsbelasting óf onder de
+-- rechtspersonenbelasting, nooit onder allebei. De rechtsvorm zegt daar niets
+-- over: ook een VZW kan onderworpen zijn aan de vennootschapsbelasting.
+--
+-- Daarom een slot en geen afleiding uit de rechtsvorm. Een dossier met twee
+-- aangiftes ziet er op het scherm volkomen normaal uit, en je merkt het pas
+-- als er twee keer een deadline aankomt.
+--
+-- Sinds 0035 geldt hetzelfde voor de voorafbetalingen: die horen bij de
+-- vennootschapsbelasting en niet bij de rechtspersonenbelasting.
 -- ============================================================
 do $$
 declare
   v_uid uuid := gen_random_uuid();
   v_firm uuid; v_admin uuid;
-  v_ot_rpb uuid; v_ot_venb uuid;
+  v_ot_rpb uuid; v_ot_venb uuid; v_ot_va uuid;
   v_vzw uuid; v_bv uuid;
   v_n int; v_d date; v_geweigerd boolean := false;
 begin
@@ -4966,6 +4971,41 @@ begin
     raise exception 'FAIL 40.4: % lopende aangiftes na het omschakelen, verwacht 1', v_n;
   end if;
   raise notice 'PASS 40.4: na het omschakelen loopt er precies één aangifte';
+
+  -- 40.5 Voorafbetalingen horen niet bij de rechtspersonenbelasting. Het
+  --      kantoor: "als je RPB aanduidt is het beter om geen VA's aan te
+  --      bieden." Beide richtingen, want welke van de twee je aanvinkt maakt
+  --      voor de botsing niet uit.
+  select id into v_ot_va from public.obligation_types where code = 'va_venb';
+  v_geweigerd := false;
+  begin
+    insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+      values (v_vzw, v_ot_va, true, current_date);
+  exception when check_violation then
+    v_geweigerd := true;
+  end;
+  if not v_geweigerd then
+    raise exception 'FAIL 40.5: een RPB-dossier kreeg voorafbetalingen';
+  end if;
+
+  v_geweigerd := false;
+  begin
+    insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+      values (v_bv, v_ot_va, true, current_date);
+  exception when check_violation then
+    v_geweigerd := true;
+  end;
+  if not v_geweigerd then
+    raise exception 'FAIL 40.5: voorafbetalingen werden aanvaard naast de RPB';
+  end if;
+  raise notice 'PASS 40.5: voorafbetalingen gaan niet samen met de RPB, in beide richtingen';
+
+  -- 40.6 Maar naast de vennootschapsbelasting horen ze er juist wél bij.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S40 Gewone vennootschap', 12, 31, 'geen', true) returning id into v_bv;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_bv, v_ot_venb, true, current_date), (v_bv, v_ot_va, true, current_date);
+  raise notice 'PASS 40.6: naast de vennootschapsbelasting mogen de voorafbetalingen gewoon';
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
