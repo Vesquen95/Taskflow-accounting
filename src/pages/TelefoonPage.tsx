@@ -7,7 +7,7 @@ import { TaskDetailModal } from '../components/TaskDetailModal'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { Paginering } from '../components/Paginering'
-import { isoDatum, vensterTot } from '../lib/werkstromen'
+import { VENSTERS, isoDatum, vensterTot, type VensterKey } from '../lib/werkstromen'
 import type { TaskInstanceWithRelations } from '../types'
 
 /** Ruim genoeg voor een maand vooruit, en tegelijk de bovengrens van wat de
@@ -25,9 +25,10 @@ const PAGINA_GROOTTE = 50
  *
  * Drie keuzes die het scherm sturen:
  *
- *  1. De lijst loopt tot het einde van deze week, met één tik tot het einde
- *     van de maand. Verder vooruit kijken doe je aan een bureau; hier gaat het
- *     over wat er nú op je afkomt.
+ *  1. Het deadlinevenster is hetzelfde als in de werkstromen (VENSTERS): het
+ *     kantoor plant per maand of per kwartaal, ook onderweg. Een keuzelijst en
+ *     geen rij knoppen -- vijf knoppen vullen op 390 pixels drie regels, en
+ *     die ruimte gaat beter naar de taken zelf.
  *
  *  2. Wat te laat is staat altijd bovenaan en valt nooit weg te filteren. Dat
  *     is dezelfde regel als in de werkstromen: een gemiste wettelijke deadline
@@ -35,7 +36,7 @@ const PAGINA_GROOTTE = 50
  *
  *  3. Zoeken laat het deadlinevenster los. "Wanneer valt de AV van klant X?"
  *     is precies de vraag die je op een telefoon stelt, en het antwoord ligt
- *     bijna nooit binnen deze week.
+ *     zelden binnen het venster dat je toevallig openstaan hebt.
  */
 export function TelefoonPage() {
   const { employee } = useCurrentEmployee()
@@ -44,19 +45,12 @@ export function TelefoonPage() {
   // besturingselement op dat kapot lijkt.
   const { employees } = useEmployees()
   const vandaag = useMemo(() => isoDatum(new Date()), [])
+  // De kop "Deze week" in de lijst blijft wel bestaan: dat is een tussenkop en
+  // geen filter. Wat deze week moet, hoort apart te staan van wat later komt,
+  // ook wanneer je een kwartaal opvraagt.
   const eindeWeek = useMemo(() => vensterTot('deze_week'), [])
-  // Bewust een rollende horizon en niet "deze maand". Op 31 augustus loopt
-  // "deze maand" tot vandaag: het venster is dan leeg terwijl het eerste werk
-  // twee weken verderop staat. Dat viel bij het uitproberen op een telefoon
-  // meteen op -- twee lege vensters na elkaar, en geen enkele aanwijzing dat
-  // er wel degelijk taken aankomen. Dertig dagen vooruit kent die kuil niet.
-  const dertigDagen = useMemo(() => {
-    const d = new Date()
-    d.setDate(d.getDate() + 30)
-    return isoDatum(d)
-  }, [])
 
-  const [ruimVenster, setRuimVenster] = useState(false)
+  const [venster, setVenster] = useState<VensterKey>('deze_maand')
   const [openTask, setOpenTask] = useState<TaskInstanceWithRelations | null>(null)
   const [statusFout, setStatusFout] = useState<string | null>(null)
 
@@ -75,7 +69,7 @@ export function TelefoonPage() {
   } = useTaskInstances({
     pagina: 1,
     paginaGrootte: PAGINA_GROOTTE,
-    dueTot: eindeWeek,
+    dueTot: vensterTot('deze_maand'),
   })
 
   const zoekterm = filters.zoekterm ?? ''
@@ -83,20 +77,37 @@ export function TelefoonPage() {
   const pagina = filters.pagina ?? 1
   const alleenVanMij = filters.toegewezenAan !== undefined && filters.toegewezenAan !== 'alle'
 
-  function zetVenster(ruim: boolean) {
-    setRuimVenster(ruim)
-    setFilters((f) => ({ ...f, dueTot: ruim ? dertigDagen : eindeWeek, pagina: 1 }))
+  function zetVenster(keuze: VensterKey) {
+    setVenster(keuze)
+    setFilters((f) => ({ ...f, dueTot: vensterTot(keuze), pagina: 1 }))
   }
 
+  /** Het eerstvolgende venster dat écht verder reikt dan het huidige.
+   *
+   *  Niet gewoon "de volgende in de lijst": die loopt niet netjes van smal
+   *  naar breed. Op 2 september eindigt "deze maand" op 30/09 en "dit
+   *  kwartaal" ook -- terwijl "volgende maand" tot 31/10 loopt en er dus
+   *  tussenin staat. Een knop die belooft verder te kijken en dan evenveel
+   *  toont, is precies het soort stille onwaarheid dat dit scherm niet mag
+   *  hebben. */
+  const ruimerVenster = useMemo(() => {
+    const huidig = vensterTot(venster)
+    if (huidig === undefined) return undefined
+    return VENSTERS.slice(VENSTERS.findIndex((v) => v.key === venster) + 1).find((v) => {
+      const tot = vensterTot(v.key)
+      return tot === undefined || tot > huidig
+    })
+  }, [venster])
+
   function zetZoekterm(term: string) {
-    // Zoeken kijkt over het hele dossier, niet enkel in deze week: anders
-    // levert "AV" van een klant met een boekjaar in juni niets op en lijkt de
-    // taak te ontbreken.
+    // Zoeken kijkt over het hele dossier, niet enkel binnen het venster:
+    // anders levert "AV" van een klant met een boekjaar in juni niets op en
+    // lijkt de taak te ontbreken.
     const zoektNu = term.trim().length > 0
     setFilters((f) => ({
       ...f,
       zoekterm: term,
-      dueTot: zoektNu ? undefined : ruimVenster ? dertigDagen : eindeWeek,
+      dueTot: zoektNu ? undefined : vensterTot(venster),
       pagina: 1,
     }))
   }
@@ -145,13 +156,19 @@ export function TelefoonPage() {
           aria-label="Zoeken"
           className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base"
         />
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => zetVenster(false)} className={knopKlasse(!ruimVenster)}>
-            Deze week
-          </button>
-          <button type="button" onClick={() => zetVenster(true)} className={knopKlasse(ruimVenster)}>
-            30 dagen
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="Deadlinevenster"
+            value={venster}
+            onChange={(e) => zetVenster(e.target.value as VensterKey)}
+            className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-base"
+          >
+            {VENSTERS.map((v) => (
+              <option key={v.key} value={v.key}>
+                {v.label}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={() => zetAlleenVanMij(!alleenVanMij)}
@@ -162,8 +179,8 @@ export function TelefoonPage() {
           </button>
         </div>
         {zoekt && (
-          // Anders lijkt het venster stuk: je zoekt binnen deze week en krijgt
-          // een taak van volgend jaar terug.
+          // Anders lijkt het venster stuk: je zoekt binnen deze maand en
+          // krijgt een taak van volgend jaar terug.
           <p className="text-xs text-slate-500">
             Zoeken kijkt over alle deadlines heen, niet enkel binnen het gekozen venster.
           </p>
@@ -192,24 +209,17 @@ export function TelefoonPage() {
             title={
               zoekt
                 ? 'Niets gevonden voor deze zoekterm.'
-                : ruimVenster
-                  ? 'Niets te doen in de komende 30 dagen.'
-                  : 'Niets te doen deze week.'
+                : `Niets te doen in het venster "${VENSTERS.find((v) => v.key === venster)?.label}".`
             }
           />
-          {!zoekt && !ruimVenster && (
+          {!zoekt && ruimerVenster && (
             <button
               type="button"
-              onClick={() => zetVenster(true)}
+              onClick={() => zetVenster(ruimerVenster.key)}
               className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700"
             >
-              Kijk 30 dagen vooruit
+              Kijk verder: {ruimerVenster.label.toLowerCase()}
             </button>
-          )}
-          {!zoekt && ruimVenster && (
-            <p className="text-center text-sm text-slate-500">
-              Verder vooruit kijken doe je in een werkstroom, via het menu.
-            </p>
           )}
           {!zoekt && alleenVanMij && (
             // Het filter staat aan en verbergt dan misschien juist het werk
