@@ -469,3 +469,77 @@ describe('ClientFormModal — jaarafsluiting: de getoonde SLA staat ook echt in 
     expect(String(sel?.parameters.sla_maanden ?? '')).toBe(veld.value)
   })
 })
+
+describe('ClientFormModal — patrimoniumtaks en de bijzondere btw-aangifte', () => {
+  const types: ObligationType[] = [
+    ...obligationTypes,
+    { id: 'ot-patri', code: 'patrimoniumtaks', naam: 'Patrimoniumtaks (toetsen)', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: 'jaarlijks', werkstroom: 'vennootschapsbelasting' },
+    { id: 'ot-bijz', code: 'btw_bijzondere_aangifte', naam: 'Bijzondere btw-aangifte (toetsen)', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: 'kwartaal', werkstroom: 'btw' },
+  ]
+
+  function toon(c: Client | null, bestaand: { obligation_type_id: string; gekozen: boolean }[] = []) {
+    render(
+      <ClientFormModal
+        client={c}
+        employees={employees}
+        obligationTypes={types}
+        bestaandeVerplichtingen={bestaand.map((b) => ({ ...b, parameters: {}, standaard_toegewezen_medewerker_id: 'e1' }))}
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    )
+  }
+
+  it('biedt de patrimoniumtaks niet aan bij een herkende vennootschapsvorm', () => {
+    toon(client({ rechtsvorm: 'BV' }))
+    expect(screen.queryByText(/Patrimoniumtaks/i)).not.toBeInTheDocument()
+  })
+
+  it('biedt ze wel aan bij een vzw', () => {
+    toon(client({ rechtsvorm: 'VZW' }))
+    expect(screen.getByText(/Patrimoniumtaks/i)).toBeInTheDocument()
+  })
+
+  it('biedt ze ook aan bij een rechtsvorm die het scherm niet kent', () => {
+    // Niet weten is geen reden om een wettelijke taks te verbergen.
+    toon(client({ rechtsvorm: 'Buitenlandse entiteit' }))
+    expect(screen.getByText(/Patrimoniumtaks/i)).toBeInTheDocument()
+  })
+
+  it('blijft een reeds aangevinkte patrimoniumtaks tonen, ook bij een vennootschap', () => {
+    // Anders verdwijnt ze van het scherm terwijl ze opgeslagen blijft: het
+    // scherm zou dan iets anders tonen dan wat er in de databank staat.
+    toon(client({ rechtsvorm: 'BV' }), [{ obligation_type_id: 'ot-patri', gekozen: true }])
+    expect(screen.getByText(/Patrimoniumtaks/i)).toBeInTheDocument()
+  })
+
+  it('zet de bijzondere btw-aangifte bij het btw-regime en niet in de lijst', async () => {
+    const user = userEvent.setup()
+    toon(client({ btw_regime: 'vrijgesteld_kleine_onderneming', btw_aangifte_frequentie: null }))
+    const vakjes = screen.getAllByText(/Bijzondere btw-aangifte/i)
+    expect(vakjes).toHaveLength(1)
+    await user.click(screen.getByRole('checkbox', { name: /Bijzondere btw-aangifte/i }))
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        obligations: expect.arrayContaining([
+          expect.objectContaining({ obligation_type_id: 'ot-bijz', gekozen: true }),
+        ]),
+      })
+    )
+  })
+
+  it('verbergt ze bij een periodieke aangever', () => {
+    toon(client({ btw_regime: 'periodieke_aangever' }))
+    expect(screen.queryByText(/Bijzondere btw-aangifte/i)).not.toBeInTheDocument()
+  })
+
+  it('toont ze wel bij een periodieke aangever als ze al aanstaat', () => {
+    // Zo kun je ze zelf uitvinken. Verbergen zou het opslaan laten stuklopen
+    // op de databankregel, met een fout over iets wat nergens te zien is.
+    toon(client({ btw_regime: 'periodieke_aangever' }), [
+      { obligation_type_id: 'ot-bijz', gekozen: true },
+    ])
+    expect(screen.getByRole('checkbox', { name: /Bijzondere btw-aangifte/i })).toBeChecked()
+  })
+})

@@ -2,6 +2,11 @@ import { useState, type FormEvent } from 'react'
 import { Modal } from './Modal'
 import type { Employee } from '../types'
 import { reportError } from '../lib/errorMessage'
+import {
+  buitenlandseBtwDeadline,
+  buitenlandseBtwJaren,
+  buitenlandseBtwTitel,
+} from '../lib/taakLabel'
 
 export function AdhocTaskFormModal({
   employees,
@@ -20,6 +25,15 @@ export function AdhocTaskFormModal({
   const [assignee, setAssignee] = useState(defaultAssigneeId ?? employees[0]?.id ?? '')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [teruggaafJaar, setTeruggaafJaar] = useState(() => buitenlandseBtwJaren()[1])
+
+  /** Vult titel en deadline in; de rest van het formulier blijft gewoon
+   *  bewerkbaar. Een sneltoets die meteen zou opslaan, neemt je de kans af om
+   *  er nog een verantwoordelijke of een notitie bij te zetten. */
+  function vulTeruggaafIn() {
+    setTitle(buitenlandseBtwTitel(teruggaafJaar))
+    setDueDate(buitenlandseBtwDeadline(teruggaafJaar))
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -46,6 +60,41 @@ export function AdhocTaskFormModal({
   return (
     <Modal title="Ad-hoc taak aanmaken" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-3 text-sm">
+        {/* De teruggaaf van buitenlandse btw is geen terugkerende verplichting
+            -- niet elke klant heeft er een, en meestal weet je het pas als de
+            facturen er zijn. De termijn is wél vast, en die telkens opnieuw
+            uitrekenen is precies waar het misgaat: de btw van 2025 vraag je
+            terug tegen 30 september 2026. */}
+        <div className="flex flex-wrap items-end gap-2 rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2">
+          <div>
+            <label htmlFor="adhoc-teruggaafjaar" className="mb-1 block text-xs font-medium text-slate-500">
+              Teruggaaf buitenlandse btw over
+            </label>
+            <select
+              id="adhoc-teruggaafjaar"
+              value={teruggaafJaar}
+              onChange={(e) => setTeruggaafJaar(Number(e.target.value))}
+              className="rounded-md border border-slate-300 px-2 py-1.5"
+            >
+              {buitenlandseBtwJaren().map((jaar) => (
+                <option key={jaar} value={jaar}>
+                  {jaar}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={vulTeruggaafIn}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Invullen
+          </button>
+          <p className="w-full text-xs text-slate-500">
+            Zet de titel en de deadline klaar: indienen tegen{' '}
+            {buitenlandseBtwDeadline(teruggaafJaar).split('-').reverse().join('/')}.
+          </p>
+        </div>
         <div>
           <label htmlFor="adhoc-title" className="mb-1 block text-xs font-medium text-slate-500">Titel *</label>
           <input id="adhoc-title" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-md border border-slate-300 px-2 py-1.5" required />

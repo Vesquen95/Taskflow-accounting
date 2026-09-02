@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Employee, ObligationType } from '../types'
+import { kanPatrimoniumtaksHebben } from '../lib/rechtsvorm'
 import type { ObligationSelection } from '../lib/clientObligations'
 import {
   AV_GEEN_STATUTAIRE_DATUM,
@@ -63,12 +64,19 @@ export function ObligationPicker({
   employees,
   selections,
   btwRegime,
+  rechtsvorm,
+  verbergCodes = [],
   onChange,
 }: {
   obligationTypes: ObligationType[]
   employees: Employee[]
   selections: ObligationSelection[]
   btwRegime: string
+  /** Bepaalt of de patrimoniumtaks hier aan de orde is. */
+  rechtsvorm?: string
+  /** Verplichtingen die elders op het formulier bediend worden. Twee vakjes
+   *  voor één keuze is erger dan een vakje op een onhandige plek. */
+  verbergCodes?: string[]
   onChange: (next: ObligationSelection[]) => void
 }) {
   // Een verplichting die al aangevinkt uit de database komt (een bestaande
@@ -137,6 +145,19 @@ export function ObligationPicker({
         {obligationTypes.map((type) => {
           const sel = selections.find((s) => s.obligation_type_id === type.id)
           if (!sel) return null
+          // Deze codes staan elders op het scherm (de bijzondere btw-aangifte
+          // hoort bij het btw-regime). Ze hier ook tonen zou hetzelfde vinkje
+          // twee keer zetten, dus verbergen mag onvoorwaardelijk.
+          if (verbergCodes.includes(type.code)) return null
+          // De patrimoniumtaks geldt voor verenigingen en stichtingen. Bij een
+          // herkende vennootschapsvorm is ze niet aan de orde; bij een lege of
+          // onbekende rechtsvorm blijft ze staan, want dan weet het scherm het
+          // niet en is verbergen erger dan aanbieden. Staat ze al aan, dan
+          // blijft ze óók staan: wie de rechtsvorm wijzigt hoort de taks zelf
+          // uit te vinken, niet ze te zien verdwijnen terwijl ze bewaard blijft.
+          if (type.code === 'patrimoniumtaks' && !sel.gekozen && !kanPatrimoniumtaksHebben(rechtsvorm)) {
+            return null
+          }
           const afgeleid = AFGELEID_UIT_BTW_REGIME.includes(type.code)
           const actiefViaBtw =
             (type.code === 'btw_aangifte' && btwRegime === 'periodieke_aangever') ||

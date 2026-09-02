@@ -1,4 +1,5 @@
 import type { BtwFrequentie, BtwRegime } from '../types'
+import { kanPatrimoniumtaksHebben } from './rechtsvorm'
 
 /**
  * Klanten inlezen uit een Excel-bestand — de pure kant.
@@ -190,7 +191,7 @@ const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
     vereist: false,
     verplichting: true,
     uitleg:
-      'Ja of Nee. Elk jaar tegen 31 maart nakijken of de taks verschuldigd is en ze indienen. Onder 50.000 euro vermogen is er niets verschuldigd en geen aangifte, maar die drempel toets je elk jaar opnieuw — vandaar een taak, ook in een jaar dat je niets indient.',
+      'Ja of Nee. Alleen voor vzw\'s, ivzw\'s en private stichtingen. Elk jaar tegen 31 maart nakijken of de taks verschuldigd is en ze indienen. Onder 50.000 euro vermogen is er niets verschuldigd en geen aangifte, maar die drempel toets je elk jaar opnieuw — vandaar een taak, ook in een jaar dat je niets indient.',
     synoniemen: ['patrimonium', 'patrimoniumtaks', 'vermogenstaks'],
     breedte: 16,
   },
@@ -1049,6 +1050,14 @@ function leesVerplichtingen(
       REGIME_VAN_TEKST[normaliseerKop(ruw.btw_regime)] === 'periodieke_aangever') {
     fouten.push(
       'Bijzondere btw-aangifte staat op Ja bij een periodieke aangever. Die aangifte bestaat juist voor wie géén periodieke btw-aangifte indient.'
+    )
+  }
+  // De patrimoniumtaks bestaat voor vzw's, ivzw's en private stichtingen. Bij
+  // een rechtsvorm die het scherm niet herkent laten we ze staan: niet weten
+  // is geen reden om een wettelijke taks stil weg te laten.
+  if (bij('patrimoniumtaks') && !kanPatrimoniumtaksHebben(ruw.rechtsvorm)) {
+    fouten.push(
+      `Patrimoniumtaks staat op Ja bij rechtsvorm "${ruw.rechtsvorm.trim()}". Die taks geldt voor vzw's, ivzw's en private stichtingen, niet voor vennootschappen.`
     )
   }
   if (bij('aangifte_rpb') && bij('va_venb')) {

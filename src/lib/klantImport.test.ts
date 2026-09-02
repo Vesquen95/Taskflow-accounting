@@ -574,8 +574,8 @@ describe('leesKlantRijen — de aangifte RPB', () => {
 describe('leesKlantRijen — patrimoniumtaks en bijzondere btw-aangifte', () => {
   it('leest ze als eigen verplichtingen', () => {
     const rij = leesKlantRijen(
-      blad(metVeld('patrimoniumtaks', 'Ja', metVeld('btw_bijzondere_aangifte', 'Ja',
-        metVeld('btw_regime', 'Vrijgesteld (kleine onderneming)', metVeld('btw_aangifte_frequentie', '')))))
+      blad(metVeld('rechtsvorm', 'VZW', metVeld('patrimoniumtaks', 'Ja', metVeld('btw_bijzondere_aangifte', 'Ja',
+        metVeld('btw_regime', 'Vrijgesteld (kleine onderneming)', metVeld('btw_aangifte_frequentie', ''))))))
     ).rijen[0]
     expect(rij.fouten).toEqual([])
     const codes = rij.verplichtingen.map((v) => v.code)
@@ -589,5 +589,23 @@ describe('leesKlantRijen — patrimoniumtaks en bijzondere btw-aangifte', () => 
     const rij = leesKlantRijen(blad(metVeld('btw_bijzondere_aangifte', 'Ja'))).rijen[0]
     expect(rij.klant).toBeNull()
     expect(rij.fouten.join(' ')).toMatch(/periodieke aangever/i)
+  })
+
+  // Dezelfde regel als in het klantenscherm: bij een vennootschap staat de
+  // patrimoniumtaks er niet, dus mag de import ze ook niet stilzwijgend zetten.
+  it('weigert de patrimoniumtaks bij een vennootschap', () => {
+    const rij = leesKlantRijen(blad(metVeld('patrimoniumtaks', 'Ja'))).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/patrimoniumtaks/i)
+  })
+
+  // Niet weten is geen reden om een wettelijke taks weg te laten: bij een
+  // rechtsvorm die we niet herkennen laat de import ze staan.
+  it('laat de patrimoniumtaks staan bij een onbekende rechtsvorm', () => {
+    const rij = leesKlantRijen(
+      blad(metVeld('rechtsvorm', 'Buitenlandse entiteit', metVeld('patrimoniumtaks', 'Ja')))
+    ).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.verplichtingen.map((v) => v.code)).toContain('patrimoniumtaks')
   })
 })

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AdhocTaskFormModal } from './AdhocTaskFormModal'
 import type { Employee } from '../types'
 
@@ -104,5 +104,42 @@ describe('AdhocTaskFormModal — submit flow', () => {
   it('mentions that ad-hoc tasks never require goedkeuring/recurrence (informational copy stays accurate)', () => {
     render(<AdhocTaskFormModal employees={employees} defaultAssigneeId="e1" onClose={onClose} onSubmit={onSubmit} />)
     expect(screen.getByText(/vereisen nooit goedkeuring/i)).toBeInTheDocument()
+  })
+})
+
+describe('AdhocTaskFormModal — sneltoets voor de teruggaaf van buitenlandse btw', () => {
+  // Een vaste klok, zodat de keuzelijst met jaren en de verwachte deadline
+  // allebei uitgeschreven kunnen staan. Zou de test de datum zelf uitrekenen,
+  // dan zou ze dezelfde fout maken als de code die ze moet bewaken.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-06-15T09:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('vult titel en deadline in, met de deadline een jaar later', async () => {
+    // Dit is de fout die de sneltoets moet voorkomen: de btw van 2025 vraag je
+    // terug tegen 30 september 2026, niet 2025.
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<AdhocTaskFormModal employees={employees} defaultAssigneeId="e1" onClose={onClose} onSubmit={onSubmit} />)
+
+    await user.selectOptions(screen.getByLabelText('Teruggaaf buitenlandse btw over'), '2025')
+    await user.click(screen.getByRole('button', { name: 'Invullen' }))
+
+    expect(screen.getByLabelText('Titel *')).toHaveValue('Teruggaaf buitenlandse btw 2025')
+    expect(screen.getByLabelText('Deadline')).toHaveValue('2026-09-30')
+  })
+
+  it('slaat nog niets op: je kunt er eerst nog iets bij zetten', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<AdhocTaskFormModal employees={employees} defaultAssigneeId="e1" onClose={onClose} onSubmit={onSubmit} />)
+
+    await user.click(screen.getByRole('button', { name: 'Invullen' }))
+
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
   })
 })

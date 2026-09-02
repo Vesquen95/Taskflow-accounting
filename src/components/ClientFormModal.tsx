@@ -72,6 +72,23 @@ export function ClientFormModal({
     toFormValues(client, obligationTypes, bestaandeVerplichtingen)
   )
 
+  // De bijzondere btw-aangifte staat bij het btw-regime en niet in de lijst
+  // onderaan. Het is dezelfde verplichting en dezelfde opslag; alleen de plek
+  // op het scherm verschilt, want dáár neem je de beslissing.
+  const bijzondereAangifteType = obligationTypes.find((t) => t.code === 'btw_bijzondere_aangifte')
+  const bijzondereAangifteGekozen = Boolean(
+    values.obligations.find((o) => o.obligation_type_id === bijzondereAangifteType?.id)?.gekozen
+  )
+  function zetBijzondereAangifte(gekozen: boolean) {
+    if (!bijzondereAangifteType) return
+    setValues((v) => ({
+      ...v,
+      obligations: v.obligations.map((o) =>
+        o.obligation_type_id === bijzondereAangifteType.id ? { ...o, gekozen } : o
+      ),
+    }))
+  }
+
   // De catalogus wordt opgehaald terwijl het scherm al staat. Wie snel op
   // "Nieuwe klant" klikt opent dit venster voor ze binnen is, en omdat de
   // beginwaarde van useState maar één keer berekend wordt, bleef de lijst met
@@ -234,6 +251,31 @@ export function ClientFormModal({
           )}
         </div>
 
+        {/* De bijzondere aangifte hoort bij het btw-regime en niet onderaan bij
+            de verplichtingen: ze bestaat juist voor wie géén periodieke
+            aangifte doet, en dat zie je hier. Bij een periodieke aangever
+            verdwijnt ze — de databank weigert die combinatie sowieso. Staat ze
+            al aan, dan blijft het vinkje wél staan: anders zou het scherm ze
+            verbergen terwijl ze opgeslagen blijft, en zou het opslaan stuklopen
+            op iets wat je nergens ziet. */}
+        {bijzondereAangifteType && (values.btw_regime !== 'periodieke_aangever' || bijzondereAangifteGekozen) && (
+          <label className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={bijzondereAangifteGekozen}
+              onChange={(e) => zetBijzondereAangifte(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium text-slate-800">Bijzondere btw-aangifte</span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Elk kwartaal nakijken of er intracommunautaire verwervingen of ontvangen diensten
+                waren, en zo ja indienen tegen de 25ste van de maand erna.
+              </span>
+            </span>
+          </label>
+        )}
+
         <div>
           <label htmlFor="client-verantwoordelijke" className="mb-1 block text-xs font-medium text-slate-500">
             Standaard verantwoordelijke {values.vertrouwelijk && '*'}
@@ -293,6 +335,8 @@ export function ClientFormModal({
         )}
 
         <ObligationPicker
+          rechtsvorm={values.rechtsvorm}
+          verbergCodes={['btw_bijzondere_aangifte']}
           obligationTypes={obligationTypes}
           employees={employees}
           selections={values.obligations}
