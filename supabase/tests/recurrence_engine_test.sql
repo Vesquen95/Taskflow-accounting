@@ -5008,4 +5008,112 @@ begin
   raise notice 'PASS 40.6: naast de vennootschapsbelasting mogen de voorafbetalingen gewoon';
 end $$;
 
+
+-- ============================================================
+-- Sectie 41 (0036): patrimoniumtaks en bijzondere btw-aangifte.
+--
+-- Twee verplichtingen die het kantoor als CONTROLE voert. De patrimoniumtaks
+-- is pas verschuldigd boven 50.000 euro vermogen en die drempel toets je elk
+-- jaar opnieuw; de bijzondere aangifte is alleen verschuldigd in een kwartaal
+-- waarin er echt iets was. Beide staan er dus elk jaar of elk kwartaal, juist
+-- om te kunnen nakijken.
+--
+-- Twee dingen die makkelijk stil fout gaan en daarom vastliggen:
+--   * de patrimoniumtaks valt op 31 maart van HETZELFDE jaar als de periode.
+--     De taks wordt geheven op het vermogen op 1 januari, dus de deadline ligt
+--     binnen de periode -- anders dan bij elke andere jaarlijkse verplichting
+--     in dit systeem.
+--   * de bijzondere aangifte valt op de 25ste, niet op de 20ste. Dat is sinds
+--     1 januari 2025 zo, samen met de gewone kwartaalaangifte.
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid;
+  v_ot_pat uuid; v_ot_bijz uuid;
+  v_klant uuid; v_periodiek uuid;
+  v_n int; v_d date; v_geweigerd boolean := false;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's41@test.local', now());
+  insert into public.firms (naam) values ('Sectie 41 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S41 Beheerder', 's41@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+
+  select id into v_ot_pat  from public.obligation_types where code = 'patrimoniumtaks';
+  select id into v_ot_bijz from public.obligation_types where code = 'btw_bijzondere_aangifte';
+  if v_ot_pat is null or v_ot_bijz is null then
+    raise exception 'FAIL 41.0: de nieuwe verplichtingstypes staan niet in de catalogus';
+  end if;
+
+  insert into public.clients (firm_id, naam, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S41 Vereniging', 'VZW', 12, 31, 'vrijgesteld_kleine_onderneming', true)
+    returning id into v_klant;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot_pat, true, current_date), (v_klant, v_ot_bijz, true, current_date);
+
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+
+  -- 41.1 De patrimoniumtaks valt op 31 maart van hetzelfde jaar als de periode.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_pat;
+  if v_n = 0 then
+    raise exception 'FAIL 41.1: de patrimoniumtaks leverde geen taken op';
+  end if;
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_pat
+     and due_date_wettelijk <> make_date(periode_label::int, 3, 31);
+  if v_n <> 0 then
+    raise exception 'FAIL 41.1: % taken staan niet op 31 maart van hun eigen jaar', v_n;
+  end if;
+  raise notice 'PASS 41.1: de patrimoniumtaks valt op 31 maart van hetzelfde jaar';
+
+  -- 41.2 De bijzondere aangifte: de 25ste van de maand na het kwartaal.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_bijz;
+  if v_n = 0 then
+    raise exception 'FAIL 41.2: de bijzondere btw-aangifte leverde geen taken op';
+  end if;
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_bijz
+     and due_date_wettelijk <> (date_trunc('month', periode_eind) + interval '1 month')::date + 24;
+  if v_n <> 0 then
+    raise exception 'FAIL 41.2: % taken staan niet op de 25ste na hun kwartaal', v_n;
+  end if;
+  select due_date_wettelijk into v_d from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_bijz order by due_date limit 1;
+  if extract(day from v_d) <> 25 then
+    raise exception 'FAIL 41.2: de eerste bijzondere aangifte valt op de %e, niet op de 25ste', extract(day from v_d);
+  end if;
+  raise notice 'PASS 41.2: de bijzondere aangifte valt op de 25ste na het kwartaal (%)', v_d;
+
+  -- 41.3 Bij een periodieke aangever hoort ze niet: geweigerd bij het
+  --      aanvinken, én de motor maakt er geen taken voor.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S41 Periodiek', 12, 31, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_periodiek;
+  begin
+    insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+      values (v_periodiek, v_ot_bijz, true, current_date);
+  exception when check_violation then
+    v_geweigerd := true;
+  end;
+  if not v_geweigerd then
+    raise exception 'FAIL 41.3: een periodieke aangever kreeg de bijzondere btw-aangifte';
+  end if;
+  raise notice 'PASS 41.3: de bijzondere aangifte wordt geweigerd bij een periodieke aangever';
+
+  -- 41.4 Herhalen verandert niets.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id in (v_ot_pat, v_ot_bijz);
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+  if (select count(*) from public.task_instances
+       where client_id = v_klant and obligation_type_id in (v_ot_pat, v_ot_bijz)) <> v_n then
+    raise exception 'FAIL 41.4: een tweede ronde maakte extra taken aan';
+  end if;
+  raise notice 'PASS 41.4: een tweede ronde levert geen dubbels op (% taken)', v_n;
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

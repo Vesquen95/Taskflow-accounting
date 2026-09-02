@@ -66,6 +66,8 @@ export type VerplichtingSleutel =
   | 'aangifte_venb_pb'
   | 'aangifte_rpb'
   | 'va_venb'
+  | 'patrimoniumtaks'
+  | 'btw_bijzondere_aangifte'
   | 'rapportering'
   | 'fiche_281_20'
   | 'fiche_281_45'
@@ -181,6 +183,26 @@ const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
     uitleg: 'Ja of Nee. Levert VA1 tot en met VA4 per boekjaar op.',
     synoniemen: ['va', 'vas', 'voorafbetaling', 'vavenb'],
     breedte: 18,
+  },
+  {
+    sleutel: 'patrimoniumtaks',
+    kop: 'Patrimoniumtaks',
+    vereist: false,
+    verplichting: true,
+    uitleg:
+      'Ja of Nee. Elk jaar tegen 31 maart nakijken of de taks verschuldigd is en ze indienen. Onder 50.000 euro vermogen is er niets verschuldigd en geen aangifte, maar die drempel toets je elk jaar opnieuw — vandaar een taak, ook in een jaar dat je niets indient.',
+    synoniemen: ['patrimonium', 'patrimoniumtaks', 'vermogenstaks'],
+    breedte: 16,
+  },
+  {
+    sleutel: 'btw_bijzondere_aangifte',
+    kop: 'Bijzondere btw-aangifte',
+    vereist: false,
+    verplichting: true,
+    uitleg:
+      'Ja of Nee. Elk kwartaal nakijken of er intracommunautaire verwervingen of ontvangen diensten waren, en zo ja indienen tegen de 25ste van de maand erna. Alleen voor wie géén periodieke btw-aangifte doet.',
+    synoniemen: ['bijzondereaangifte', 'aangifte629', '629'],
+    breedte: 22,
   },
   {
     sleutel: 'rapportering',
@@ -362,6 +384,8 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     aangifte_venb_pb: 'Ja',
     aangifte_rpb: 'Nee',
     va_venb: 'Ja',
+    patrimoniumtaks: 'Nee',
+    btw_bijzondere_aangifte: 'Nee',
     rapportering: 'Ja',
     fiche_281_20: 'Ja',
     fiche_281_45: 'Nee',
@@ -385,6 +409,8 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     aangifte_venb_pb: 'Nee',
     aangifte_rpb: 'Ja',
     va_venb: 'Nee',
+    patrimoniumtaks: 'Ja',
+    btw_bijzondere_aangifte: 'Ja',
     rapportering: '',
     fiche_281_20: 'Nee',
     fiche_281_45: 'Nee',
@@ -1017,6 +1043,12 @@ function leesVerplichtingen(
   if (bij('aangifte_venb_pb') && bij('aangifte_rpb')) {
     fouten.push(
       'Aangifte VenB en Aangifte RPB staan allebei op Ja. Een dossier valt onder de vennootschapsbelasting óf onder de rechtspersonenbelasting, niet onder allebei.'
+    )
+  }
+  if (bij('btw_bijzondere_aangifte') && ruw.btw_regime !== '' &&
+      REGIME_VAN_TEKST[normaliseerKop(ruw.btw_regime)] === 'periodieke_aangever') {
+    fouten.push(
+      'Bijzondere btw-aangifte staat op Ja bij een periodieke aangever. Die aangifte bestaat juist voor wie géén periodieke btw-aangifte indient.'
     )
   }
   if (bij('aangifte_rpb') && bij('va_venb')) {

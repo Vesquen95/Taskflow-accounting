@@ -99,6 +99,28 @@ export const WACHT_OP_GOEDKEURDER_UITLEG =
 export const WACHT_OP_GOEDKEURDER_KORT = 'Wacht op iemand met goedkeuringsrecht'
 
 /**
+ * De herinnering bij het doorsturen voor goedkeuring.
+ *
+ * Het kantoor werkt met checklists per categorie -- afsluiting, jaarrekening,
+ * aangiftes. Taskflow beheert die lijsten niet; ze staan buiten de app. Maar
+ * het moment waarop ze vergeten worden is wél te vatten: bij het doorsturen
+ * voor goedkeuring, want dan geef je het dossier uit handen en kijkt iemand
+ * anders ernaar.
+ *
+ * Bewust vóór de stap en niet erna: een melding achteraf leest als "je bent
+ * iets vergeten" in plaats van als "denk hieraan".
+ */
+export const CHECKLIST_HERINNERING =
+  'Is de checklist voor deze taak opgemaakt? Die hoort bij het dossier voor je het doorstuurt.'
+
+/** Gaat deze actie langs "wacht op goedkeuring"? Dat geldt ook voor de
+ *  gecombineerde stap "indienen en zelf goedkeuren" op een eenmanskantoor:
+ *  de checklist hoort er dan evengoed te zijn. */
+export function gaatLangsGoedkeuring(actie: StatusActie): boolean {
+  return actie.stappen.includes('wacht_op_goedkeuring')
+}
+
+/**
  * Zou de databank deze overgang aanvaarden? Spiegelt, in dezelfde volgorde,
  * de controles van `enforce_task_instance_transition` (migratie 0011).
  */

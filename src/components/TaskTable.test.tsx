@@ -225,8 +225,50 @@ describe('TaskTable — status doorklikken', () => {
     renderTable(task({ status: 'in_uitvoering', vereist_goedkeuring: true }))
 
     await user.click(screen.getByRole('button', { name: /volgende stap: Dien in voor goedkeuring/i }))
+    // Deze ene stap vraagt eerst een bevestiging: zie de checklistherinnering
+    // hieronder. De andere overgangen blijven één klik.
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Dien in voor goedkeuring' })
+    )
 
     expect(onStatusChange).toHaveBeenCalledWith('t1', 'wacht_op_goedkeuring')
+  })
+
+  // Het kantoor werkt met checklists per categorie. Taskflow beheert die niet,
+  // maar het moment waarop ze vergeten worden is wél te vatten: bij het
+  // doorsturen, want dan geef je het dossier uit handen.
+  it('herinnert aan de checklist voor het dossier uit handen gaat', async () => {
+    const user = userEvent.setup()
+    renderTable(task({ status: 'in_uitvoering', vereist_goedkeuring: true }))
+
+    await user.click(screen.getByRole('button', { name: /volgende stap: Dien in voor goedkeuring/i }))
+
+    expect(screen.getByRole('dialog')).toHaveTextContent(/checklist/i)
+    // Nog niets doorgestuurd zolang je niet bevestigt.
+    expect(onStatusChange).not.toHaveBeenCalled()
+  })
+
+  it('stuurt niets door wanneer je de bevestiging annuleert', async () => {
+    const user = userEvent.setup()
+    renderTable(task({ status: 'in_uitvoering', vereist_goedkeuring: true }))
+
+    await user.click(screen.getByRole('button', { name: /volgende stap: Dien in voor goedkeuring/i }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Annuleren' }))
+
+    expect(onStatusChange).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('vraagt geen bevestiging voor een stap die niet langs goedkeuring gaat', async () => {
+    // Anders wordt elke doorklik een dialoog, en dat is precies wat het
+    // kantoor niet wilde toen de status doorklikbaar werd.
+    const user = userEvent.setup()
+    renderTable(task({ status: 'open', vereist_goedkeuring: true }))
+
+    await user.click(screen.getByRole('button', { name: /volgende stap: In uitvoering/i }))
+
+    expect(onStatusChange).toHaveBeenCalledWith('t1', 'in_uitvoering')
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('rondt een servicetaak zonder goedkeuringsvereiste rechtstreeks af', async () => {

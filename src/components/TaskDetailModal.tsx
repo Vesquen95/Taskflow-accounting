@@ -9,6 +9,8 @@ import type { Employee, TaskInstanceWithRelations, TaskStatus, TaskStatusLog } f
 import { reportError } from '../lib/errorMessage'
 import {
   annulatieActie,
+  CHECKLIST_HERINNERING,
+  gaatLangsGoedkeuring,
   EINDSTATUSSEN,
   STATUS_LABEL,
   statusActieFoutmelding,
@@ -353,6 +355,15 @@ export function TaskDetailModal({
                 </button>
               ))}
             </div>
+            {/* Het kantoor werkt met checklists per categorie. Taskflow beheert
+                die niet, maar het moment waarop ze vergeten worden is wél te
+                vatten: bij het doorsturen, want dan geef je het dossier uit
+                handen. In de takenlijst staat dit als een bevestiging vóór de
+                stap; hier zou een venster in een venster komen, dus staat het
+                er als tekst bij de knoppen. */}
+            {volgendeStappen.some(gaatLangsGoedkeuring) && (
+              <p className="text-xs text-slate-500">{CHECKLIST_HERINNERING}</p>
+            )}
           </div>
         )}
 

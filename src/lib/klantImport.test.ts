@@ -14,7 +14,7 @@ const KOPPEN = KOLOMMEN.map((k) => k.kop)
  *  velden van de klant, dan een cel per verplichting. */
 const GOEDE_RIJ: unknown[] = [
   'Acme BV', 'BE0123.456.749', 'BV', 12, 31, 'Periodieke aangever', 'Kwartaal', 'Ja',
-  'Ja', 'Ja', 'Ja', 'Nee', 'Ja', 'Nee', '', '', '',
+  'Ja', 'Ja', 'Ja', 'Nee', 'Ja', 'Nee', 'Nee', 'Nee', '', '', '',
   '15/05', '1 maand voor AV', '', '',
 ]
 
@@ -568,5 +568,26 @@ describe('leesKlantRijen — de aangifte RPB', () => {
     const codes = rij.verplichtingen.map((v) => v.code)
     expect(codes).not.toContain('aangifte_venb_pb')
     expect(codes).not.toContain('aangifte_rpb')
+  })
+})
+
+describe('leesKlantRijen — patrimoniumtaks en bijzondere btw-aangifte', () => {
+  it('leest ze als eigen verplichtingen', () => {
+    const rij = leesKlantRijen(
+      blad(metVeld('patrimoniumtaks', 'Ja', metVeld('btw_bijzondere_aangifte', 'Ja',
+        metVeld('btw_regime', 'Vrijgesteld (kleine onderneming)', metVeld('btw_aangifte_frequentie', '')))))
+    ).rijen[0]
+    expect(rij.fouten).toEqual([])
+    const codes = rij.verplichtingen.map((v) => v.code)
+    expect(codes).toContain('patrimoniumtaks')
+    expect(codes).toContain('btw_bijzondere_aangifte')
+  })
+
+  // De databank weigert dit ook: de bijzondere aangifte bestaat juist voor wie
+  // géén periodieke aangifte indient.
+  it('weigert de bijzondere aangifte bij een periodieke aangever', () => {
+    const rij = leesKlantRijen(blad(metVeld('btw_bijzondere_aangifte', 'Ja'))).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/periodieke aangever/i)
   })
 })
