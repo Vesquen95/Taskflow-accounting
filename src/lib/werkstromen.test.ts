@@ -131,14 +131,38 @@ describe('vensterTot', () => {
     }
   })
 
-  it('houdt "alles" als laatste keuze, zodat het geheel te overzien blijft', () => {
+  it('biedt de vensters waarin het kantoor plant, met "alles" als laatste', () => {
+    // "Deze week" stond hier tot september 2026 vooraan en is eruit: het
+    // kantoor plant per maand of per kwartaal, en een week leverde vooral
+    // lege schermen op. De berekening bestaat nog wel voor het
+    // telefoonscherm, dat een andere vraag stelt.
     expect(VENSTERS.map((v) => v.key)).toEqual([
-      'deze_week',
       'deze_maand',
       'volgende_maand',
       'dit_kwartaal',
+      'volgend_kwartaal',
       'alles',
     ])
+    expect(VENSTERS.map((v) => v.key)).not.toContain('deze_week')
+  })
+
+  it('laat "volgend kwartaal" tot het einde van het kwartaal daarna lopen', () => {
+    // Augustus zit in Q3 (eindigt 30/09); volgend kwartaal eindigt op 31/12.
+    expect(vensterTot('volgend_kwartaal', woensdag)).toBe('2026-12-31')
+    expect(vensterTot('volgend_kwartaal', new Date(2026, 0, 5))).toBe('2026-06-30')
+    expect(vensterTot('volgend_kwartaal', new Date(2026, 4, 5))).toBe('2026-09-30')
+  })
+
+  it('rolt "volgend kwartaal" in het vierde kwartaal mee over de jaarwissel', () => {
+    expect(vensterTot('volgend_kwartaal', new Date(2026, 10, 5))).toBe('2027-03-31')
+    expect(vensterTot('volgend_kwartaal', new Date(2026, 11, 31))).toBe('2027-03-31')
+  })
+
+  it('houdt volgend kwartaal altijd ruimer dan dit kwartaal', () => {
+    for (const maand of [0, 2, 3, 5, 6, 8, 9, 11]) {
+      const d = new Date(2026, maand, 15)
+      expect(vensterTot('volgend_kwartaal', d)! > vensterTot('dit_kwartaal', d)!).toBe(true)
+    }
   })
 })
 

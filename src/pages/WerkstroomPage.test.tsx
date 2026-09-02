@@ -142,21 +142,17 @@ describe('WerkstroomPage', () => {
     install([task()])
     render(<WerkstroomPage ingang={btw} />)
 
-    // De eerste ronde staat op "deze week".
-    await waitFor(() =>
-      expect(argsVan(laatsteQuery(), 'lte', 'due_date')![1]).toBe(vensterTot('deze_week'))
-    )
-
-    await userEvent.selectOptions(screen.getByLabelText('Deadlinevenster'), 'deze_maand')
-
-    // Precies de bovengrens van het gekozen venster, en niet "ergens ruimer".
-    // Die vergelijking hield het niet: op de laatste dag van een maand loopt
-    // "deze week" door tot in de volgende maand en is "deze maand" dus de
-    // smallere van de twee. Dat is juist -- elk venster is een einddatum, geen
-    // rangorde -- maar een test die op ruimer-of-gelijk toetst valt er één keer
-    // per maand over.
+    // De eerste ronde staat op "deze maand".
     await waitFor(() =>
       expect(argsVan(laatsteQuery(), 'lte', 'due_date')![1]).toBe(vensterTot('deze_maand'))
+    )
+
+    await userEvent.selectOptions(screen.getByLabelText('Deadlinevenster'), 'dit_kwartaal')
+
+    // Precies de bovengrens van het gekozen venster, en niet "ergens ruimer":
+    // elk venster is een einddatum, geen rangorde.
+    await waitFor(() =>
+      expect(argsVan(laatsteQuery(), 'lte', 'due_date')![1]).toBe(vensterTot('dit_kwartaal'))
     )
   })
 
@@ -190,7 +186,7 @@ describe('WerkstroomPage', () => {
     const keuze = await screen.findByLabelText('Deadlinevenster')
     expect(
       Array.from(keuze.querySelectorAll('option')).map((o) => o.textContent)
-    ).toEqual(['Deze week', 'Deze maand', 'Volgende maand', 'Dit kwartaal', 'Alles'])
+    ).toEqual(['Deze maand', 'Volgende maand', 'Dit kwartaal', 'Volgend kwartaal', 'Alles'])
   })
 
   it('toont de taken in blokken per maand, met de achterstand vooraan', async () => {

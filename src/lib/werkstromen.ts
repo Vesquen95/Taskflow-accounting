@@ -75,13 +75,21 @@ export type VensterKey =
   | 'deze_maand'
   | 'volgende_maand'
   | 'dit_kwartaal'
+  | 'volgend_kwartaal'
   | 'alles'
 
+/** De vensters die het kantoor in een werkstroom kiest.
+ *
+ *  'deze_week' staat er bewust NIET bij: het kantoor plant per maand of per
+ *  kwartaal, en een venster van een week leverde in de praktijk vooral lege
+ *  schermen op. De berekening blijft wel bestaan -- het telefoonscherm
+ *  (src/pages/TelefoonPage.tsx) gebruikt ze voor "wat komt er nu op me af",
+ *  en dat is een andere vraag dan plannen. */
 export const VENSTERS: { key: VensterKey; label: string }[] = [
-  { key: 'deze_week', label: 'Deze week' },
   { key: 'deze_maand', label: 'Deze maand' },
   { key: 'volgende_maand', label: 'Volgende maand' },
   { key: 'dit_kwartaal', label: 'Dit kwartaal' },
+  { key: 'volgend_kwartaal', label: 'Volgend kwartaal' },
   { key: 'alles', label: 'Alles' },
 ]
 
@@ -119,6 +127,13 @@ export function vensterTot(venster: VensterKey, vandaag: Date = new Date()): str
       // smal, maar de achterstand blijft er onverkort in staan.
       const eersteMaandVolgendKwartaal = Math.floor(d.getMonth() / 3) * 3 + 3
       return isoDatum(new Date(d.getFullYear(), eersteMaandVolgendKwartaal, 0))
+    }
+    case 'volgend_kwartaal': {
+      // Drie maanden verder dan het einde van dit kwartaal. De
+      // Date-constructor rolt zelf over de jaarwissel: sta je in het vierde
+      // kwartaal, dan levert maand 15 het einde van maart erna op.
+      const eersteMaandDaarna = Math.floor(d.getMonth() / 3) * 3 + 6
+      return isoDatum(new Date(d.getFullYear(), eersteMaandDaarna, 0))
     }
     case 'alles':
       return undefined

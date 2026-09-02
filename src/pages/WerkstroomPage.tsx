@@ -32,7 +32,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
   // blijft de status in de tabel een label in plaats van een knop.
   const { employee } = useCurrentEmployee()
   const { obligationTypes, loading: typesLaden, error: typesFout } = useObligationTypes()
-  const [venster, setVenster] = useState<VensterKey>('deze_week')
+  const [venster, setVenster] = useState<VensterKey>('deze_maand')
   const [openTask, setOpenTask] = useState<TaskInstanceWithRelations | null>(null)
 
   const adhoc = ingang.key === 'adhoc'
@@ -63,7 +63,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
     // toont.
     adhocOnly: ingang.key === 'adhoc',
     obligationTypeIds: ingang.key === 'adhoc' ? undefined : [],
-    dueTot: vensterTot('deze_week'),
+    dueTot: vensterTot('deze_maand'),
     // Een werkstroom kent haar verplichtingstypes pas als de catalogus binnen
     // is; ad-hoc heeft die niet nodig en kan meteen door.
     paused: ingang.key !== 'adhoc',
