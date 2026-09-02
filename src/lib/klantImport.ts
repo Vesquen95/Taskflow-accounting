@@ -1090,6 +1090,13 @@ function leesVerplichtingen(
   if (jaKeuze) {
     const parameters = leesJaarafsluitingDeadline(ruw.jaarafsluiting_deadline, fouten)
     if (parameters) jaKeuze.parameters = parameters
+    // Rekenen vanaf een vergadering die niet in het dossier staat, levert een
+    // deadline op die er correct uitziet en naar niets verwijst.
+    if (parameters?.basis === 'voor_av' && !bij('algemene_vergadering')) {
+      fouten.push(
+        'De jaarafsluiting rekent vanaf de algemene vergadering, maar "Algemene vergadering" staat op Nee. Zet die op Ja of geef een aantal maanden na het boekjaareinde.'
+      )
+    }
   }
 
   const rapFrequentie = eisAangevinkt('rapportering_frequentie', 'rapportering')

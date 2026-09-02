@@ -89,6 +89,14 @@ export function ObligationPicker({
     if (genormaliseerd !== selections) onChange(genormaliseerd)
   }, [obligationTypes, selections, onChange])
 
+  /** Staat de algemene vergadering aangevinkt? De jaarafsluiting kan daarop
+   *  rekenen, en dan moet die vergadering er ook echt zijn. */
+  const avGekozen = selections.some(
+    (s) =>
+      s.gekozen &&
+      obligationTypes.find((t) => t.id === s.obligation_type_id)?.code === 'algemene_vergadering'
+  )
+
   function wijzig(typeId: string, patch: Partial<ObligationSelection>) {
     onChange(
       selections.map((s) => (s.obligation_type_id === typeId ? { ...s, ...patch } : s))
@@ -214,6 +222,7 @@ export function ObligationPicker({
                   {type.code === 'jaarafsluiting' && (
                     <JaarafsluitingVelden
                       parameters={sel.parameters}
+                      avGekozen={avGekozen}
                       onBasis={(basis) =>
                         zetParameters(type.id, jaarafsluitingParametersVoorBasis(sel.parameters, basis))
                       }
@@ -289,10 +298,14 @@ export function ObligationPicker({
  */
 function JaarafsluitingVelden({
   parameters,
+  avGekozen,
   onBasis,
   onParameter,
 }: {
   parameters: ObligationParameters
+  /** Staat de algemene vergadering bij deze klant aangevinkt? Zo niet, dan
+   *  rekent de motor met een vergadering die in dit dossier niet bestaat. */
+  avGekozen: boolean
   onBasis: (basis: string) => void
   onParameter: (sleutel: string, waarde: unknown) => void
 }) {
@@ -338,17 +351,29 @@ function JaarafsluitingVelden({
         </label>
       )}
 
-      {basis === JAARAFSLUITING_BASIS_VOOR_AV && (
-        // Zonder statutaire AV-datum rekent de motor met de wettelijke uiterste
-        // datum (boekjaareinde + 6 maanden). Dat is een echte datum, maar zelden
-        // de dag waarop de vergadering werkelijk plaatsvindt -- en dan schuift
-        // de afsluiting mee.
-        <p className="w-full text-[11px] text-slate-500">
-          Is er bij de algemene vergadering geen statutaire datum ingevuld, dan
-          rekent Taskflow met de wettelijke uiterste datum: zes maanden na het
-          boekjaareinde.
-        </p>
-      )}
+      {basis === JAARAFSLUITING_BASIS_VOOR_AV &&
+        (!avGekozen ? (
+          // Erger dan een onbekende datum: hier bestaat de vergadering niet
+          // waar de deadline naar verwijst. De motor rekent dan met het
+          // wettelijke ijkpunt, maar het scherm zou anders een afspraak
+          // beloven die nergens in dit dossier staat.
+          <p className="w-full rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+            Deze klant heeft geen algemene vergadering aangevinkt. Taskflow rekent
+            dan met de wettelijke uiterste datum — zes maanden na het boekjaareinde —
+            en niet met een echte vergadering. Vink de algemene vergadering aan, of
+            kies "maanden na het boekjaareinde".
+          </p>
+        ) : (
+          // Zonder statutaire AV-datum rekent de motor met de wettelijke uiterste
+          // datum (boekjaareinde + 6 maanden). Dat is een echte datum, maar zelden
+          // de dag waarop de vergadering werkelijk plaatsvindt -- en dan schuift
+          // de afsluiting mee.
+          <p className="w-full text-[11px] text-slate-500">
+            Is er bij de algemene vergadering geen statutaire datum ingevuld, dan
+            rekent Taskflow met de wettelijke uiterste datum: zes maanden na het
+            boekjaareinde.
+          </p>
+        ))}
     </div>
   )
 }

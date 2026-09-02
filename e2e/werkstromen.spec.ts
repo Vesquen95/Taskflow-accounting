@@ -6,8 +6,11 @@ test.describe('Werkstromen', () => {
     await login(page)
   })
 
-  test('de vijf ingangen staan in de zijbalk', async ({ page }) => {
-    for (const label of ['Btw', 'Afsluiting', 'Vennootschapsbelasting', 'Rapportering', 'Ad-hoc']) {
+  test('de zes ingangen staan in de zijbalk', async ({ page }) => {
+    // "Belastingaangifte" en niet "Vennootschapsbelasting": sinds de aangifte
+    // RPB erbij kwam zit in die werkstroom ook werk dat geen
+    // vennootschapsbelasting is. "Fiches" is de zesde ingang.
+    for (const label of ['Btw', 'Afsluiting', 'Belastingaangifte', 'Fiches', 'Rapportering', 'Ad-hoc']) {
       await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible()
     }
   })
@@ -57,11 +60,13 @@ test.describe('Werkstromen', () => {
     await expect(page.getByText('Laden…')).toHaveCount(0)
     const alles = await page.locator('tbody tr').count()
 
-    await page.getByLabel('Deadlinevenster').selectOption('deze_week')
+    // "Deze week" bestaat niet meer als venster: het kantoor plant per maand
+    // of per kwartaal. Het smalste venster is nu deze maand.
+    await page.getByLabel('Deadlinevenster').selectOption('deze_maand')
     await expect(page.getByText('Laden…')).toHaveCount(0)
-    const week = await page.locator('tbody tr').count()
+    const maand = await page.locator('tbody tr').count()
 
-    expect(week).toBeLessThanOrEqual(alles)
+    expect(maand).toBeLessThanOrEqual(alles)
 
     // Staat er achterstand, dan hoort die in élk venster te blijven staan.
     const teLaat = page.getByRole('heading', { name: 'Te laat' })

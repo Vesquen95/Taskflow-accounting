@@ -211,6 +211,38 @@ describe('ObligationPicker — de jaarafsluiting voor de algemene vergadering', 
   })
 })
 
+describe('ObligationPicker — de jaarafsluiting zonder algemene vergadering', () => {
+  // Zonder AV in het dossier verwijst "een maand voor de algemene vergadering"
+  // naar een vergadering die er niet is. De motor rekent dan met het wettelijke
+  // ijkpunt; het scherm hoort dat te zeggen in plaats van een afspraak te
+  // beloven die nergens staat.
+  it('waarschuwt wanneer de algemene vergadering niet aangevinkt staat', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('checkbox', { name: /Jaarafsluiting/ }))
+    await user.selectOptions(screen.getByLabelText('Deadline jaarafsluiting'), 'voor_av')
+
+    expect(screen.getByText(/geen algemene vergadering aangevinkt/i)).toBeInTheDocument()
+  })
+
+  it('zwijgt zodra de algemene vergadering er wel bij staat', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+
+    await user.click(screen.getByRole('checkbox', { name: /Algemene vergadering/ }))
+    await user.click(screen.getByRole('checkbox', { name: /Jaarafsluiting/ }))
+    await user.selectOptions(screen.getByLabelText('Deadline jaarafsluiting'), 'voor_av')
+
+    expect(screen.queryByText(/geen algemene vergadering aangevinkt/i)).toBeNull()
+    // De bestaande uitleg bij de jaarafsluiting blijft wel staan. (Bij de AV
+    // zelf staat een gelijkaardige zin; vandaar de specifiekere tekst hier.)
+    expect(
+      screen.getByText(/Is er bij de algemene vergadering geen statutaire datum ingevuld/i)
+    ).toBeInTheDocument()
+  })
+})
+
 describe('ObligationPicker — verplichtingen die niet samen kunnen', () => {
   it('zet de VenB-aangifte uit zodra je de RPB aanvinkt', async () => {
     const user = userEvent.setup()

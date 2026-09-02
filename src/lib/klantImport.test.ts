@@ -346,7 +346,13 @@ describe('leesKlantRijen — de verplichtingen per klant', () => {
   })
 
   it('telt een lege cel als Nee', () => {
-    const rij = leesKlantRijen(blad(metVeld('algemene_vergadering', '', metVeld('av_datum', '')))).rijen[0]
+    // De voorbeeldrij laat de jaarafsluiting vanaf de AV rekenen; zonder AV
+    // hoort dat een fout te zijn, dus zet die deadline hier op maanden na het
+    // boekjaareinde. Wat deze test bewaakt is de lege cel, niet die koppeling.
+    const rij = leesKlantRijen(
+      blad(metVeld('algemene_vergadering', '', metVeld('av_datum', '',
+        metVeld('jaarafsluiting_deadline', '3'))))
+    ).rijen[0]
     expect(rij.fouten).toEqual([])
     expect(rij.verplichtingen.map((v) => v.code)).not.toContain('algemene_vergadering')
   })
@@ -568,6 +574,21 @@ describe('leesKlantRijen — de aangifte RPB', () => {
     const codes = rij.verplichtingen.map((v) => v.code)
     expect(codes).not.toContain('aangifte_venb_pb')
     expect(codes).not.toContain('aangifte_rpb')
+  })
+})
+
+describe('leesKlantRijen — de jaarafsluiting voor een vergadering die er niet is', () => {
+  it('weigert "voor AV" wanneer de algemene vergadering op Nee staat', () => {
+    const rij = leesKlantRijen(
+      blad(metVeld('algemene_vergadering', 'Nee', metVeld('jaarafsluiting_deadline', '1 maand voor AV')))
+    ).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/Algemene vergadering.*Nee/i)
+  })
+
+  it('laat "voor AV" gewoon door zodra de vergadering aangevinkt is', () => {
+    const rij = leesKlantRijen(blad(metVeld('jaarafsluiting_deadline', '1 maand voor AV'))).rijen[0]
+    expect(rij.fouten).toEqual([])
   })
 })
 
