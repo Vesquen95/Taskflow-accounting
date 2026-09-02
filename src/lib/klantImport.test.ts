@@ -14,7 +14,7 @@ const KOPPEN = KOLOMMEN.map((k) => k.kop)
  *  velden van de klant, dan een cel per verplichting. */
 const GOEDE_RIJ: unknown[] = [
   'Acme BV', 'BE0123.456.749', 'BV', 12, 31, 'Periodieke aangever', 'Kwartaal', 'Ja',
-  'Ja', 'Ja', 'Ja', 'Ja', 'Nee', '', '', '',
+  'Ja', 'Ja', 'Ja', 'Nee', 'Ja', 'Nee', '', '', '',
   '15/05', '1 maand voor AV', '', '',
 ]
 
@@ -522,5 +522,32 @@ describe('leesKlantRijen — de instellingen per verplichting', () => {
     const rij = leesKlantRijen(blad(metVeld('jaarafsluiting_deadline', ''))).rijen[0]
     expect(rij.fouten).toEqual([])
     expect(keuze(rij, 'jaarafsluiting')?.parameters).toEqual({})
+  })
+})
+
+describe('leesKlantRijen — de aangifte RPB', () => {
+  it('leest de RPB als eigen verplichting', () => {
+    const rij = leesKlantRijen(
+      blad(metVeld('aangifte_rpb', 'Ja', metVeld('aangifte_venb_pb', 'Nee')))
+    ).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.verplichtingen.map((v) => v.code)).toContain('aangifte_rpb')
+  })
+
+  // De databank weigert dit ook (migratie 0034). Het hier al zeggen scheelt
+  // een rij die er in het voorbeeld geldig uitziet en pas bij het opslaan
+  // sneuvelt.
+  it('weigert een klant met zowel VenB als RPB', () => {
+    const rij = leesKlantRijen(blad(metVeld('aangifte_rpb', 'Ja'))).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/niet onder allebei/i)
+  })
+
+  it('laat een dossier zonder van beide gewoon door', () => {
+    const rij = leesKlantRijen(blad(metVeld('aangifte_venb_pb', 'Nee'))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    const codes = rij.verplichtingen.map((v) => v.code)
+    expect(codes).not.toContain('aangifte_venb_pb')
+    expect(codes).not.toContain('aangifte_rpb')
   })
 })

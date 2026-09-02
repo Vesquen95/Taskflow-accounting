@@ -64,6 +64,7 @@ export type VerplichtingSleutel =
   | 'algemene_vergadering'
   | 'jaarafsluiting'
   | 'aangifte_venb_pb'
+  | 'aangifte_rpb'
   | 'va_venb'
   | 'rapportering'
   | 'fiche_281_20'
@@ -160,6 +161,16 @@ const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
     verplichting: true,
     uitleg: 'Ja of Nee.',
     synoniemen: ['venb', 'aangiftevenbpb', 'vennootschapsbelasting'],
+    breedte: 16,
+  },
+  {
+    sleutel: 'aangifte_rpb',
+    kop: 'Aangifte RPB',
+    vereist: false,
+    verplichting: true,
+    uitleg:
+      'Ja of Nee. De rechtspersonenbelasting, voor VZW\'s, IVZW\'s en stichtingen. Een klant valt onder de vennootschapsbelasting óf onder de rechtspersonenbelasting, dus niet samen met "Aangifte VenB".',
+    synoniemen: ['rpb', 'aangifterpb', 'rechtspersonenbelasting'],
     breedte: 16,
   },
   {
@@ -349,6 +360,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     algemene_vergadering: 'Ja',
     jaarafsluiting: 'Ja',
     aangifte_venb_pb: 'Ja',
+    aangifte_rpb: 'Nee',
     va_venb: 'Ja',
     rapportering: 'Ja',
     fiche_281_20: 'Ja',
@@ -371,6 +383,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     algemene_vergadering: 'Ja',
     jaarafsluiting: 'Ja',
     aangifte_venb_pb: 'Nee',
+    aangifte_rpb: 'Ja',
     va_venb: 'Nee',
     rapportering: '',
     fiche_281_20: 'Nee',
@@ -996,6 +1009,16 @@ function leesVerplichtingen(
   }
 
   const bij = (code: VerplichtingSleutel) => keuzes.find((k) => k.code === code)
+
+  // Een dossier valt onder de vennootschapsbelasting óf onder de
+  // rechtspersonenbelasting. De databank weigert allebei (migratie 0034); het
+  // hier al zeggen scheelt een rij die er in het voorbeeld geldig uitziet en
+  // pas bij het opslaan sneuvelt.
+  if (bij('aangifte_venb_pb') && bij('aangifte_rpb')) {
+    fouten.push(
+      'Aangifte VenB en Aangifte RPB staan allebei op Ja. Een klant valt onder de vennootschapsbelasting óf onder de rechtspersonenbelasting, niet onder allebei.'
+    )
+  }
 
   /** Een instelling zonder haar verplichting is een fout en geen stille
    *  waarde: wie de kolom invult verwacht dat ze iets doet. */

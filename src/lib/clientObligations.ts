@@ -67,7 +67,18 @@ export async function saveClientObligations(
   const loopt = (r: BestaandeVerplichting) =>
     r.actief && (r.geldig_tot === null || r.geldig_tot >= vandaag)
 
-  for (const sel of selections) {
+  // Eerst afzetten, dan aanzetten. De volgorde is geen detail: een klant valt
+  // onder de vennootschapsbelasting of onder de rechtspersonenbelasting, en de
+  // databank weigert allebei tegelijk (migratie 0034). De catalogus komt op
+  // naam gesorteerd binnen, dus "Aangifte RPB" staat vóór "Aangifte VenB" --
+  // in één ronde zou de nieuwe aangifte aankomen terwijl de oude nog loopt, en
+  // dan strandt een omschakeling die de gebruiker net correct invulde.
+  const teDoen = [
+    ...selections.filter((sel) => !sel.gekozen),
+    ...selections.filter((sel) => sel.gekozen),
+  ]
+
+  for (const sel of teDoen) {
     if (AFGELEID_UIT_BTW_REGIME.includes(codePerTypeId[sel.obligation_type_id] ?? '')) continue
 
     const huidig = bestaand.find((r) => r.obligation_type_id === sel.obligation_type_id && loopt(r))

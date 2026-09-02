@@ -29,8 +29,11 @@ export const INGANGEN: IngangDefinitie[] = [
   {
     key: 'vennootschapsbelasting',
     pad: 'vennootschapsbelasting',
-    label: 'Vennootschapsbelasting',
-    omschrijving: 'Voorafbetalingen en de aangifte — per boekjaar.',
+    // De enumwaarde blijft 'vennootschapsbelasting' (migratie 0022), maar het
+    // label niet: sinds de aangifte RPB erbij kwam (0034) zit hier ook het werk
+    // voor VZW's in, en die betalen geen vennootschapsbelasting.
+    label: 'Belastingaangifte',
+    omschrijving: 'Aangifte VenB of RPB en de voorafbetalingen — per boekjaar.',
   },
   {
     key: 'fiches',

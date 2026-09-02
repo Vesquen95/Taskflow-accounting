@@ -3158,17 +3158,23 @@ begin
   -- over op dag X, dan hoort een periode die vóór X afliep er nog bij zolang de
   -- indieningsdatum ná X valt -- die aangifte moet het kantoor nog doen.
   --
-  -- De grensdatum wordt hier op de 6de van deze maand gelegd. Voor een
-  -- maandaangever betekent dat: de vorige maand is afgelopen (periode-einde
-  -- vóór de 6de) terwijl haar deadline pas op de 20ste van deze maand valt,
-  -- dus ná de grens. Onafhankelijk van welke dag het vandaag is.
+  -- De grensdatum ligt op de EERSTE van deze maand. Voor een maandaangever
+  -- betekent dat: de vorige maand is afgelopen (periode-einde vóór de eerste)
+  -- terwijl haar deadline pas op de 20ste van deze maand valt, dus ná de grens.
+  --
+  -- Ze lag hier eerst op de 6de, en dat hield het niet: op de eerste vijf
+  -- dagen van een maand ligt die datum in de TOEKOMST, en dan slaat de motor
+  -- de verplichting helemaal over -- terecht, want ze is nog niet begonnen
+  -- (`co.geldig_vanaf <= current_date`). De test viel dus elke maand vijf
+  -- dagen lang om, en dat kwam pas op 2 september boven. De eerste van de
+  -- maand is nooit in de toekomst en houdt het scenario intact.
   select id into v_ot_btw from public.obligation_types where code = 'btw_aangifte';
   insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
                               btw_regime, btw_aangifte_frequentie, actief)
     values (v_firm, 'S26 Grensgeval', 12, 31, 'periodieke_aangever', 'maand', true)
     returning id into v_grens;
 
-  v_grensdatum := date_trunc('month', current_date)::date + 5;
+  v_grensdatum := date_trunc('month', current_date)::date;
   update public.client_obligations set geldig_vanaf = v_grensdatum where client_id = v_grens;
 
   perform public.generate_task_instances(3, 6);
@@ -3243,36 +3249,43 @@ begin
   end if;
   raise notice 'PASS 27.1: aangiftetaken worden aangemaakt zonder kalenderrij';
 
-  -- 27.2 De laatste dag van de zevende maand na het boekjaareinde, per cohort.
+  -- 27.2 De wettelijke termijn per cohort, met de datums voluit.
+  --
+  -- Deze test rekende de verwachting eerst zelf uit met dezelfde formule als de
+  -- motor -- en legde daarmee de fout vast die 0033 rechtzette: een boekjaar
+  -- op 31/12 kreeg 31/07 in plaats van 30/09. Een test die de formule van de
+  -- code overneemt, toetst niets; ze bevestigt alleen dat de code doet wat de
+  -- code doet. Daarom staan de datums hier voluit.
   for v_i in 1..4 loop
     v_maand := v_gevallen[v_i][1];
     select ti.due_date_wettelijk into v_due
     from public.task_instances ti join public.clients c on c.id = ti.client_id
     where ti.obligation_type_id = v_ot_aang and ti.periode_label = '2026'
       and c.boekjaar_einde_maand = v_maand;
-    v_verwacht := (date_trunc('month', make_date(2026, v_maand, v_gevallen[v_i][2]))
-                   + interval '8 months' - interval '1 day')::date;
+    v_verwacht := case v_maand
+      when 12 then date '2027-09-30'  -- winterafsluiting: 30 september
+      when 6  then date '2027-01-31'
+      when 9  then date '2027-04-30'
+      when 3  then date '2026-10-31'
+    end;
     if v_due is distinct from v_verwacht then
       raise exception 'FAIL 27.2: boekjaareinde maand % gaf % i.p.v. %', v_maand, v_due, v_verwacht;
     end if;
   end loop;
-  select ti.due_date_wettelijk into v_due
-  from public.task_instances ti join public.clients c on c.id = ti.client_id
-  where ti.obligation_type_id = v_ot_aang and ti.periode_label = '2026' and c.boekjaar_einde_maand = 6;
-  if v_due is distinct from date '2027-01-31' then
-    raise exception 'FAIL 27.2: een 30/06-dossier moet indienen voor 31/01/2027, kreeg %', v_due;
-  end if;
-  raise notice 'PASS 27.2: 31/12->31/07, 30/06->31/01, 30/09->30/04, 31/03->31/10';
+  raise notice 'PASS 27.2: 31/12->30/09, 30/06->31/01, 30/09->30/04, 31/03->31/10';
 
   -- 27.3 Een aangekondigde campagnedatum wint, ook van een taak die al bestaat.
+  -- Bewust een datum die de formule NIET geeft: sinds 0033 rekent die voor een
+  -- 31/12-dossier zelf al 30/09/2027 uit, en dan zou deze test niet meer
+  -- kunnen zien of de override iets deed.
   insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, aangemaakt_door, gewijzigd_door)
-  values (v_ot_aang, 2026, 'boekjaar_12', date '2027-09-30', true, v_admin, v_admin);
+  values (v_ot_aang, 2026, 'boekjaar_12', date '2027-10-15', true, v_admin, v_admin);
 
   select ti.due_date_wettelijk into v_due
   from public.task_instances ti join public.clients c on c.id = ti.client_id
   where ti.obligation_type_id = v_ot_aang and ti.periode_label = '2026' and c.boekjaar_einde_maand = 12;
-  if v_due is distinct from date '2027-09-30' then
-    raise exception 'FAIL 27.3: de override verzette de bestaande taak niet (% i.p.v. 30/09/2027)', v_due;
+  if v_due is distinct from date '2027-10-15' then
+    raise exception 'FAIL 27.3: de override verzette de bestaande taak niet (% i.p.v. 15/10/2027)', v_due;
   end if;
 
   -- en raakt alleen het cohort dat ze noemt.
@@ -4778,6 +4791,181 @@ begin
     raise exception 'FAIL 38.4: herbereken_jaarafsluiting_taken_voor() controleert de toegang niet';
   end if;
   raise notice 'PASS 38.4: de herberekening controleert zelf of je het dossier mag zien';
+end $$;
+
+
+-- ============================================================
+-- Sectie 39 (0033): de aangiftetermijn, met de winteruitzondering.
+--
+-- De motor rekende sinds 0019 met "de laatste dag van de zevende maand na het
+-- boekjaareinde" en niets meer. Die regel is onvolledig: sluit het boekjaar af
+-- tussen 31 december en eind februari, dan is de uiterste datum 30 september
+-- (art. 310 WIB92). Bij een boekjaar op 31/12 -- de meest voorkomende
+-- afsluitdatum -- stond de aangifte dus twee maanden te vroeg.
+--
+-- Te vroeg is de veilige kant, maar het is stil: er verschijnt geen fout, de
+-- datum ziet er alleen maar plausibel uit. Precies waarom dit een test
+-- verdient en geen opmerking in de code.
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid; v_ot uuid;
+  v_klant uuid; v_n int; v_d date;
+  r record;
+begin
+  -- 39.1 De regel zelf, per afsluitdatum.
+  for r in
+    select * from (values
+      (date '2026-12-31', date '2027-09-30', 'winter: 31 december'),
+      (date '2027-01-31', date '2027-09-30', 'winter: januari'),
+      (date '2027-02-28', date '2027-09-30', 'winter: februari'),
+      (date '2028-02-29', date '2028-09-30', 'winter: schrikkeljaar'),
+      (date '2027-03-31', date '2027-10-31', 'gewoon: maart'),
+      (date '2027-06-30', date '2028-01-31', 'gewoon: juni'),
+      (date '2027-09-30', date '2028-04-30', 'gewoon: september'),
+      (date '2027-12-15', date '2028-07-31', 'december, maar niet de 31e')
+    ) t(be, verwacht, uitleg)
+  loop
+    if public.aangifte_deadline(r.be) <> r.verwacht then
+      raise exception 'FAIL 39.1 (%): boekjaareinde % gaf % in plaats van %',
+        r.uitleg, r.be, public.aangifte_deadline(r.be), r.verwacht;
+    end if;
+  end loop;
+  raise notice 'PASS 39.1: de aangiftetermijn klopt voor elke afsluitdatum, ook 29 februari';
+
+  -- 39.2 En de motor gebruikt diezelfde functie, niet een eigen kopie.
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's39@test.local', now());
+  insert into public.firms (naam) values ('Sectie 39 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S39 Beheerder', 's39@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select id into v_ot from public.obligation_types where code = 'aangifte_venb_pb';
+
+  -- Een boekjaar op 31 JANUARI: ook een winterafsluiting, en een cohort waar
+  -- geen enkele andere sectie een campagnedatum voor invult. Sectie 27 zet er
+  -- wel een voor het 31/12-cohort, en dan zou deze test de override meten in
+  -- plaats van de formule.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S39 Januari', 1, 31, 'geen', true) returning id into v_klant;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot, true, current_date);
+
+  select count(*) into v_n from public.legal_calendar
+   where obligation_type_id = v_ot and scope = 'boekjaar_1';
+  if v_n <> 0 then
+    raise exception 'FAIL 39.2: er staat een campagnedatum voor dit cohort; de test bewijst dan niets';
+  end if;
+
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+
+  select count(*) into v_n from public.task_instances ti
+   where ti.client_id = v_klant and ti.obligation_type_id = v_ot
+     and ti.due_date_wettelijk <> public.aangifte_deadline(ti.periode_eind);
+  if v_n <> 0 then
+    raise exception 'FAIL 39.2: % aangiftetaken wijken af van de termijnfunctie', v_n;
+  end if;
+
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot;
+  if v_n = 0 then
+    raise exception 'FAIL 39.2: er kwamen helemaal geen aangiftetaken';
+  end if;
+
+  select due_date_wettelijk into v_d from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot order by due_date limit 1;
+  if extract(month from v_d) <> 9 or extract(day from v_d) <> 30 then
+    raise exception 'FAIL 39.2: een boekjaar op 31/01 gaf % in plaats van 30 september', v_d;
+  end if;
+  raise notice 'PASS 39.2: de motor volgt de termijnfunctie; een winterafsluiting levert 30 september (%)', v_d;
+end $$;
+
+-- ============================================================
+-- Sectie 40 (0034): de aangifte RPB, en één aangifte per dossier.
+--
+-- Een VZW valt onder de rechtspersonenbelasting in plaats van de
+-- vennootschapsbelasting. Nooit onder allebei -- en dat laatste is de reden
+-- dat hier een slot op zit: een dossier met twee aangiftes ziet er op het
+-- scherm volkomen normaal uit, en je merkt het pas als er twee keer een
+-- deadline aankomt.
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid;
+  v_ot_rpb uuid; v_ot_venb uuid;
+  v_vzw uuid; v_bv uuid;
+  v_n int; v_d date; v_geweigerd boolean := false;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's40@test.local', now());
+  insert into public.firms (naam) values ('Sectie 40 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S40 Beheerder', 's40@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+
+  select id into v_ot_rpb from public.obligation_types where code = 'aangifte_rpb';
+  select id into v_ot_venb from public.obligation_types where code = 'aangifte_venb_pb';
+  if v_ot_rpb is null then
+    raise exception 'FAIL 40.0: de aangifte RPB staat niet in de catalogus';
+  end if;
+
+  -- 40.1 De RPB volgt dezelfde termijn als de VenB.
+  insert into public.clients (firm_id, naam, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S40 VZW', 'VZW', 12, 31, 'geen', true) returning id into v_vzw;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_vzw, v_ot_rpb, true, current_date);
+
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+
+  select count(*) into v_n from public.task_instances
+   where client_id = v_vzw and obligation_type_id = v_ot_rpb;
+  if v_n = 0 then
+    raise exception 'FAIL 40.1: de RPB leverde geen taken op';
+  end if;
+  select count(*) into v_n from public.task_instances ti
+   where ti.client_id = v_vzw and ti.obligation_type_id = v_ot_rpb
+     and ti.due_date_wettelijk <> public.aangifte_deadline(ti.periode_eind);
+  if v_n <> 0 then
+    raise exception 'FAIL 40.1: % RPB-taken volgen de termijnfunctie niet', v_n;
+  end if;
+  select due_date_wettelijk into v_d from public.task_instances
+   where client_id = v_vzw and obligation_type_id = v_ot_rpb order by due_date limit 1;
+  raise notice 'PASS 40.1: de RPB volgt dezelfde termijn als de VenB (%)', v_d;
+
+  -- 40.2 Het slot: er geen tweede aangifte bij kunnen zetten.
+  begin
+    insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+      values (v_vzw, v_ot_venb, true, current_date);
+  exception when check_violation then
+    v_geweigerd := true;
+  end;
+  if not v_geweigerd then
+    raise exception 'FAIL 40.2: een dossier kreeg zowel de VenB- als de RPB-aangifte';
+  end if;
+  raise notice 'PASS 40.2: een tweede aangifte op hetzelfde dossier wordt geweigerd';
+
+  -- 40.3 Omschakelen moet wél kunnen: eerst afzetten, dan aanzetten. Zo doet
+  --      het scherm het ook (src/lib/clientObligations.ts).
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S40 Omschakeling', 12, 31, 'geen', true) returning id into v_bv;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_bv, v_ot_venb, true, current_date);
+
+  update public.client_obligations set actief = false, geldig_tot = current_date
+   where client_id = v_bv and obligation_type_id = v_ot_venb;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_bv, v_ot_rpb, true, current_date);
+  raise notice 'PASS 40.3: van de VenB naar de RPB omschakelen lukt in één beweging';
+
+  -- 40.4 Een stopgezette aangifte botst met niets meer.
+  select count(*) into v_n from public.client_obligations co
+   where co.client_id = v_bv and co.actief;
+  if v_n <> 1 then
+    raise exception 'FAIL 40.4: % lopende aangiftes na het omschakelen, verwacht 1', v_n;
+  end if;
+  raise notice 'PASS 40.4: na het omschakelen loopt er precies één aangifte';
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
