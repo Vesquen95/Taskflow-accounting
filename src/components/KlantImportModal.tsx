@@ -94,7 +94,7 @@ function VoorbeeldTabel({ rijen }: { rijen: ImportRij[] }) {
             <th className="px-2 py-1.5">Rechtsvorm</th>
             <th className="px-2 py-1.5">Boekjaar</th>
             <th className="px-2 py-1.5">BTW</th>
-            <th className="px-2 py-1.5">Mandataris</th>
+            <th className="px-2 py-1.5">Fiscaal mandaat</th>
             <th className="px-2 py-1.5">Verplichtingen</th>
             <th className="px-2 py-1.5">Beoordeling</th>
           </tr>

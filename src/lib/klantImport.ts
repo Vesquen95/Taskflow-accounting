@@ -317,11 +317,13 @@ export const KOLOMMEN: readonly Kolom[] = [
   },
   {
     sleutel: 'mandataris',
-    kop: 'Mandataris',
+    kop: 'Fiscaal mandaat',
     vereist: false,
-    uitleg: 'Ja of Nee. Leeg telt als Nee.',
-    synoniemen: [],
-    breedte: 12,
+    uitleg: 'Ja of Nee. Leeg telt als Nee. Houdt het kantoor een fiscaal mandaat voor deze klant?',
+    // 'mandataris' blijft herkend: bestanden die met het vorige sjabloon
+    // gemaakt zijn moeten blijven werken, ook al heet de kolom nu anders.
+    synoniemen: ['mandataris', 'mandaat', 'fiscaalmandaat'],
+    breedte: 18,
   },
   ...VERPLICHTING_KOLOMMEN,
   ...PARAMETER_KOLOMMEN,
@@ -1087,7 +1089,7 @@ function leesRij(ruw: Record<KolomSleutel, string>, excelRij: number, dubbels: D
   const boekjaar = leesBoekjaareinde(ruw.boekjaar_einde_maand, ruw.boekjaar_einde_dag, fouten, waarschuwingen)
   const regime = leesRegime(ruw.btw_regime, fouten)
   const frequentie = leesFrequentie(ruw.btw_aangifte_frequentie, regime, fouten)
-  const mandataris = leesJaNee(ruw.mandataris, 'Mandataris', fouten)
+  const mandataris = leesJaNee(ruw.mandataris, 'Fiscaal mandaat', fouten)
   const verplichtingen = leesVerplichtingen(ruw, boekjaar, fouten)
 
   const geldig =

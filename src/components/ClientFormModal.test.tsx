@@ -141,7 +141,7 @@ describe('ClientFormModal — editing an existing client', () => {
     )
     const naamInput = screen.getByLabelText('Naam *') as HTMLInputElement
     expect(naamInput.value).toBe('Existing Co')
-    expect(screen.getByRole('checkbox', { name: 'Mandataris' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Fiscaal mandaat' })).not.toBeChecked()
   })
 
   // Het vinkje "Actief" uitzetten archiveert de klant en annuleert al zijn

@@ -193,7 +193,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase text-slate-400">Mandataris</dt>
+              <dt className="text-xs uppercase text-slate-400">Fiscaal mandaat</dt>
               <dd>{client.mandataris ? 'Ja' : 'Nee'}</dd>
             </div>
             <div>

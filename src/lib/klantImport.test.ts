@@ -220,10 +220,20 @@ describe('leesKlantRijen — normaliseren wat veilig te normaliseren is', () => 
     expect(nees.every((r) => r.klant?.mandataris === false)).toBe(true)
   })
 
-  it('weigert een mandatariswaarde waarvan je moet gokken', () => {
+  it('weigert een waarde voor het fiscaal mandaat waarvan je moet gokken', () => {
     const rij = leesKlantRijen(blad(metVeld('mandataris', 'soms'))).rijen[0]
     expect(rij.klant).toBeNull()
-    expect(rij.fouten.join(' ')).toMatch(/mandataris/i)
+    expect(rij.fouten.join(' ')).toMatch(/fiscaal mandaat/i)
+  })
+
+  it('leest de kolom nog steeds wanneer ze "Mandataris" heet', () => {
+    // Het veld heette tot vandaag zo. Wie een bestand van vorige week
+    // opnieuw gebruikt, mag daar niet op stranden.
+    const oudeKoppen = KOLOMMEN.map((k) => (k.sleutel === 'mandataris' ? 'Mandataris' : k.kop))
+    const voorbeeld = leesKlantRijen([oudeKoppen, GOEDE_RIJ])
+    expect(voorbeeld.onbekendeKolommen).toEqual([])
+    expect(voorbeeld.rijen[0].fouten).toEqual([])
+    expect(voorbeeld.rijen[0].klant?.mandataris).toBe(true)
   })
 })
 

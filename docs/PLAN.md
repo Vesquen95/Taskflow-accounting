@@ -49,7 +49,9 @@ gebruikt:**
   losse `mag_goedkeuren`-vlag.
 - Klantenbeheer: rechtsvorm, boekjaareinde, `btw_regime`, mandataris,
   vertrouwelijk, actief, standaard verantwoordelijke (verplicht bij
-  vertrouwelijke klanten).
+  vertrouwelijke klanten). De kolom `mandataris` heet op het scherm en in
+  het importsjabloon "Fiscaal mandaat"; de kolomnaam in de databank bleef
+  ongewijzigd.
 - Catalogus van 8 verplichtingtypes (§2.3), per klant configureerbaar
   (`client_obligations`, effectief-gedateerd).
 - Wettelijke kalender (`legal_calendar`) + feestdagenkalender

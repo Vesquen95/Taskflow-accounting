@@ -260,7 +260,7 @@ export function ClientFormModal({
               checked={values.mandataris}
               onChange={(e) => setValues((v) => ({ ...v, mandataris: e.target.checked }))}
             />
-            Mandataris
+            Fiscaal mandaat
           </label>
           <label className="flex items-center gap-1.5">
             <input

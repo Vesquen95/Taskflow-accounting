@@ -187,7 +187,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
           </select>
         </div>
         <div>
-          <label htmlFor="klanten-mandataris" className="mb-1 block text-xs font-medium text-slate-500">Mandataris</label>
+          <label htmlFor="klanten-mandataris" className="mb-1 block text-xs font-medium text-slate-500">Fiscaal mandaat</label>
           <select
             id="klanten-mandataris"
             value={String(filters.mandataris)}
@@ -232,7 +232,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
                 <th className="px-3 py-2">Rechtsvorm</th>
                 <th className="px-3 py-2">Boekjaareinde</th>
                 <th className="px-3 py-2">BTW-regime</th>
-                <th className="px-3 py-2">Mandataris</th>
+                <th className="px-3 py-2">Fiscaal mandaat</th>
                 <th className="px-3 py-2">Verantwoordelijke</th>
                 <th className="px-3 py-2">Status</th>
               </tr>
