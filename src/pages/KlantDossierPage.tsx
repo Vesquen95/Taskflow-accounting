@@ -111,7 +111,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     await reload()
   }
 
-  async function reassignTask(taskId: string, toegewezen_medewerker_id: string) {
+  async function reassignTask(taskId: string, toegewezen_medewerker_id: string | null) {
     const { error: err } = await supabase.from('task_instances').update({ toegewezen_medewerker_id }).eq('id', taskId)
     if (err) throw err
     await reload()

@@ -12,6 +12,7 @@ import {
   type VerplichtingKeuze,
 } from '../lib/klantImport'
 import { SJABLOON_BESTANDSNAAM, downloadSjabloon, leesKlantenBestand } from '../lib/klantImportBestand'
+import { useTeams } from '../hooks/useTeams'
 import { voerKlantImportUit, type ImportVerslag } from '../lib/klantImportOpslag'
 import { reportError } from '../lib/errorMessage'
 
@@ -213,6 +214,7 @@ export function KlantImportModal({
   onKlaar: (aantalAangemaakt: number) => void
   onClose: () => void
 }) {
+  const { teams } = useTeams()
   const [stap, setStap] = useState<Stap>({ naam: 'kiezen' })
   const [fout, setFout] = useState<string | null>(null)
   const bestandRef = useRef<HTMLInputElement>(null)
@@ -222,7 +224,13 @@ export function KlantImportModal({
     setFout(null)
     setStap({ naam: 'lezen' })
     try {
-      const voorbeeld = await leesKlantenBestand(bestand, { bestaandeOndernemingsnummers })
+      // De teamcodes mee: zonder die lijst zou "ZAV4" stil genegeerd worden en
+      // stond er straks een dossier zonder team, zichtbaar voor het hele
+      // kantoor, zonder dat iemand het gevraagd had.
+      const voorbeeld = await leesKlantenBestand(bestand, {
+        bestaandeOndernemingsnummers,
+        teamCodes: teams.map((t) => t.code),
+      })
       setStap({ naam: 'voorbeeld', voorbeeld })
     } catch (err) {
       setStap({ naam: 'kiezen' })

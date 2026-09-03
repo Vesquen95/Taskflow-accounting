@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
-import { useTaskInstances } from '../hooks/useTaskInstances'
+import { TEAMBAK, useTaskInstances } from '../hooks/useTaskInstances'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useEmployees } from '../hooks/useEmployees'
+import { useTeams } from '../hooks/useTeams'
+import { teamLabel } from '../lib/teams'
 import { TaakKaart } from '../components/TaakKaart'
 import { TaskDetailModal } from '../components/TaskDetailModal'
 import { ErrorState } from '../components/ErrorState'
@@ -44,6 +46,7 @@ export function TelefoonPage() {
   // keuzelijst met verantwoordelijken, en die leeg meegeven levert een
   // besturingselement op dat kapot lijkt.
   const { employees } = useEmployees()
+  const { teams } = useTeams()
   const vandaag = useMemo(() => isoDatum(new Date()), [])
   // De kop "Deze week" in de lijst blijft wel bestaan: dat is een tussenkop en
   // geen filter. Wat deze week moet, hoort apart te staan van wat later komt,
@@ -85,7 +88,11 @@ export function TelefoonPage() {
   const zoekterm = filters.zoekterm ?? ''
   const zoekt = zoekterm.trim().length > 0
   const pagina = filters.pagina ?? 1
-  const alleenVanMij = filters.toegewezenAan !== undefined && filters.toegewezenAan !== 'alle'
+  const alleenTeambak = filters.toegewezenAan === TEAMBAK
+  const alleenVanMij =
+    filters.toegewezenAan !== undefined &&
+    filters.toegewezenAan !== 'alle' &&
+    filters.toegewezenAan !== TEAMBAK
 
   function zetVenster(keuze: VensterKey) {
     setVenster(keuze)
@@ -131,6 +138,13 @@ export function TelefoonPage() {
       dueVanaf: zoektNu || !achterstandVerborgen ? undefined : vandaag,
       pagina: 1,
     }))
+  }
+
+  /** Het werk dat nog niemand opgenomen heeft. Sluit "Van mij" uit: dat zijn
+   *  twee tegengestelde vragen, en één keuzelijst met drie standen is hier
+   *  eerlijker dan twee knoppen die elkaar kunnen tegenspreken. */
+  function zetAlleenTeambak(aan: boolean) {
+    setFilters((f) => ({ ...f, toegewezenAan: aan ? TEAMBAK : 'alle', pagina: 1 }))
   }
 
   function zetAlleenVanMij(aan: boolean) {
@@ -197,6 +211,31 @@ export function TelefoonPage() {
             className={knopKlasse(alleenVanMij)}
           >
             Van mij
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Het team op een eigen regel: op 390 pixels duwt een derde
+              besturingselement naast het venster alles op drie regels. */}
+          <select
+            aria-label="Team"
+            value={filters.team ?? 'alle'}
+            onChange={(e) => setFilters((f) => ({ ...f, team: e.target.value, pagina: 1 }))}
+            className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-base"
+          >
+            <option value="alle">Alle teams</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {teamLabel(t)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => zetAlleenTeambak(!alleenTeambak)}
+            aria-pressed={alleenTeambak}
+            className={knopKlasse(alleenTeambak)}
+          >
+            Nog niemand
           </button>
         </div>
         {zoekt && (

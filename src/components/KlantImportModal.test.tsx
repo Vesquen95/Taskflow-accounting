@@ -18,6 +18,7 @@ function klant(naam: string): NieuweKlant {
   return {
     naam,
     ondernemingsnummer: null,
+    team_code: null,
     rechtsvorm: 'BV',
     boekjaar_einde_maand: 12,
     boekjaar_einde_dag: 31,

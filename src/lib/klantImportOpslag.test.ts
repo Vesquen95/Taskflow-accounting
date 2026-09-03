@@ -6,6 +6,7 @@ function rij(excelRij: number, naam: string, geldig = true): ImportRij {
   const klant: NieuweKlant = {
     naam,
     ondernemingsnummer: null,
+    team_code: null,
     rechtsvorm: null,
     boekjaar_einde_maand: 12,
     boekjaar_einde_dag: 31,

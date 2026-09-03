@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useTaskInstances } from '../hooks/useTaskInstances'
+import { TEAMBAK, useTaskInstances } from '../hooks/useTaskInstances'
 import { useEmployees } from '../hooks/useEmployees'
+import { useTeams } from '../hooks/useTeams'
+import { teamLabel } from '../lib/teams'
 import { TaskDetailModal } from '../components/TaskDetailModal'
 import { StatusBadge } from '../components/StatusBadge'
 import { UrgencyBadge } from '../components/UrgencyBadge'
@@ -49,6 +51,7 @@ function taakWoord(aantal: number): string {
  */
 export function KalenderPage() {
   const { employees } = useEmployees()
+  const { teams } = useTeams()
   // Eén keer per mount: de kalender hoort niet van datum te wisselen terwijl
   // je erin bladert.
   const vandaag = useMemo(() => isoDatum(new Date()), [])
@@ -142,12 +145,26 @@ export function KalenderPage() {
             Te late taken uit het verleden verbergen
           </label>
           <select
+            aria-label="Team"
+            value={filters.team ?? 'alle'}
+            onChange={(e) => setFilters((f) => ({ ...f, team: e.target.value, pagina: 1 }))}
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          >
+            <option value="alle">Alle teams</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {teamLabel(t)}
+              </option>
+            ))}
+          </select>
+          <select
             aria-label="Medewerker"
             value={filters.toegewezenAan ?? 'alle'}
             onChange={(e) => setFilters((f) => ({ ...f, toegewezenAan: e.target.value, pagina: 1 }))}
             className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
           >
             <option value="alle">Kantoorbreed</option>
+            <option value={TEAMBAK}>Nog niemand</option>
             {employees.map((emp) => (
               <option key={emp.id} value={emp.id}>
                 {emp.naam}

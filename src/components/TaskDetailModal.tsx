@@ -5,6 +5,8 @@ import { UrgencyBadge } from './UrgencyBadge'
 import { dagenVerschil, formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
+import { useTeams } from '../hooks/useTeams'
+import { collegasVoorDossier } from '../lib/teams'
 import type { Employee, TaskInstanceWithRelations, TaskStatus, TaskStatusLog } from '../types'
 import { reportError } from '../lib/errorMessage'
 import {
@@ -27,7 +29,7 @@ interface TaskDetailModalProps {
   employees: Employee[]
   onClose: () => void
   onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>
-  onReassign: (taskId: string, employeeId: string) => Promise<void>
+  onReassign: (taskId: string, employeeId: string | null) => Promise<void>
   onMarkReviewHandled: (taskId: string) => Promise<void>
   /** Optioneel: schermen die een deadline laten verzetten geven dit mee.
    *  Zonder handler blijft de deadline een leesbaar gegeven. */
@@ -78,11 +80,14 @@ export function TaskDetailModal({
   onDueDateChange,
 }: TaskDetailModalProps) {
   const { employee } = useCurrentEmployee()
+  const { leden } = useTeams()
   const [log, setLog] = useState<TaskStatusLogWithActor[]>([])
   const [logLoading, setLogLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [reassignTo, setReassignTo] = useState(task.toegewezen_medewerker_id)
+  // '' is de bak van het team: nog niemand. Een aparte lege stand en geen
+  // null, zodat de keuzelijst er gewoon een optie van kan maken.
+  const [reassignTo, setReassignTo] = useState(task.toegewezen_medewerker_id ?? '')
   const [nieuweDeadline, setNieuweDeadline] = useState(task.due_date)
 
   useEffect(() => {
@@ -109,6 +114,10 @@ export function TaskDetailModal({
   // de doorklikbare status in de takenlijst, en een getrouwe spiegel van
   // enforce_task_instance_transition (migratie 0011). De databank blijft de
   // handhaving; dit scherm belooft alleen niets wat zij zou weigeren.
+  // De keuzelijst volgt het team van het dossier. Geen afscherming -- dat doet
+  // de databank -- maar wel het verschil tussen zes zinvolle namen en vijftig.
+  const collegas = collegasVoorDossier(employees, leden, task.client.team_id, task.toegewezen_medewerker_id)
+
   const ctx = statusContext(task, employee)
   const volgendeStappen = voortgangsActies(ctx)
   const annuleren = annulatieActie(ctx)
@@ -159,12 +168,12 @@ export function TaskDetailModal({
     }
   }
 
-  async function handleReassign() {
-    if (reassignTo === task.toegewezen_medewerker_id) return
+  async function handleReassign(naar: string | null = reassignTo || null) {
+    if (naar === (task.toegewezen_medewerker_id ?? null)) return
     setBusy(true)
     setError(null)
     try {
-      await onReassign(task.id, reassignTo)
+      await onReassign(task.id, naar)
     } catch (err) {
       setError(reportError(err, 'Herverdelen is mislukt'))
     } finally {
@@ -241,13 +250,30 @@ export function TaskDetailModal({
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium uppercase text-slate-400">Verantwoordelijke</label>
+
+          {/* Ligt de taak nog in de bak van het team, dan is "ik doe dit" de
+              handeling die je hier komt doen. Eén knop in plaats van jezelf
+              opzoeken in een keuzelijst. */}
+          {task.toegewezen_medewerker_id === null && employee && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleReassign(employee.id)}
+              className="w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            >
+              Ik neem dit op
+            </button>
+          )}
+
           <div className="flex gap-2">
             <select
+              aria-label="Verantwoordelijke"
               value={reassignTo}
               onChange={(e) => setReassignTo(e.target.value)}
               className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
             >
-              {employees.map((emp) => (
+              <option value="">— nog niemand, in de bak van het team —</option>
+              {collegas.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.naam}
                 </option>
@@ -255,8 +281,8 @@ export function TaskDetailModal({
             </select>
             <button
               type="button"
-              disabled={busy || reassignTo === task.toegewezen_medewerker_id}
-              onClick={handleReassign}
+              disabled={busy || (reassignTo || null) === (task.toegewezen_medewerker_id ?? null)}
+              onClick={() => handleReassign()}
               className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               Herverdeel

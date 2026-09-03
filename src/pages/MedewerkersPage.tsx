@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useEmployees } from '../hooks/useEmployees'
+import { useTeams } from '../hooks/useTeams'
+import { teamsVan } from '../lib/teams'
 import { ErrorState } from '../components/ErrorState'
 import type { EmployeeRol } from '../types'
 import { reportError } from '../lib/errorMessage'
@@ -12,6 +14,7 @@ import { reportError } from '../lib/errorMessage'
  * een werkstroom of in de kalender. */
 export function MedewerkersPage() {
   const { employees, loading, error, reload, inviteEmployee, updateEmployee } = useEmployees()
+  const { teams, leden, voegLidToe, verwijderLid } = useTeams()
   const [naam, setNaam] = useState('')
   const [email, setEmail] = useState('')
   const [rol, setRol] = useState<EmployeeRol>('medewerker')
@@ -47,6 +50,19 @@ export function MedewerkersPage() {
       await updateEmployee(id, { actief: !actief })
     } catch (err) {
       setRowError(reportError(err, 'Wijzigen is mislukt'))
+    }
+  }
+
+  /** Lid worden van een team ís toegang krijgen tot die dossiers. Daarom staat
+   *  het hier bij het medewerkersbeheer en niet ergens in een profielscherm:
+   *  het is een beslissing van een kantoorbeheerder, geen voorkeur. */
+  async function wisselTeam(employeeId: string, teamId: string, isLid: boolean) {
+    setRowError(null)
+    try {
+      if (isLid) await verwijderLid(employeeId, teamId)
+      else await voegLidToe(employeeId, teamId)
+    } catch (err) {
+      setRowError(reportError(err, 'Het team wijzigen is mislukt'))
     }
   }
 
@@ -119,6 +135,7 @@ export function MedewerkersPage() {
                 <th className="px-3 py-2">Naam</th>
                 <th className="px-3 py-2">E-mail</th>
                 <th className="px-3 py-2">Rol</th>
+                <th className="px-3 py-2">Teams</th>
                 <th className="px-3 py-2">Mag goedkeuren</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2" />
@@ -130,6 +147,35 @@ export function MedewerkersPage() {
                   <td className="px-3 py-2 font-medium text-slate-800">{emp.naam}</td>
                   <td className="px-3 py-2 text-slate-500">{emp.email}</td>
                   <td className="px-3 py-2 text-slate-600">{emp.rol === 'kantoorbeheerder' ? 'Kantoorbeheerder' : 'Medewerker'}</td>
+                  <td className="px-3 py-2">
+                    {/* Aanklikbare codes en geen keuzelijst: meervoudig
+                        lidmaatschap is normaal, en dan wil je in één oogopslag
+                        zien wie waar zit. */}
+                    <div className="flex flex-wrap gap-1">
+                      {teams.map((team) => {
+                        const isLid = teamsVan(leden, emp.id).includes(team.id)
+                        return (
+                          <button
+                            key={team.id}
+                            type="button"
+                            title={`${team.naam} — ${isLid ? 'klik om te verwijderen' : 'klik om toe te voegen'}`}
+                            aria-pressed={isLid}
+                            onClick={() => wisselTeam(emp.id, team.id, isLid)}
+                            className={`rounded border px-1.5 py-0.5 text-xs font-medium transition ${
+                              isLid
+                                ? 'border-brand-600 bg-brand-600 text-white'
+                                : 'border-slate-300 bg-white text-slate-400 hover:text-slate-700'
+                            }`}
+                          >
+                            {team.code}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {emp.rol === 'kantoorbeheerder' && (
+                      <p className="mt-1 text-[11px] text-slate-500">Ziet sowieso alle dossiers.</p>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <button type="button" onClick={() => toggleMagGoedkeuren(emp.id, emp.mag_goedkeuren)} className="text-xs font-medium text-brand-600 hover:text-brand-700">
                       {emp.mag_goedkeuren ? 'Ja — intrekken' : 'Nee — toekennen'}

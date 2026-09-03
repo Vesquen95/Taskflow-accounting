@@ -192,7 +192,15 @@ export function TaskTable({
                   onError={setStatusFout}
                 />
               </td>
-              <td className="max-w-[160px] truncate px-3 py-2 text-slate-600">{task.toegewezen_medewerker?.naam ?? '—'}</td>
+              <td className="max-w-[160px] truncate px-3 py-2 text-slate-600">
+                {task.toegewezen_medewerker?.naam ?? (
+                  // Geen streepje: niemand op een taak is geen ontbrekend
+                  // gegeven maar een toestand waar iemand iets mee moet doen.
+                  <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                    Nog niemand
+                  </span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

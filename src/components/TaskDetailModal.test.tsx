@@ -59,7 +59,7 @@ function task(overrides: Partial<TaskInstanceWithRelations> = {}): TaskInstanceW
     afgerond_op: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
-    client: { id: 'c1', naam: 'Client A', vertrouwelijk: false, actief: true },
+    client: { id: 'c1', naam: 'Client A', vertrouwelijk: false, actief: true, team_id: null },
     obligation_type: { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', werkstroom: 'btw' },
     toegewezen_medewerker: { id: 'e1', naam: 'Jan Janssens' },
     ...overrides,
@@ -74,7 +74,11 @@ const onReassign = vi.fn()
 const onMarkReviewHandled = vi.fn()
 
 function installSupabase() {
-  const mock = createSupabaseMock({ task_status_log: () => ({ data: [], error: null }) })
+  const mock = createSupabaseMock({
+    task_status_log: () => ({ data: [], error: null }),
+    teams: () => ({ data: [], error: null }),
+    employee_teams: () => ({ data: [], error: null }),
+  })
   ;(supabase.from as Mock).mockImplementation(mock.from)
 }
 
@@ -631,5 +635,52 @@ describe('TaskDetailModal — deadline handmatig verzetten (bevinding L)', () =>
 
     expect(await screen.findByText(/ingelogde, gekoppelde medewerker/)).toBeInTheDocument()
     expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('TaskDetailModal — de bak van het team', () => {
+  function toonTaak(overrides: Partial<TaskInstanceWithRelations> = {}) {
+    mockEmployee.mockReturnValue(employee({ id: 'e1', naam: 'Jan Janssens' }))
+    render(
+      <TaskDetailModal
+        task={task({ status: 'open', ...overrides })}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+      />
+    )
+  }
+
+  it('biedt "Ik neem dit op" aan zodra de taak nog van niemand is', async () => {
+    // Jezelf opzoeken in een keuzelijst is de omweg; dit is de handeling
+    // waarvoor je het scherm opent.
+    const user = userEvent.setup()
+    toonTaak({ toegewezen_medewerker_id: null, toegewezen_medewerker: null })
+
+    await user.click(await screen.findByRole('button', { name: 'Ik neem dit op' }))
+
+    expect(onReassign).toHaveBeenCalledWith('t1', 'e1')
+  })
+
+  it('toont die knop niet wanneer de taak al iemand heeft', async () => {
+    toonTaak({ toegewezen_medewerker_id: 'e2' })
+
+    await screen.findByText('BTW-aangifte')
+    expect(screen.queryByRole('button', { name: 'Ik neem dit op' })).not.toBeInTheDocument()
+  })
+
+  it('kan een taak teruggeven aan het team', async () => {
+    // De lege stand is een echte keuze en geen ontbrekende waarde: werk dat je
+    // niet afkrijgt hoort terug in de bak, niet op jouw naam te blijven staan.
+    const user = userEvent.setup()
+    toonTaak({ toegewezen_medewerker_id: 'e1' })
+
+    await user.selectOptions(await screen.findByLabelText('Verantwoordelijke'), '')
+    await user.click(screen.getByRole('button', { name: 'Herverdeel' }))
+
+    expect(onReassign).toHaveBeenCalledWith('t1', null)
   })
 })

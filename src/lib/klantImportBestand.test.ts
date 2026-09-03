@@ -85,11 +85,11 @@ describe('leesKlantenBestand — een echt .xlsx', () => {
         sheet: 'Klanten',
         data: [
           KOPPEN,
-          ['Acme BV', 'BE0123.456.749', 'BV', '12', '31', 'Periodieke aangever', 'Kwartaal', 'Ja'],
+          ['Acme BV', 'ZAV1', 'BE0123.456.749', 'BV', '12', '31', 'Periodieke aangever', 'Kwartaal', 'Ja'],
           // Een gat tussen de rijen, zoals mensen dat in Excel achterlaten.
           [],
-          ['Beta NV', '', 'NV', '6', '30', 'Geen', '', 'Nee'],
-          ['Gamma', '', '', '12', '31', 'onzin', '', 'Nee'],
+          ['Beta NV', '', '', 'NV', '6', '30', 'Geen', '', 'Nee'],
+          ['Gamma', '', '', '', '12', '31', 'onzin', '', 'Nee'],
         ],
       },
     ])
@@ -105,7 +105,7 @@ describe('leesKlantenBestand — een echt .xlsx', () => {
   it('kiest het blad Klanten, ook wanneer de uitleg vooraan staat', async () => {
     const file = await maakXlsx([
       { sheet: 'Toelichting', data: [['Vul het blad Klanten in.']] },
-      { sheet: 'Klanten', data: [KOPPEN, ['Acme BV', '', '', '12', '31', 'Geen', '', 'Nee']] },
+      { sheet: 'Klanten', data: [KOPPEN, ['Acme BV', '', '', '', '12', '31', 'Geen', '', 'Nee']] },
     ])
     const voorbeeld = await leesKlantenBestand(file)
     expect(voorbeeld.bladnaam).toBe('Klanten')

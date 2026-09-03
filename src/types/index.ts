@@ -52,6 +52,21 @@ export interface Employee {
   created_at: string
 }
 
+/** Een team van het kantoor: Aalst, Zaventem 1/2/3, Antwerpen, Gosselies.
+ *
+ *  De afscherming loopt PER TEAM en niet per vestiging: dat ZAV1 en ZAV2 op
+ *  hetzelfde adres zitten, geeft ze geen toegang tot elkaars dossiers. De
+ *  vestiging staat er alleen bij om te kunnen groeperen in overzichten. */
+export interface Team {
+  id: string
+  firm_id: string
+  code: string
+  naam: string
+  vestiging: string
+  actief: boolean
+  created_at: string
+}
+
 export interface Client {
   id: string
   firm_id: string
@@ -65,6 +80,10 @@ export interface Client {
   mandataris: boolean
   vertrouwelijk: boolean
   standaard_verantwoordelijke_id: string | null
+  /** Het team dat dit dossier draait. Leeg = nog niet ingedeeld; zo'n dossier
+   *  blijft voor iedereen van het kantoor zichtbaar, zodat het opvalt in
+   *  plaats van te verdwijnen (migratie 0038/0039). */
+  team_id: string | null
   actief: boolean
   created_at: string
 }
@@ -117,7 +136,9 @@ export interface TaskInstance {
    *  overschrijft zo'n afspraak niet meer stil (migratie 0013). */
   due_date_handmatig_op: string | null
   status: TaskStatus
-  toegewezen_medewerker_id: string
+  /** Wie de taak op zich genomen heeft. Leeg = nog niemand: ze ligt in de bak
+   *  van het team dat het dossier draait (migratie 0040). */
+  toegewezen_medewerker_id: string | null
   voorloper_taak_id: string | null
   bron_type: TaakBron
   voorlopige_datum: boolean
@@ -135,7 +156,7 @@ export interface TaskInstance {
 
 /** task_instances joined with the display fields views commonly need. */
 export interface TaskInstanceWithRelations extends TaskInstance {
-  client: Pick<Client, 'id' | 'naam' | 'vertrouwelijk' | 'actief'>
+  client: Pick<Client, 'id' | 'naam' | 'vertrouwelijk' | 'actief' | 'team_id'>
   obligation_type: Pick<ObligationType, 'id' | 'code' | 'naam' | 'categorie' | 'werkstroom'> | null
   toegewezen_medewerker: Pick<Employee, 'id' | 'naam'> | null
 }

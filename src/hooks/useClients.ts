@@ -19,9 +19,13 @@ export interface ClientFilters {
   mandataris?: boolean | 'alle'
   rechtsvorm?: string | 'alle'
   verantwoordelijkeId?: string | 'alle'
+  /** Het team dat het dossier draait. 'alle' = geen beperking, 'geen' = juist
+   *  de dossiers die nog ingedeeld moeten worden. Dit filter dient om te
+   *  focussen; afschermen doet de databank (migratie 0039). */
+  teamId?: string | 'alle' | 'geen'
 }
 
-const DEFAULT_FILTERS: ClientFilters = { actief: true, mandataris: 'alle', rechtsvorm: 'alle', verantwoordelijkeId: 'alle' }
+const DEFAULT_FILTERS: ClientFilters = { actief: true, mandataris: 'alle', rechtsvorm: 'alle', verantwoordelijkeId: 'alle', teamId: 'alle' }
 
 /** Klantenlijst/zoekscherm (§4 point 8). RLS (can_access_client) already
  * hides confidential clients this employee has no reason to see — this
@@ -43,6 +47,8 @@ export function useClients(initialFilters: ClientFilters = DEFAULT_FILTERS) {
       if (filters.mandataris === true) query = query.eq('mandataris', true)
       if (filters.mandataris === false) query = query.eq('mandataris', false)
       if (filters.rechtsvorm && filters.rechtsvorm !== 'alle') query = query.eq('rechtsvorm', filters.rechtsvorm)
+      if (filters.teamId === 'geen') query = query.is('team_id', null)
+      else if (filters.teamId && filters.teamId !== 'alle') query = query.eq('team_id', filters.teamId)
       if (filters.verantwoordelijkeId && filters.verantwoordelijkeId !== 'alle') {
         query = query.eq('standaard_verantwoordelijke_id', filters.verantwoordelijkeId)
       }

@@ -5,12 +5,19 @@ import { reportError } from '../lib/errorMessage'
 import { voerBulkUit, type BulkResultaat } from '../lib/bulkActie'
 
 /** De velden die een bulkactie mag schrijven — één status of één toewijzing. */
-type TaakPatch = { status: TaskStatus } | { toegewezen_medewerker_id: string }
+type TaakPatch = { status: TaskStatus } | { toegewezen_medewerker_id: string | null }
 
 const NOT_FINAL: TaskStatus[] = ['open', 'in_uitvoering', 'wacht_op_klant', 'wacht_op_goedkeuring']
 
+/** De stand van het medewerkersfilter die "nog niemand" betekent. */
+export const TEAMBAK = 'teambak' as const
+
 export interface TaskInstanceFilters {
-  toegewezenAan?: string | 'alle'
+  /** Een medewerker-id, 'alle', of TEAMBAK voor het werk dat nog niemand
+   *  opgenomen heeft. Die derde stand hoort hier en niet in een eigen filter:
+   *  op het scherm is het dezelfde keuzelijst, en twee filters die elkaar
+   *  kunnen tegenspreken is een bug die op je wacht. */
+  toegewezenAan?: string | 'alle' | typeof TEAMBAK
   zoekterm?: string
   /** Beperk tot deze verplichtingstypes -- zo staat één werkstroom op het
    *  scherm. De indeling zelf staat in de catalogus (migratie 0022); dit
@@ -19,6 +26,11 @@ export interface TaskInstanceFilters {
   obligationTypeIds?: string[]
   /** Alleen taken zonder verplichtingstype -- de ad-hoc ingang. */
   adhocOnly?: boolean
+  /** Beperk tot de dossiers van dit team. 'alle' of leeg = geen beperking --
+   *  en dat is geen achterpoort: wat je niet mag zien, laat RLS er sowieso
+   *  niet uit (migratie 0039). Dit filter dient om te focussen, niet om af te
+   *  schermen. */
+  team?: string | 'alle'
   /** Bovengrens van het deadlinevenster (ISO-datum, inclusief). Er is geen
    *  ondergrens tenzij een scherm er expliciet om vraagt (`dueVanaf`): wat te
    *  laat is hoort in elk venster thuis. */
@@ -41,8 +53,15 @@ export interface TaskInstanceFilters {
   paused?: boolean
 }
 
+/** `clients!inner` en niet `clients`: op een gewone embed kan PostgREST niet
+ *  filteren, en het teamfilter doet precies dat (`client.team_id`). Elke taak
+ *  heeft sowieso een klant, dus de inner join laat niets extra weg. */
 const SELECT_WITH_RELATIONS =
-  '*, client:clients(id,naam,vertrouwelijk,actief), obligation_type:obligation_types(id,code,naam,categorie,werkstroom), toegewezen_medewerker:employees!task_instances_toegewezen_medewerker_id_fkey(id,naam)'
+  '*, client:clients!inner(id,naam,vertrouwelijk,actief,team_id), obligation_type:obligation_types(id,code,naam,categorie,werkstroom), toegewezen_medewerker:employees!task_instances_toegewezen_medewerker_id_fkey(id,naam)'
+
+/** Dezelfde afbakening voor de tellingen, die geen rijen ophalen maar wel op
+ *  het team moeten kunnen filteren. */
+const SELECT_VOOR_TELLING = 'id, client:clients!inner(team_id)'
 
 /** Gedeelde bron voor de werkschermen: de werkstromen, de kalender en het
  * workload-dashboard. Kantoorbrede, klant-overschrijdende lijst van
@@ -81,13 +100,18 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
           .select(kolommen, opties)
           .in('status', NOT_FINAL)
 
-        if (filters.toegewezenAan && filters.toegewezenAan !== 'alle') {
+        if (filters.toegewezenAan === TEAMBAK) {
+          query = query.is('toegewezen_medewerker_id', null)
+        } else if (filters.toegewezenAan && filters.toegewezenAan !== 'alle') {
           query = query.eq('toegewezen_medewerker_id', filters.toegewezenAan)
         }
         if (filters.adhocOnly) {
           query = query.is('obligation_type_id', null)
         } else if (filters.obligationTypeIds) {
           query = query.in('obligation_type_id', filters.obligationTypeIds)
+        }
+        if (filters.team && filters.team !== 'alle') {
+          query = query.eq('client.team_id', filters.team)
         }
         if (filters.dueTot) {
           query = query.lte('due_date', filters.dueTot)
@@ -114,7 +138,7 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
       const [lijstRes, achterstandRes] = await Promise.all([
         lijst,
         filters.telAchterstandVoor
-          ? afgebakend('id', { count: 'exact', head: true }, false).lt(
+          ? afgebakend(SELECT_VOOR_TELLING, { count: 'exact', head: true }, false).lt(
               'due_date',
               filters.telAchterstandVoor
             )
@@ -159,7 +183,7 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
     await load()
   }
 
-  async function reassign(taskId: string, toegewezen_medewerker_id: string) {
+  async function reassign(taskId: string, toegewezen_medewerker_id: string | null) {
     const { error: err } = await supabase.from('task_instances').update({ toegewezen_medewerker_id }).eq('id', taskId)
     if (err) throw err
     await load()
@@ -196,7 +220,7 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
     return resultaat
   }
 
-  async function bulkReassign(taskIds: string[], toegewezen_medewerker_id: string): Promise<BulkResultaat> {
+  async function bulkReassign(taskIds: string[], toegewezen_medewerker_id: string | null): Promise<BulkResultaat> {
     return bulkPatch(taskIds, { toegewezen_medewerker_id })
   }
 

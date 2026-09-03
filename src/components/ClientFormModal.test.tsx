@@ -1,8 +1,22 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { ClientFormModal, type ClientFormValues } from './ClientFormModal'
-import type { Client, Employee, ObligationType } from '../types'
+import { supabase } from '../lib/supabase'
+import { createSupabaseMock } from '../test/supabaseMock'
+import type { Client, Employee, ObligationType, Team } from '../types'
+
+// Het formulier haalt sinds de teams zelf de teamlijst op. Zonder mock zou de
+// keuzelijst leeg blijven en zouden de tests hieronder niets kunnen kiezen.
+vi.mock('../lib/supabase', () => ({
+  supabase: { from: vi.fn(), rpc: vi.fn(), auth: {} },
+}))
+
+const teams: Team[] = [
+  { id: 't-aal', firm_id: 'f1', code: 'AAL', naam: 'Aalst', vestiging: 'Aalst', actief: true, created_at: '2026-01-01T00:00:00Z' },
+  { id: 't-zav1', firm_id: 'f1', code: 'ZAV1', naam: 'Zaventem 1', vestiging: 'Zaventem', actief: true, created_at: '2026-01-01T00:00:00Z' },
+]
 
 function employee(overrides: Partial<Employee> = {}): Employee {
   return {
@@ -33,6 +47,7 @@ function client(overrides: Partial<Client> = {}): Client {
     mandataris: true,
     vertrouwelijk: false,
     standaard_verantwoordelijke_id: 'e1',
+    team_id: null,
     actief: true,
     created_at: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -54,6 +69,11 @@ beforeEach(() => {
   onClose.mockReset()
   onSubmit.mockReset()
   onSubmit.mockResolvedValue(undefined)
+  const mock = createSupabaseMock({
+    teams: () => ({ data: teams, error: null }),
+    employee_teams: () => ({ data: [{ employee_id: 'e2', team_id: 't-aal' }], error: null }),
+  })
+  ;(supabase.from as Mock).mockImplementation(mock.from)
 })
 
 describe('ClientFormModal — required-field validation', () => {
@@ -541,5 +561,54 @@ describe('ClientFormModal — patrimoniumtaks en de bijzondere btw-aangifte', ()
       { obligation_type_id: 'ot-bijz', gekozen: true },
     ])
     expect(screen.getByRole('checkbox', { name: /Bijzondere btw-aangifte/i })).toBeChecked()
+  })
+})
+
+
+describe('ClientFormModal — het team van het dossier', () => {
+  function toon(c: Client | null = null) {
+    render(
+      <ClientFormModal
+        client={c}
+        employees={employees}
+        obligationTypes={obligationTypes}
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />
+    )
+  }
+
+  it('waarschuwt zolang er geen team gekozen is', async () => {
+    // Een dossier zonder team is zichtbaar voor het hele kantoor. Dat is
+    // bewust zo -- niets mag stil verdwijnen -- maar dan moet het scherm het
+    // wel zeggen.
+    toon()
+    expect(await screen.findByText(/zichtbaar voor het hele kantoor/i)).toBeInTheDocument()
+  })
+
+  it('slaat het gekozen team op en laat de waarschuwing vallen', async () => {
+    const user = userEvent.setup()
+    toon()
+
+    await user.selectOptions(await screen.findByLabelText('Team'), 't-zav1')
+    expect(screen.queryByText(/zichtbaar voor het hele kantoor/i)).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Naam *'), 'Nieuwe klant')
+    await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ team_id: 't-zav1' }))
+  })
+
+  it('snoeit de keuzelijst met collega\'s tot het team van het dossier', async () => {
+    // Geen afscherming -- dat doet de databank -- maar wel het verschil tussen
+    // vijftig namen en de handvol die hier zinvol zijn.
+    const user = userEvent.setup()
+    toon()
+    await user.selectOptions(await screen.findByLabelText('Team'), 't-aal')
+
+    const keuze = screen.getByLabelText(/Standaard verantwoordelijke/) as HTMLSelectElement
+    const namen = Array.from(keuze.querySelectorAll('option')).map((o) => o.textContent)
+    expect(namen).toContain('Els Peeters')
+    expect(namen).not.toContain('Jan Janssens')
   })
 })

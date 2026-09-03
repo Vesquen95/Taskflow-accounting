@@ -13,7 +13,7 @@ const KOPPEN = KOLOMMEN.map((k) => k.kop)
 /** Een geldige voorbeeldrij, in de kolomvolgorde van het sjabloon: eerst de
  *  velden van de klant, dan een cel per verplichting. */
 const GOEDE_RIJ: unknown[] = [
-  'Acme BV', 'BE0123.456.749', 'BV', 12, 31, 'Periodieke aangever', 'Kwartaal', 'Ja',
+  'Acme BV', 'ZAV1', 'BE0123.456.749', 'BV', 12, 31, 'Periodieke aangever', 'Kwartaal', 'Ja',
   'Ja', 'Ja', 'Ja', 'Nee', 'Ja', 'Nee', 'Nee', 'Nee', '', '', '',
   '15/05', '1 maand voor AV', '', '',
 ]
@@ -41,6 +41,7 @@ describe('leesKlantRijen — een goed bestand', () => {
     expect(rij.excelRij).toBe(2)
     expect(rij.klant).toEqual({
       naam: 'Acme BV',
+      team_code: 'ZAV1',
       ondernemingsnummer: 'BE0123.456.749',
       rechtsvorm: 'BV',
       boekjaar_einde_maand: 12,
@@ -574,6 +575,39 @@ describe('leesKlantRijen — de aangifte RPB', () => {
     const codes = rij.verplichtingen.map((v) => v.code)
     expect(codes).not.toContain('aangifte_venb_pb')
     expect(codes).not.toContain('aangifte_rpb')
+  })
+})
+
+describe('leesKlantRijen — het team', () => {
+  const CODES = ['AAL', 'ZAV1', 'ZAV2', 'ZAV3', 'ANT', 'GOS']
+
+  it('leest de teamcode en zet ze in hoofdletters', () => {
+    const rij = leesKlantRijen(blad(metVeld('team', ' zav2 ')), { teamCodes: CODES }).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.klant?.team_code).toBe('ZAV2')
+  })
+
+  it('weigert een team dat niet bestaat, en noemt de teams die wel bestaan', () => {
+    // Stil negeren zou een dossier zonder team opleveren, en dat is er precies
+    // één dat het hele kantoor te zien krijgt.
+    const rij = leesKlantRijen(blad(metVeld('team', 'ZAV4')), { teamCodes: CODES }).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/ZAV4/)
+    expect(rij.fouten.join(' ')).toMatch(/AAL, ZAV1/)
+  })
+
+  it('laat de cel leeg als het dossier nog niet ingedeeld is', () => {
+    const rij = leesKlantRijen(blad(metVeld('team', '')), { teamCodes: CODES }).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.klant?.team_code).toBeNull()
+  })
+
+  it('laat de code staan wanneer het scherm de teams niet meegaf', () => {
+    // De lezer kent de databank niet; zonder lijst valt er niets te toetsen en
+    // is weigeren erger dan doorlaten.
+    const rij = leesKlantRijen(blad(metVeld('team', 'XYZ'))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.klant?.team_code).toBe('XYZ')
   })
 })
 

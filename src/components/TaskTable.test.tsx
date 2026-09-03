@@ -48,7 +48,7 @@ function task(overrides: Partial<TaskInstanceWithRelations> = {}): TaskInstanceW
     afgerond_op: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
-    client: { id: 'c1', naam: 'Client A', vertrouwelijk: false, actief: true },
+    client: { id: 'c1', naam: 'Client A', vertrouwelijk: false, actief: true, team_id: null },
     obligation_type: { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', werkstroom: 'btw' },
     toegewezen_medewerker: { id: 'e1', naam: 'Jan Janssens' },
     ...overrides,
@@ -88,7 +88,7 @@ describe('TaskTable — row rendering', () => {
   it('shows a confidential-client lock icon for vertrouwelijke clients', () => {
     render(
       <TaskTable
-        tasks={[task({ client: { id: 'c1', naam: 'Secret Co', vertrouwelijk: true, actief: true } })]}
+        tasks={[task({ client: { id: 'c1', naam: 'Secret Co', vertrouwelijk: true, actief: true, team_id: null } })]}
         employees={employees}
         onOpenTask={onOpenTask}
       />
@@ -430,8 +430,8 @@ describe('TaskTable — bulkverslag per taak', () => {
   })
 
   const takenVanTweeKlanten = [
-    task({ id: 't1', status: 'open', client: { id: 'c1', naam: 'Bakkerij Peeters', vertrouwelijk: false, actief: true } }),
-    task({ id: 't2', status: 'open', client: { id: 'c2', naam: 'Garage Willems', vertrouwelijk: false, actief: true } }),
+    task({ id: 't1', status: 'open', client: { id: 'c1', naam: 'Bakkerij Peeters', vertrouwelijk: false, actief: true, team_id: null } }),
+    task({ id: 't2', status: 'open', client: { id: 'c2', naam: 'Garage Willems', vertrouwelijk: false, actief: true, team_id: null } }),
   ]
 
   async function zetStatus(user: ReturnType<typeof userEvent.setup>, waarde: string) {
@@ -538,7 +538,7 @@ describe('TaskTable op een telefoon', () => {
   it('vervangt de tabel door kaarten in plaats van zeven kolommen te laten schuiven', () => {
     render(
       <TaskTable
-        tasks={[task({ id: 't1', client: { id: 'c1', naam: 'Klant A', vertrouwelijk: false, actief: true } })]}
+        tasks={[task({ id: 't1', client: { id: 'c1', naam: 'Klant A', vertrouwelijk: false, actief: true, team_id: null } })]}
         employees={employees}
         onOpenTask={onOpenTask}
       />
@@ -555,7 +555,7 @@ describe('TaskTable op een telefoon', () => {
     // twee knoppen voor dezelfde status.
     render(
       <TaskTable
-        tasks={[task({ id: 't1', client: { id: 'c1', naam: 'Klant A', vertrouwelijk: false, actief: true } })]}
+        tasks={[task({ id: 't1', client: { id: 'c1', naam: 'Klant A', vertrouwelijk: false, actief: true, team_id: null } })]}
         employees={employees}
         onOpenTask={onOpenTask}
         currentEmployee={employee()}

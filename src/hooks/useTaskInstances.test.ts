@@ -38,7 +38,7 @@ function task(overrides: Partial<TaskInstanceWithRelations> = {}): TaskInstanceW
     afgerond_op: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
-    client: { id: 'c1', naam: 'Client A', vertrouwelijk: false, actief: true },
+    client: { id: 'c1', naam: 'Client A', vertrouwelijk: false, actief: true, team_id: null },
     obligation_type: { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', werkstroom: 'btw' },
     toegewezen_medewerker: { id: 'e1', naam: 'Jan' },
     ...overrides,
@@ -164,9 +164,9 @@ describe('useTaskInstances — filter wiring', () => {
     install({
       task_instances: () => ({
         data: [
-          task({ id: 't1', client: { id: 'c1', naam: 'Acme BV', vertrouwelijk: false, actief: true } }),
-          task({ id: 't2', client: { id: 'c2', naam: 'Other NV', vertrouwelijk: false, actief: true } }),
-          task({ id: 't3', obligation_type_id: null, obligation_type: null, title: 'Contact Acme klant', client: { id: 'c3', naam: 'Third BV', vertrouwelijk: false, actief: true } }),
+          task({ id: 't1', client: { id: 'c1', naam: 'Acme BV', vertrouwelijk: false, actief: true, team_id: null } }),
+          task({ id: 't2', client: { id: 'c2', naam: 'Other NV', vertrouwelijk: false, actief: true, team_id: null } }),
+          task({ id: 't3', obligation_type_id: null, obligation_type: null, title: 'Contact Acme klant', client: { id: 'c3', naam: 'Third BV', vertrouwelijk: false, actief: true, team_id: null } }),
         ],
         error: null,
       }),

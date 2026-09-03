@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useTaskInstances } from '../hooks/useTaskInstances'
+import { TEAMBAK, useTaskInstances } from '../hooks/useTaskInstances'
 import { useEmployees } from '../hooks/useEmployees'
+import { useTeams } from '../hooks/useTeams'
+import { teamLabel } from '../lib/teams'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useObligationTypes } from '../hooks/useObligationTypes'
 import { TaskBlocks } from '../components/TaskBlocks'
@@ -28,6 +30,7 @@ import {
  */
 export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
   const { employees } = useEmployees()
+  const { teams } = useTeams()
   // Nodig om te weten welke statusstap deze persoon mag zetten; zonder haar
   // blijft de status in de tabel een label in plaats van een knop.
   const { employee } = useCurrentEmployee()
@@ -121,6 +124,24 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
           </select>
         </div>
         <div>
+          <label className="mb-1 block text-xs font-medium text-slate-500" htmlFor="werkstroom-team">
+            Team
+          </label>
+          <select
+            id="werkstroom-team"
+            value={filters.team ?? 'alle'}
+            onChange={(e) => setFilters((f) => ({ ...f, team: e.target.value, pagina: 1 }))}
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
+          >
+            <option value="alle">Alle teams</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {teamLabel(t)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="mb-1 block text-xs font-medium text-slate-500" htmlFor="medewerker">
             Medewerker
           </label>
@@ -131,6 +152,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
             className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
           >
             <option value="alle">Alle medewerkers</option>
+            <option value={TEAMBAK}>Nog niemand (bak van het team)</option>
             {employees.map((emp) => (
               <option key={emp.id} value={emp.id}>
                 {emp.naam}

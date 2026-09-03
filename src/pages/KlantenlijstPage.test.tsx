@@ -44,6 +44,7 @@ function client(overrides: Partial<Client> = {}): Client {
     mandataris: false,
     vertrouwelijk: false,
     standaard_verantwoordelijke_id: 'e1',
+    team_id: null,
     actief: true,
     created_at: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -57,6 +58,18 @@ function install(clients: Client[], onQuery?: (state: ChainState) => void) {
       return { data: clients, error: null }
     },
     employees: () => ({ data: [{ id: 'e1', naam: 'Jan' }], error: null }),
+      // Het scherm kent sinds de teams ook een teamkolom en een teamfilter.
+      // De codes uit de voorbeeldrijen van het sjabloon moeten erbij zijn:
+      // een onbekende teamcode is een rijfout, en dan zou het sjabloon zijn
+      // eigen voorbeeld afkeuren.
+      teams: () => ({
+        data: [
+          { id: 't1', firm_id: 'f1', code: 'ZAV1', naam: 'Zaventem 1', vestiging: 'Zaventem', actief: true, created_at: '2026-01-01T00:00:00Z' },
+          { id: 't2', firm_id: 'f1', code: 'AAL', naam: 'Aalst', vestiging: 'Aalst', actief: true, created_at: '2026-01-01T00:00:00Z' },
+        ],
+        error: null,
+      }),
+      employee_teams: () => ({ data: [], error: null }),
     obligation_types: () => ({ data: [], error: null }),
   }
   const mock = createSupabaseMock(handlers)
@@ -126,6 +139,18 @@ describe('KlantenlijstPage — klanten importeren uit Excel', () => {
         return { data: clients, error: null }
       },
       employees: () => ({ data: [{ id: 'e1', naam: 'Jan' }], error: null }),
+      // Het scherm kent sinds de teams ook een teamkolom en een teamfilter.
+      // De codes uit de voorbeeldrijen van het sjabloon moeten erbij zijn:
+      // een onbekende teamcode is een rijfout, en dan zou het sjabloon zijn
+      // eigen voorbeeld afkeuren.
+      teams: () => ({
+        data: [
+          { id: 't1', firm_id: 'f1', code: 'ZAV1', naam: 'Zaventem 1', vestiging: 'Zaventem', actief: true, created_at: '2026-01-01T00:00:00Z' },
+          { id: 't2', firm_id: 'f1', code: 'AAL', naam: 'Aalst', vestiging: 'Aalst', actief: true, created_at: '2026-01-01T00:00:00Z' },
+        ],
+        error: null,
+      }),
+      employee_teams: () => ({ data: [], error: null }),
       obligation_types: () => ({ data: [], error: null }),
     }
     const mock = createSupabaseMock(handlers)

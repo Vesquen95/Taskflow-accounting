@@ -24,6 +24,7 @@ function client(overrides: Partial<Client> = {}): Client {
     mandataris: true,
     vertrouwelijk: false,
     standaard_verantwoordelijke_id: 'e1',
+    team_id: null,
     actief: true,
     created_at: '2026-01-01T00:00:00Z',
     ...overrides,

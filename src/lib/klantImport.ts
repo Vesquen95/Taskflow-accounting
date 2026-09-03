@@ -85,6 +85,7 @@ export type ParameterSleutel =
 
 export type KolomSleutel =
   | 'naam'
+  | 'team'
   | 'ondernemingsnummer'
   | 'rechtsvorm'
   | 'boekjaar_einde_maand'
@@ -301,6 +302,15 @@ export const KOLOMMEN: readonly Kolom[] = [
     breedte: 32,
   },
   {
+    sleutel: 'team',
+    kop: 'Team',
+    vereist: false,
+    uitleg:
+      'Optioneel, maar wel bepalend: de code van het team dat het dossier draait (AAL, ZAV1, ZAV2, ZAV3, ANT, GOS). Laat je dit leeg, dan is de klant zichtbaar voor het hele kantoor tot iemand hem indeelt.',
+    synoniemen: ['teamcode', 'kantoor', 'vestiging', 'ploeg'],
+    breedte: 10,
+  },
+  {
     sleutel: 'ondernemingsnummer',
     kop: 'Ondernemingsnummer',
     vereist: false,
@@ -373,6 +383,7 @@ export const KOLOMMEN: readonly Kolom[] = [
 export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
   {
     naam: 'Voorbeeld BV',
+    team: 'ZAV1',
     ondernemingsnummer: 'BE0123.456.749',
     rechtsvorm: 'BV',
     boekjaar_einde_maand: '12',
@@ -398,6 +409,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
   },
   {
     naam: 'Tweede Voorbeeld VZW',
+    team: 'AAL',
     ondernemingsnummer: '',
     rechtsvorm: 'VZW',
     boekjaar_einde_maand: '6',
@@ -428,6 +440,10 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
  *  actief: een nieuwe klant is altijd actief. */
 export interface NieuweKlant {
   naam: string
+  /** De teamcode zoals ze in het bestand stond, in hoofdletters. Het inlezen
+   *  kent de databank niet en kan er dus geen id van maken; het scherm zet ze
+   *  om vlak voor het opslaan. */
+  team_code: string | null
   ondernemingsnummer: string | null
   rechtsvorm: string | null
   boekjaar_einde_maand: number
@@ -476,6 +492,9 @@ export interface LeesOpties {
    *  schrijfwijze. Voorkomt dat de import belooft wat de unieke index
    *  (firm_id, ondernemingsnummer) daarna weigert. */
   bestaandeOndernemingsnummers?: string[]
+  /** De teamcodes die het kantoor kent (AAL, ZAV1, ...). Meegegeven, dan is een
+   *  onbekende code een rijfout in plaats van een stil genegeerde cel. */
+  teamCodes?: string[]
 }
 
 /** Een bestand dat als geheel niet bruikbaar is (geen kopregel, te groot, te
@@ -686,6 +705,22 @@ function leesRechtsvorm(ruw: string, fouten: string[]): string | null {
     return null
   }
   return ruw
+}
+
+/** De teamcode uit het bestand. Kent het scherm de codes van het kantoor, dan
+ *  is een onbekende code een rijfout: "ZAV4" stil negeren zou een dossier
+ *  ongemerkt zonder team laten, en dat is er precies één dat het hele kantoor
+ *  te zien krijgt. */
+function leesTeam(ruw: string, bekendeCodes: string[] | undefined, fouten: string[]): string | null {
+  if (ruw === '') return null
+  const code = ruw.trim().toUpperCase()
+  if (bekendeCodes && !bekendeCodes.some((c) => c.toUpperCase() === code)) {
+    fouten.push(
+      `Team "${kort(ruw, 20)}" bestaat niet. Bekende teams: ${bekendeCodes.join(', ')}. Laat de cel leeg als het dossier nog niet ingedeeld is.`
+    )
+    return null
+  }
+  return code
 }
 
 function leesMaand(ruw: string, fouten: string[]): number | null {
@@ -1155,11 +1190,17 @@ function leesOndernemingsnummer(
   return genormaliseerd
 }
 
-function leesRij(ruw: Record<KolomSleutel, string>, excelRij: number, dubbels: DubbelControle): ImportRij {
+function leesRij(
+  ruw: Record<KolomSleutel, string>,
+  excelRij: number,
+  dubbels: DubbelControle,
+  teamCodes: string[] | undefined
+): ImportRij {
   const fouten: string[] = []
   const waarschuwingen: string[] = []
 
   const naam = leesNaam(ruw.naam, fouten, waarschuwingen)
+  const teamCode = leesTeam(ruw.team, teamCodes, fouten)
   const ondernemingsnummer = leesOndernemingsnummer(ruw.ondernemingsnummer, excelRij, dubbels, fouten, waarschuwingen)
   const rechtsvorm = leesRechtsvorm(ruw.rechtsvorm, fouten)
   const boekjaar = leesBoekjaareinde(ruw.boekjaar_einde_maand, ruw.boekjaar_einde_dag, fouten, waarschuwingen)
@@ -1180,6 +1221,7 @@ function leesRij(ruw: Record<KolomSleutel, string>, excelRij: number, dubbels: D
     klant: geldig
       ? {
           naam: naam as string,
+          team_code: teamCode,
           ondernemingsnummer,
           rechtsvorm,
           boekjaar_einde_maand: (boekjaar as Boekjaareinde).maand,
@@ -1251,7 +1293,7 @@ export function leesKlantRijen(data: unknown[][], opties: LeesOpties = {}, bladn
       )
     }
 
-    rijen.push(leesRij(ruw, index + 1, dubbels))
+    rijen.push(leesRij(ruw, index + 1, dubbels, opties.teamCodes))
   }
 
   return {

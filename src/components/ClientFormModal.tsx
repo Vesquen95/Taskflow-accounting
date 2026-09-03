@@ -3,6 +3,8 @@ import { Modal } from './Modal'
 import type { BtwFrequentie, BtwRegime, Client, Employee, ObligationType } from '../types'
 import { reportError } from '../lib/errorMessage'
 import { ObligationPicker } from './ObligationPicker'
+import { useTeams } from '../hooks/useTeams'
+import { collegasVoorDossier, teamLabel } from '../lib/teams'
 import { legeSelecties, type ObligationSelection } from '../lib/clientObligations'
 import { omschrijfOpenstaandeTaken } from '../lib/klantArchief'
 
@@ -19,6 +21,7 @@ export interface ClientFormValues {
   mandataris: boolean
   vertrouwelijk: boolean
   standaard_verantwoordelijke_id: string
+  team_id: string
   actief: boolean
   /** Alle verplichtingen die het kantoor voor deze klant doet, in één keer
    *  ingevuld -- zie docs/PLAN.md §10. */
@@ -41,6 +44,7 @@ function toFormValues(
     mandataris: client?.mandataris ?? false,
     vertrouwelijk: client?.vertrouwelijk ?? false,
     standaard_verantwoordelijke_id: client?.standaard_verantwoordelijke_id ?? '',
+    team_id: client?.team_id ?? '',
     actief: client?.actief ?? true,
     obligations: legeSelecties(obligationTypes).map((leeg) => {
       const bestaand = bestaandeSelecties.find((b) => b.obligation_type_id === leeg.obligation_type_id)
@@ -70,6 +74,19 @@ export function ClientFormModal({
 }) {
   const [values, setValues] = useState<ClientFormValues>(
     toFormValues(client, obligationTypes, bestaandeVerplichtingen)
+  )
+
+  const { teams, leden } = useTeams()
+
+  // De keuzelijst met collega's volgt het team van het dossier: met zes teams
+  // is een lijst van iedereen een lijst waarin je de verkeerde aanklikt. Wie
+  // er nu op staat blijft staan, ook buiten het team -- anders verdwijnt de
+  // huidige waarde uit haar eigen keuzelijst.
+  const collegas = collegasVoorDossier(
+    employees,
+    leden,
+    values.team_id || null,
+    values.standaard_verantwoordelijke_id || null
   )
 
   // De bijzondere btw-aangifte staat bij het btw-regime en niet in de lijst
@@ -277,6 +294,33 @@ export function ClientFormModal({
         )}
 
         <div>
+          {/* Het team eerst, de persoon daarna: het team bepaalt wie het
+              dossier überhaupt ziet, en het snoeit meteen de keuzelijst
+              eronder. Leeg mag: dan ziet het hele kantoor het dossier, en dat
+              zegt het scherm er ook bij. */}
+          <label htmlFor="client-team" className="mb-1 block text-xs font-medium text-slate-500">Team</label>
+          <select
+            id="client-team"
+            value={values.team_id}
+            onChange={(e) => setValues((v) => ({ ...v, team_id: e.target.value }))}
+            className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+          >
+            <option value="">— nog geen team —</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {teamLabel(t)}
+              </option>
+            ))}
+          </select>
+          {!values.team_id && (
+            <p className="mt-1 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+              Zonder team is dit dossier zichtbaar voor het hele kantoor. Kies een
+              team om het af te schermen.
+            </p>
+          )}
+        </div>
+
+        <div>
           <label htmlFor="client-verantwoordelijke" className="mb-1 block text-xs font-medium text-slate-500">
             Standaard verantwoordelijke {values.vertrouwelijk && '*'}
           </label>
@@ -287,7 +331,7 @@ export function ClientFormModal({
             className="w-full rounded-md border border-slate-300 px-2 py-1.5"
           >
             <option value="">— geen —</option>
-            {employees.map((emp) => (
+            {collegas.map((emp) => (
               <option key={emp.id} value={emp.id}>
                 {emp.naam}
               </option>

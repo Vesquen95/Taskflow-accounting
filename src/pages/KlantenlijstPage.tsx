@@ -1,6 +1,8 @@
 import { Suspense, lazy, useState } from 'react'
 import { useClients } from '../hooks/useClients'
 import { useEmployees } from '../hooks/useEmployees'
+import { useTeams } from '../hooks/useTeams'
+import { teamCode, teamLabel } from '../lib/teams'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { ClientFormModal, type ClientFormValues } from '../components/ClientFormModal'
 import { useObligationTypes } from '../hooks/useObligationTypes'
@@ -24,6 +26,7 @@ const KlantImportModal = lazy(() =>
 export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?: string) => void }) {
   const { employee } = useCurrentEmployee()
   const { employees } = useEmployees()
+  const { teams } = useTeams()
   const { clients, loading, error, filters, setFilters, reload, createClient, insertClient, haalOndernemingsnummers } =
     useClients()
   const { obligationTypes } = useObligationTypes()
@@ -49,6 +52,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
       mandataris: values.mandataris,
       vertrouwelijk: values.vertrouwelijk,
       standaard_verantwoordelijke_id: values.standaard_verantwoordelijke_id || null,
+      team_id: values.team_id || null,
       actief: true,
     })
     // Alles in één handeling: de klant staat er, en zijn toekomstige taken ook.
@@ -83,9 +87,15 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
    *  block_unaudited_confidentiality_change() weigert die bij het aanmaken. */
   async function maakKlantUitImport(klant: NieuweKlant): Promise<string> {
     if (!employee) throw new Error('Geen medewerkersprofiel geladen.')
+    // De teamcode uit het bestand omzetten naar een id: het inlezen kent de
+    // databank niet, dus dat gebeurt hier. Een onbekende code is bij het lezen
+    // al een rijfout, dus wat hier binnenkomt bestaat.
+    const { team_code, ...velden } = klant
+    const team = team_code ? teams.find((t) => t.code.toUpperCase() === team_code) : undefined
     const nieuw = await insertClient({
       firm_id: employee.firm_id,
-      ...klant,
+      ...velden,
+      team_id: team?.id ?? null,
       vertrouwelijk: false,
       standaard_verantwoordelijke_id: null,
       actief: true,
@@ -200,6 +210,26 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
           </select>
         </div>
         <div>
+          {/* "Nog geen team" is een eigen stand en geen vergetelheid: zolang
+              een dossier niet ingedeeld is, ziet het hele kantoor het, en dat
+              hoor je te kunnen opzoeken. */}
+          <label htmlFor="klanten-team" className="mb-1 block text-xs font-medium text-slate-500">Team</label>
+          <select
+            id="klanten-team"
+            value={filters.teamId ?? 'alle'}
+            onChange={(e) => setFilters((f) => ({ ...f, teamId: e.target.value }))}
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
+          >
+            <option value="alle">Alle teams</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {teamLabel(t)}
+              </option>
+            ))}
+            <option value="geen">Nog geen team</option>
+          </select>
+        </div>
+        <div>
           <label htmlFor="klanten-verantwoordelijke" className="mb-1 block text-xs font-medium text-slate-500">Verantwoordelijke</label>
           <select
             id="klanten-verantwoordelijke"
@@ -229,6 +259,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
             <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-2">Naam</th>
+                <th className="px-3 py-2">Team</th>
                 <th className="px-3 py-2">Rechtsvorm</th>
                 <th className="px-3 py-2">Boekjaareinde</th>
                 <th className="px-3 py-2">BTW-regime</th>
@@ -243,6 +274,19 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
                   <td className="px-3 py-2 font-medium text-slate-800">
                     {client.vertrouwelijk && <span aria-label="Vertrouwelijk">🔒 </span>}
                     {client.naam}
+                  </td>
+                  <td className="px-3 py-2">
+                    {teamCode(teams, client.team_id) ? (
+                      <span className="rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-xs font-medium text-slate-700">
+                        {teamCode(teams, client.team_id)}
+                      </span>
+                    ) : (
+                      // Geen streepje: een dossier zonder team is voor het hele
+                      // kantoor zichtbaar, en dat hoort op te vallen.
+                      <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                        Nog geen team
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-slate-600">{client.rechtsvorm ?? '—'}</td>
                   <td className="px-3 py-2 text-slate-600">

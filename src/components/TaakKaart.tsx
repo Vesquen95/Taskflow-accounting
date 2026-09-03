@@ -74,8 +74,10 @@ export function TaakKaart({ task, onOpen, currentEmployee, onStatusChange, onSta
               ↷
             </span>
           )}
-          {task.toegewezen_medewerker?.naam && (
+          {task.toegewezen_medewerker?.naam ? (
             <span className="text-slate-400"> · {task.toegewezen_medewerker.naam}</span>
+          ) : (
+            <span className="font-medium text-amber-700"> · Nog niemand</span>
           )}
         </span>
         <TaskStatusControl
