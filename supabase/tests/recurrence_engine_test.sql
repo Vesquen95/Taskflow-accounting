@@ -5284,4 +5284,308 @@ begin
   raise notice 'PASS 42.4: de neerlegging ligt nooit na de geplande AV + 30 dagen';
 end $$;
 
+
+-- ============================================================
+-- Sectie 43 (0038/0039): de teammuur.
+--
+-- RSM werkt in teams: Aalst, drie in Zaventem, Antwerpen, Gosselies. Een
+-- dossier hoort bij één team en de rest van het kantoor hoort er niet in te
+-- kunnen kijken. De afscherming loopt PER TEAM: dat ZAV1 en ZAV2 op hetzelfde
+-- adres zitten geeft ze geen toegang tot elkaars dossiers.
+--
+-- Wat hier vastligt, en waarom elk stuk ervan:
+--   43.1  je eigen team zie je
+--   43.2  een ander team niet
+--   43.3  ook niet binnen dezelfde vestiging (ZAV1 vs ZAV2)
+--   43.4  een dossier zonder team blijft voor iedereen zichtbaar -- anders
+--         verdwijnt bij het invoeren van teams honderd dossiers in stilte
+--   43.5  een kantoorbeheerder ziet alles
+--   43.6  meervoudig lidmaatschap werkt: in twee teams is twee teams zien
+--   43.7  een toegewezen taak opent het dossier over de teamgrens heen
+--   43.8  de taken zelf volgen dezelfde muur
+--   43.9  een lidmaatschap over kantoorgrenzen wordt geweigerd
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_ander_firm uuid;
+  v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_aal uuid;   v_aal_uid uuid := gen_random_uuid();
+  v_zav1 uuid;  v_zav1_uid uuid := gen_random_uuid();
+  v_beide uuid; v_beide_uid uuid := gen_random_uuid();
+  v_ander_emp uuid;
+  v_t_aal uuid; v_t_zav1 uuid; v_t_zav2 uuid; v_t_ant uuid;
+  v_k_aal uuid; v_k_zav1 uuid; v_k_zav2 uuid; v_k_ant uuid; v_k_geen uuid;
+  v_ot uuid; v_taak uuid;
+  v_cnt int; v_ok boolean;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's43-admin@test.local', now()),
+    (v_aal_uid,   's43-aal@test.local',   now()),
+    (v_zav1_uid,  's43-zav1@test.local',  now()),
+    (v_beide_uid, 's43-beide@test.local', now());
+
+  insert into public.firms (naam) values ('Sectie 43 kantoor') returning id into v_firm;
+  insert into public.firms (naam) values ('Sectie 43 ander kantoor') returning id into v_ander_firm;
+
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_admin_uid, 'S43 Beheerder', 's43-admin@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_aal_uid, 'S43 Aalst', 's43-aal@test.local', 'medewerker', false, true)
+    returning id into v_aal;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_zav1_uid, 'S43 Zaventem 1', 's43-zav1@test.local', 'medewerker', false, true)
+    returning id into v_zav1;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_beide_uid, 'S43 Vennoot', 's43-beide@test.local', 'medewerker', false, true)
+    returning id into v_beide;
+  insert into public.employees (firm_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_ander_firm, 'S43 Buitenstaander', 's43-buiten@test.local', 'medewerker', false, true)
+    returning id into v_ander_emp;
+
+  -- 0038 zaait de zes teams per kantoor; deze kantoren zijn na die migratie
+  -- aangemaakt, dus hier zelf.
+  insert into public.teams (firm_id, code, naam, vestiging) values
+    (v_firm, 'AAL',  'Aalst',      'Aalst')     returning id into v_t_aal;
+  insert into public.teams (firm_id, code, naam, vestiging) values
+    (v_firm, 'ZAV1', 'Zaventem 1', 'Zaventem')  returning id into v_t_zav1;
+  insert into public.teams (firm_id, code, naam, vestiging) values
+    (v_firm, 'ZAV2', 'Zaventem 2', 'Zaventem')  returning id into v_t_zav2;
+  insert into public.teams (firm_id, code, naam, vestiging) values
+    (v_firm, 'ANT',  'Antwerpen',  'Antwerpen') returning id into v_t_ant;
+
+  insert into public.employee_teams (employee_id, team_id) values
+    (v_aal, v_t_aal), (v_zav1, v_t_zav1), (v_beide, v_t_aal), (v_beide, v_t_ant);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id) values
+    (v_firm, 'S43 Klant Aalst', 12, 31, 'geen', true, v_t_aal)  returning id into v_k_aal;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id) values
+    (v_firm, 'S43 Klant Zaventem 1', 12, 31, 'geen', true, v_t_zav1) returning id into v_k_zav1;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id) values
+    (v_firm, 'S43 Klant Zaventem 2', 12, 31, 'geen', true, v_t_zav2) returning id into v_k_zav2;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id) values
+    (v_firm, 'S43 Klant Antwerpen', 12, 31, 'geen', true, v_t_ant)  returning id into v_k_ant;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief) values
+    (v_firm, 'S43 Klant zonder team', 12, 31, 'geen', true)      returning id into v_k_geen;
+
+  -- ---------- als medewerker van Aalst ----------
+  perform set_config('taskflow.test_uid', v_aal_uid::text, true);
+  set local role authenticated;
+
+  select count(*) into v_cnt from public.clients where id = v_k_aal;
+  if v_cnt <> 1 then raise exception 'FAIL 43.1: het eigen teamdossier is onzichtbaar'; end if;
+  raise notice 'PASS 43.1: je ziet de dossiers van je eigen team';
+
+  select count(*) into v_cnt from public.clients where id = v_k_ant;
+  if v_cnt <> 0 then raise exception 'FAIL 43.2: Aalst ziet een dossier van Antwerpen'; end if;
+  raise notice 'PASS 43.2: een dossier van een ander team blijft onzichtbaar';
+
+  select count(*) into v_cnt from public.clients where id = v_k_geen;
+  if v_cnt <> 1 then
+    raise exception 'FAIL 43.4: een dossier zonder team is onzichtbaar geworden';
+  end if;
+  raise notice 'PASS 43.4: een dossier zonder team blijft voor iedereen zichtbaar';
+
+  -- ---------- als medewerker van Zaventem 1 ----------
+  set local role postgres;
+  perform set_config('taskflow.test_uid', v_zav1_uid::text, true);
+  set local role authenticated;
+
+  select count(*) into v_cnt from public.clients where id = v_k_zav1;
+  if v_cnt <> 1 then raise exception 'FAIL 43.3: ZAV1 ziet zijn eigen dossier niet'; end if;
+  select count(*) into v_cnt from public.clients where id = v_k_zav2;
+  if v_cnt <> 0 then
+    raise exception 'FAIL 43.3: ZAV1 ziet een dossier van ZAV2 -- de vestiging mag niet groeperen';
+  end if;
+  raise notice 'PASS 43.3: binnen dezelfde vestiging staan de teams apart (ZAV1 ziet ZAV2 niet)';
+
+  -- ---------- als kantoorbeheerder ----------
+  set local role postgres;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+
+  select count(*) into v_cnt from public.clients
+   where id in (v_k_aal, v_k_zav1, v_k_zav2, v_k_ant, v_k_geen);
+  if v_cnt <> 5 then
+    raise exception 'FAIL 43.5: een kantoorbeheerder ziet maar % van de 5 dossiers', v_cnt;
+  end if;
+  raise notice 'PASS 43.5: een kantoorbeheerder ziet alle dossiers';
+
+  -- ---------- als vennoot in twee teams ----------
+  set local role postgres;
+  perform set_config('taskflow.test_uid', v_beide_uid::text, true);
+  set local role authenticated;
+
+  select count(*) into v_cnt from public.clients where id in (v_k_aal, v_k_ant);
+  if v_cnt <> 2 then
+    raise exception 'FAIL 43.6: meervoudig lidmaatschap levert maar % dossiers op', v_cnt;
+  end if;
+  select count(*) into v_cnt from public.clients where id = v_k_zav1;
+  if v_cnt <> 0 then
+    raise exception 'FAIL 43.6: lid van AAL en ANT zien betekent niet ZAV1 zien';
+  end if;
+  raise notice 'PASS 43.6: wie in twee teams zit, ziet precies die twee';
+
+  -- ---------- een toegewezen taak opent het dossier ----------
+  set local role postgres;
+  select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
+  perform set_config('taskflow.generating', 'on', true);
+  insert into public.task_instances (
+    client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (
+    v_k_ant, v_ot, '2026', current_date, current_date, 'open', v_aal,
+    'automatisch_gegenereerd', true
+  ) returning id into v_taak;
+  perform set_config('taskflow.generating', 'off', true);
+
+  perform set_config('taskflow.test_uid', v_aal_uid::text, true);
+  set local role authenticated;
+
+  select count(*) into v_cnt from public.clients where id = v_k_ant;
+  if v_cnt <> 1 then
+    raise exception 'FAIL 43.7: een toegewezen taak opent het dossier niet over de teamgrens';
+  end if;
+  raise notice 'PASS 43.7: wie een taak toegewezen kreeg, ziet dat dossier ook buiten zijn team';
+
+  -- ---------- de taken volgen dezelfde muur ----------
+  set local role postgres;
+  perform set_config('taskflow.generating', 'on', true);
+  insert into public.task_instances (
+    client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (
+    v_k_zav2, v_ot, '2026', current_date, current_date, 'open', v_zav1,
+    'automatisch_gegenereerd', true
+  );
+  perform set_config('taskflow.generating', 'off', true);
+
+  perform set_config('taskflow.test_uid', v_aal_uid::text, true);
+  set local role authenticated;
+
+  select count(*) into v_cnt from public.task_instances where client_id = v_k_zav2;
+  if v_cnt <> 0 then
+    raise exception 'FAIL 43.8: Aalst ziet % taak/taken van een Zaventem-dossier', v_cnt;
+  end if;
+  raise notice 'PASS 43.8: de taken van een ander team zijn onzichtbaar';
+
+  -- ---------- lidmaatschap over kantoorgrenzen ----------
+  set local role postgres;
+  v_ok := false;
+  begin
+    insert into public.employee_teams (employee_id, team_id) values (v_ander_emp, v_t_aal);
+  exception when check_violation then
+    v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 43.9: een medewerker van een ander kantoor kon lid worden van dit team';
+  end if;
+  raise notice 'PASS 43.9: een lidmaatschap over kantoorgrenzen wordt geweigerd';
+
+  set local role postgres;
+end $$;
+
+-- ============================================================
+-- Sectie 44 (0040): de teambak -- een taak zonder naam.
+--
+-- "De teams zijn verantwoordelijk voor de taken, niet per se één persoon."
+-- Twee dingen die daarvoor moesten wijken:
+--   * de terugval op "de oudste actieve kantoorbeheerder", die werk op iemands
+--     naam zette dat hij nooit gekregen had;
+--   * het stil overslaan van een dossier zonder verantwoordelijke, waardoor een
+--     klant met verplichtingen eruitzag als een klant zonder.
+--
+--   44.1  de motor genereert wél, en zonder naam
+--   44.2  het werk komt niet op de kantoorbeheerder terecht
+--   44.3  een taak teruggeven aan het team mag, en staat herkenbaar in het log
+--   44.4  staat er wél een naam, dan geldt de kantoorgrens onverkort
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_ander_firm uuid; v_admin uuid; v_vreemde uuid;
+  v_klant uuid; v_ot uuid; v_taak uuid;
+  v_n int; v_naam uuid; v_notitie text; v_ok boolean;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's44@test.local', now());
+  insert into public.firms (naam) values ('Sectie 44 kantoor') returning id into v_firm;
+  insert into public.firms (naam) values ('Sectie 44 ander kantoor') returning id into v_ander_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S44 Beheerder', 's44@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_ander_firm, 'S44 Vreemde', 's44-vreemd@test.local', 'medewerker', false, true)
+    returning id into v_vreemde;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+
+  select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
+
+  -- Een dossier zonder standaard verantwoordelijke: precies het geval dat
+  -- vroeger overgeslagen werd of op de kantoorbeheerder belandde.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S44 Klant zonder verantwoordelijke', 12, 31, 'geen', true)
+    returning id into v_klant;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot, true, current_date);
+
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+
+  select count(*) into v_n from public.task_instances where client_id = v_klant;
+  if v_n = 0 then
+    raise exception 'FAIL 44.1: het dossier werd overgeslagen omdat er geen verantwoordelijke was';
+  end if;
+  raise notice 'PASS 44.1: de motor genereert ook zonder verantwoordelijke (% taken)', v_n;
+
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and toegewezen_medewerker_id is null;
+  if v_n = 0 then
+    raise exception 'FAIL 44.2: de taken kregen tóch een naam -- de terugval leeft nog';
+  end if;
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and toegewezen_medewerker_id = v_admin;
+  if v_n <> 0 then
+    raise exception 'FAIL 44.2: % taak/taken belandden op de kantoorbeheerder', v_n;
+  end if;
+  raise notice 'PASS 44.2: de taken liggen in de teambak, niet op de kantoorbeheerder';
+
+  -- 44.3 Een taak oppakken en weer teruggeven.
+  select id into v_taak from public.task_instances where client_id = v_klant limit 1;
+  update public.task_instances set toegewezen_medewerker_id = v_admin where id = v_taak;
+  update public.task_instances set toegewezen_medewerker_id = null where id = v_taak;
+
+  select toegewezen_medewerker_id into v_naam from public.task_instances where id = v_taak;
+  if v_naam is not null then
+    raise exception 'FAIL 44.3: de taak kon niet teruggelegd worden in de teambak';
+  end if;
+
+  -- Niet "de laatste logregel": now() staat vast binnen een transactie, dus
+  -- opnemen en terugleggen dragen hier dezelfde created_at. Het gaat erom DAT
+  -- allebei de gebeurtenissen herkenbaar in het log staan.
+  select count(*) into v_n from public.task_status_log
+   where task_instance_id = v_taak and event_type = 'toewijzing_gewijzigd'
+     and notitie like 'Teruggelegd in de bak van het team%';
+  if v_n <> 1 then
+    raise exception 'FAIL 44.3: het terugleggen staat niet herkenbaar in het log (% regels)', v_n;
+  end if;
+  select count(*) into v_n from public.task_status_log
+   where task_instance_id = v_taak and event_type = 'toewijzing_gewijzigd'
+     and notitie like 'Opgenomen uit de bak van het team%';
+  if v_n <> 1 then
+    raise exception 'FAIL 44.3: het oppakken staat niet herkenbaar in het log (% regels)', v_n;
+  end if;
+  raise notice 'PASS 44.3: opnemen en terugleggen staan allebei herkenbaar in het log';
+
+  -- 44.4 Met een naam erop blijft de kantoorgrens gelden.
+  v_ok := false;
+  begin
+    update public.task_instances set toegewezen_medewerker_id = v_vreemde where id = v_taak;
+  exception when check_violation then
+    v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 44.4: een medewerker van een ander kantoor kon de taak krijgen';
+  end if;
+  raise notice 'PASS 44.4: met een naam erop geldt de kantoorgrens onverkort';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
