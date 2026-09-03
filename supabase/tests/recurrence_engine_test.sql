@@ -329,9 +329,19 @@ begin
   from public.task_instances where id = v_neerlegging_id;
 
   perform pg_temp.test_assert(v_post_voorlopig = false, 'AV -> neerlegging: voorlopige_datum flips to false once the AV is actually completed');
+  -- Sinds 0037 is dit de vroegste van twee data en niet meer alleen de
+  -- afronding + 30. Ging de AV later door dan gepland, dan blijft de
+  -- neerlegging op de geplande datum + 30 staan: te laat vergaderen geeft geen
+  -- extra tijd om neer te leggen. Ging ze vroeger door, dan schuift ze mee naar
+  -- voren, want de wettelijke termijn van dertig dagen loopt vanaf de
+  -- goedkeuring.
   perform pg_temp.test_assert(
-    v_post_due_wettelijk = v_post_afgerond_op::date + 30,
-    'AV -> neerlegging: due_date_wettelijk is recalculated from the AV''s real completion date (+30 days)'
+    v_post_due_wettelijk = least(v_post_afgerond_op::date, v_av_due_wettelijk) + 30,
+    'AV -> neerlegging: due_date_wettelijk = the earlier of (real completion + 30) and (planned AV + 30)'
+  );
+  perform pg_temp.test_assert(
+    v_post_due_wettelijk <= v_av_due_wettelijk + 30,
+    'AV -> neerlegging: the recalculation never pushes the deadline past the planned AV + 30 days'
   );
   perform pg_temp.test_assert(
     v_post_due = public.next_business_day(v_post_due_wettelijk),
@@ -2037,7 +2047,7 @@ declare
   v_ot_av uuid; v_ot_neer uuid; v_ot_btw uuid;
   v_av uuid; v_av2 uuid; v_neer uuid; v_taak uuid;
   v_cnt int; v_err text; v_state text;
-  v_voorlopig boolean; v_wettelijk date; v_due date; v_handmatig timestamptz;
+  v_voorlopig boolean; v_wettelijk date; v_due date; v_handmatig timestamptz; v_av_gepland date;
 begin
   select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
   select id into v_ot_neer from public.obligation_types where code = 'neerlegging_jaarrekening';
@@ -2163,10 +2173,15 @@ begin
   if v_voorlopig then
     raise exception 'FAIL 20.5: de neerlegging staat nog altijd op een voorlopige datum';
   end if;
-  if v_wettelijk <> current_date + 30 then
-    raise exception 'FAIL 20.5: neerleggingsdatum % i.p.v. %', v_wettelijk, current_date + 30;
+  -- Sinds 0037 de vroegste van (afronding + 30) en (geplande AV + 30). Deze
+  -- fixture heeft een AV-datum in het verleden, dus de geplande datum wint:
+  -- een AV die te laat gehouden wordt, geeft geen extra tijd om neer te leggen.
+  select due_date_wettelijk into v_av_gepland from public.task_instances where id = v_av2;
+  if v_wettelijk <> least(current_date, v_av_gepland) + 30 then
+    raise exception 'FAIL 20.5: neerleggingsdatum % i.p.v. % (geplande AV %, afgerond vandaag)',
+      v_wettelijk, least(current_date, v_av_gepland) + 30, v_av_gepland;
   end if;
-  raise notice 'PASS 20.5: afronden van de nieuwe AV levert een definitieve neerleggingsdatum';
+  raise notice 'PASS 20.5: afronden van de nieuwe AV levert een definitieve neerleggingsdatum (%)', v_wettelijk;
 
   -- 20.6 Het handmatig herkoppelen van een voorloper weigert nu luidruchtig
   -- i.p.v. stil terug te zetten (een stille 200 was misleidend).
@@ -5114,6 +5129,159 @@ begin
     raise exception 'FAIL 41.4: een tweede ronde maakte extra taken aan';
   end if;
   raise notice 'PASS 41.4: een tweede ronde levert geen dubbels op (% taken)', v_n;
+end $$;
+
+
+-- ============================================================
+-- Sectie 42 (0037): een late algemene vergadering schuift de neerlegging niet.
+--
+-- De neerlegging hangt met voorloper_taak_id aan de AV en krijgt haar
+-- definitieve datum zodra die AV afgevinkt wordt. Tot 0037 was dat altijd
+-- "afgerond_op + 30 dagen", ook wanneer de vergadering maanden te laat
+-- gehouden werd -- en dan schoof een deadline die al verstreken was gewoon
+-- naar de toekomst. Het scherm zei dan dat je nog tijd had terwijl de
+-- neerleggingskosten bij de NBB al opliepen.
+--
+-- De regel van het kantoor: de statuten blijven het ijkpunt. Te laat
+-- vergaderd is een te laat dossier, geen uitgesteld dossier.
+--
+--   42.1  AV te laat  -> neerlegging blijft op geplande AV + 30 dagen
+--   42.2  ... en staat daarmee zelf in het verleden: het dossier is dringend
+--   42.3  AV op tijd  -> neerlegging op afronding + 30 dagen (ongewijzigd)
+--   42.4  AV vroeger  -> neerlegging schuift mee naar vroeger (strenger mag)
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid;
+  v_ot_av uuid; v_ot_nl uuid;
+  v_klant uuid; v_co_av uuid;
+  v_av_id uuid; v_nl_id uuid;
+  v_gepland date; v_nl date; v_verwacht date;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's42@test.local', now());
+  insert into public.firms (naam) values ('Sectie 42 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S42 Beheerder', 's42@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+
+  select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
+  select id into v_ot_nl from public.obligation_types where code = 'neerlegging_jaarrekening';
+
+  -- Een dossier met een statutaire AV: dat is het ijkpunt dat moet blijven.
+  insert into public.clients (firm_id, naam, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S42 Laatkomer', 'BV', 12, 31, 'geen', true)
+    returning id into v_klant;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters)
+    values (v_klant, v_ot_av, true, current_date,
+            jsonb_build_object('av_vorm', 'vaste_datum', 'av_maand', 5, 'av_dag', 15))
+    returning id into v_co_av;
+
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+
+  -- De eerstvolgende AV-taak en haar neerlegging.
+  select id, due_date_wettelijk into v_av_id, v_gepland
+    from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_av
+   order by due_date_wettelijk limit 1;
+  if v_av_id is null then
+    raise exception 'FAIL 42.0: er werd geen AV-taak aangemaakt';
+  end if;
+
+  select id into v_nl_id from public.task_instances
+   where voorloper_taak_id = v_av_id and obligation_type_id = v_ot_nl;
+  if v_nl_id is null then
+    raise exception 'FAIL 42.0: er hangt geen neerlegging aan de AV-taak';
+  end if;
+
+  -- De geplande AV vier maanden in het verleden zetten. due_date_wettelijk is
+  -- eigendom van de datumpijplijn; die sleutel is hoe de migraties zelf een
+  -- ijkpunt verzetten (0033), en hier is dat precies wat we nabootsen: een
+  -- dossier waarvan de statutaire vergaderdag al voorbij is.
+  v_gepland := current_date - 120;
+  perform set_config('taskflow.pipeline_task_id', v_av_id::text, true);
+  update public.task_instances
+     set due_date_wettelijk = v_gepland, due_date = public.next_business_day(v_gepland)
+   where id = v_av_id;
+  perform set_config('taskflow.pipeline_task_id', '', true);
+
+  -- 42.1 De vergadering wordt pas vandaag afgevinkt, ver na die dag.
+  update public.task_instances set status = 'wacht_op_goedkeuring' where id = v_av_id;
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_av_id;
+
+  select due_date_wettelijk into v_nl from public.task_instances where id = v_nl_id;
+  v_verwacht := v_gepland + 30;
+  if v_nl <> v_verwacht then
+    raise exception 'FAIL 42.1: de neerlegging staat op % in plaats van % (geplande AV % + 30)',
+      v_nl, v_verwacht, v_gepland;
+  end if;
+  raise notice 'PASS 42.1: een late AV schuift de neerlegging niet vooruit (%)', v_nl;
+
+  -- 42.2 En daarmee staat ze zelf in het verleden. Dat is de bedoeling: een
+  -- te laat gehouden vergadering maakt het dossier dringend, geen uitgesteld
+  -- dossier met een geruststellende datum.
+  if v_nl >= current_date then
+    raise exception 'FAIL 42.2: de neerlegging (%) ligt in de toekomst na een AV die % dagen te laat was',
+      v_nl, current_date - v_gepland;
+  end if;
+  raise notice 'PASS 42.2: de neerlegging staat te laat en het dossier is dringend';
+end $$;
+
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid;
+  v_ot_av uuid; v_ot_nl uuid;
+  v_klant uuid;
+  v_av_id uuid; v_nl_id uuid;
+  v_gepland date; v_nl date; v_vandaag date := current_date;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's42b@test.local', now());
+  insert into public.firms (naam) values ('Sectie 42b kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S42b Beheerder', 's42b@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+
+  select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
+  select id into v_ot_nl from public.obligation_types where code = 'neerlegging_jaarrekening';
+
+  insert into public.clients (firm_id, naam, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S42b Op tijd', 'BV', 12, 31, 'geen', true)
+    returning id into v_klant;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot_av, true, current_date);
+
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+
+  select id, due_date_wettelijk into v_av_id, v_gepland
+    from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_av
+     and due_date_wettelijk >= v_vandaag
+   order by due_date_wettelijk limit 1;
+  select id into v_nl_id from public.task_instances
+   where voorloper_taak_id = v_av_id and obligation_type_id = v_ot_nl;
+
+  -- 42.3 De vergadering wordt vandaag afgevinkt, ruim voor de geplande datum.
+  -- Dan telt de wettelijke termijn van dertig dagen vanaf de goedkeuring: de
+  -- neerlegging schuift mee naar vroeger. Strenger dan de planning mag.
+  update public.task_instances set status = 'wacht_op_goedkeuring' where id = v_av_id;
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_av_id;
+
+  select due_date_wettelijk into v_nl from public.task_instances where id = v_nl_id;
+  if v_nl <> v_vandaag + 30 then
+    raise exception 'FAIL 42.3: de neerlegging staat op % in plaats van % (vandaag + 30)',
+      v_nl, v_vandaag + 30;
+  end if;
+  raise notice 'PASS 42.3: een AV die vroeger doorgaat brengt de neerlegging mee naar voren (%)', v_nl;
+
+  -- 42.4 ... en dus zeker niet later dan de geplande datum + 30.
+  if v_nl > v_gepland + 30 then
+    raise exception 'FAIL 42.4: de neerlegging (%) ligt na de geplande AV + 30 dagen (%)',
+      v_nl, v_gepland + 30;
+  end if;
+  raise notice 'PASS 42.4: de neerlegging ligt nooit na de geplande AV + 30 dagen';
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

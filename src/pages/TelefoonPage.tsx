@@ -51,12 +51,16 @@ export function TelefoonPage() {
   const eindeWeek = useMemo(() => vensterTot('deze_week'), [])
 
   const [venster, setVenster] = useState<VensterKey>('deze_maand')
+  // Eigen state, net als het venster: zoeken laat de ondergrens tijdelijk los,
+  // en de keuze mag daar niet in verdwijnen.
+  const [achterstandVerborgen, setAchterstandVerborgen] = useState(true)
   const [openTask, setOpenTask] = useState<TaskInstanceWithRelations | null>(null)
   const [statusFout, setStatusFout] = useState<string | null>(null)
 
   const {
     tasks,
     totaal,
+    achterstandAantal,
     loading,
     error,
     filters,
@@ -70,8 +74,14 @@ export function TelefoonPage() {
     pagina: 1,
     paginaGrootte: PAGINA_GROOTTE,
     dueTot: vensterTot('deze_maand'),
+    // Beginnen bij vandaag, net als de kalender op de computer. Met honderd
+    // dossiers vult de achterstand anders de hele eerste pagina en zie je op
+    // een telefoon niet meer wat er deze week moet.
+    dueVanaf: vandaag,
+    telAchterstandVoor: vandaag,
   })
 
+  const achterstand = achterstandAantal ?? 0
   const zoekterm = filters.zoekterm ?? ''
   const zoekt = zoekterm.trim().length > 0
   const pagina = filters.pagina ?? 1
@@ -80,6 +90,13 @@ export function TelefoonPage() {
   function zetVenster(keuze: VensterKey) {
     setVenster(keuze)
     setFilters((f) => ({ ...f, dueTot: vensterTot(keuze), pagina: 1 }))
+  }
+
+  /** De achterstand erbij of eraf. Verbergen mag, stil verbergen niet: zolang
+   *  ze weg is staat er een rode balk met het aantal en één tik terug. */
+  function zetAchterstandVerborgen(verbergen: boolean) {
+    setAchterstandVerborgen(verbergen)
+    setFilters((f) => ({ ...f, dueVanaf: verbergen ? vandaag : undefined, pagina: 1 }))
   }
 
   /** Het eerstvolgende venster dat écht verder reikt dan het huidige.
@@ -108,6 +125,10 @@ export function TelefoonPage() {
       ...f,
       zoekterm: term,
       dueTot: zoektNu ? undefined : vensterTot(venster),
+      // Zoeken kijkt ook naar wat te laat is: "waar staat die taak" heeft
+      // niets met het venster of met de achterstandsknop te maken. Daarna komt
+      // de keuze gewoon terug.
+      dueVanaf: zoektNu || !achterstandVerborgen ? undefined : vandaag,
       pagina: 1,
     }))
   }
@@ -186,6 +207,20 @@ export function TelefoonPage() {
           </p>
         )}
       </div>
+
+      {achterstandVerborgen && achterstand > 0 && !zoekt && (
+        <button
+          type="button"
+          onClick={() => zetAchterstandVerborgen(false)}
+          aria-label="Verborgen achterstand"
+          className="mb-3 flex w-full items-center justify-between gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-left"
+        >
+          <span className="text-sm font-medium text-red-800">
+            {achterstand} te laat, uit het verleden
+          </span>
+          <span className="text-sm font-semibold text-red-700 underline">Toon</span>
+        </button>
+      )}
 
       {statusFout && (
         <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

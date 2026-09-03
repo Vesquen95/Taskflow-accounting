@@ -90,6 +90,68 @@ beforeEach(() => {
   taskCalls.length = 0
 })
 
+/** De tellerquery vraagt geen rijen op maar alleen een aantal (head: true). */
+function isTelling(state: ChainState): boolean {
+  const opties = state.calls.find((c) => c.method === 'select')?.args[1] as { head?: boolean } | undefined
+  return opties?.head === true
+}
+
+function installMetAchterstand(taken: TaskInstanceWithRelations[], achterstand: number) {
+  const mock = createSupabaseMock({
+    employees: () => ({ data: [{ id: 'e1', naam: 'Jan' }], error: null }),
+    task_instances: (state) => {
+      if (isTelling(state)) return { data: null, error: null, count: achterstand }
+      taskCalls.push(state)
+      return { data: taken, error: null }
+    },
+  })
+  ;(supabase.from as Mock).mockImplementation(mock.from)
+}
+
+function vandaagIso(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+describe('TelefoonPage — de achterstand uit het verleden', () => {
+  it('begint bij vandaag in plaats van bij de oudste achterstand', async () => {
+    // Met honderd dossiers vulde de achterstand de hele eerste pagina: op een
+    // telefoon zag je dan niet meer wat er deze week moet.
+    installMetAchterstand([task()], 12)
+    render(<TelefoonPage />)
+
+    await waitFor(() => expect(argsVan(laatsteQuery(), 'gte', 'due_date')![1]).toBe(vandaagIso()))
+  })
+
+  it('zegt hoeveel er verborgen is, met één tik terug', async () => {
+    const user = userEvent.setup()
+    installMetAchterstand([task()], 12)
+    render(<TelefoonPage />)
+
+    const balk = await screen.findByRole('button', { name: /verborgen achterstand/i })
+    expect(balk).toHaveTextContent(/12 te laat/)
+
+    await user.click(balk)
+
+    await waitFor(() => expect(argsVan(laatsteQuery(), 'gte', 'due_date')).toBeUndefined())
+    expect(screen.queryByRole('button', { name: /verborgen achterstand/i })).toBeNull()
+  })
+
+  it('houdt de keuze vast over een zoekopdracht heen', async () => {
+    // Zoeken laat de grenzen los; daarna hoort het scherm terug te staan zoals
+    // je het had, niet stil met de achterstand erbij.
+    const user = userEvent.setup()
+    installMetAchterstand([task()], 12)
+    render(<TelefoonPage />)
+    await waitFor(() => expect(argsVan(laatsteQuery(), 'gte', 'due_date')).toBeDefined())
+
+    await user.type(screen.getByLabelText('Zoeken'), 'Klant')
+    await waitFor(() => expect(argsVan(laatsteQuery(), 'gte', 'due_date')).toBeUndefined())
+
+    await user.clear(screen.getByLabelText('Zoeken'))
+    await waitFor(() => expect(argsVan(laatsteQuery(), 'gte', 'due_date')![1]).toBe(vandaagIso()))
+  })
+})
+
 describe('TelefoonPage — het deadlinevenster', () => {
   it('biedt dezelfde vensters aan als de werkstromen', async () => {
     // Eén lijst voor het hele systeem: hier en op de computer dezelfde keuzes,

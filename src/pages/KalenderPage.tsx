@@ -37,10 +37,15 @@ function taakWoord(aantal: number): string {
  *   1. Er staan 50 taken op een pagina, en het totaal komt uit de databank
  *      (count: 'exact'). Een teller die de opgehaalde rijen telt, laat een
  *      afgekapte lijst als een volledige lijst lezen.
- *   2. De achterstand uit het verleden mag je wegfilteren, maar nooit stil:
- *      staat het vinkje aan, dan zegt het scherm hoeveel taken het verbergt.
- *      Daarom staat het vinkje standaard UIT — een gemiste wettelijke deadline
- *      verdwijnt niet uit beeld omdat de app hem ongemakkelijk vindt.
+ *   2. Het scherm begint bij vandaag. Met honderd dossiers loopt de
+ *      achterstand maanden terug, en wie binnenkomt op de oudste maand moet
+ *      eerst een handvol pagina's vooruit klikken voor hij ziet wat er deze
+ *      week moet. Het vinkje staat dus standaard AAN.
+ *
+ *      Verbergen mag, stil verbergen niet: zolang er achterstand is, staat er
+ *      een rode balk met het aantal en één klik om ze alsnog te tonen. Een
+ *      gemiste wettelijke deadline verdwijnt niet uit beeld — ze verhuist naar
+ *      een melding die je niet kunt missen.
  */
 export function KalenderPage() {
   const { employees } = useEmployees()
@@ -64,6 +69,9 @@ export function KalenderPage() {
     pagina: 1,
     paginaGrootte: PAGINA_GROOTTE,
     telAchterstandVoor: vandaag,
+    // Beginnen bij vandaag. De achterstand blijft geteld en staat bovenaan in
+    // de rode balk; ze is één klik weg, niet weggemoffeld.
+    dueVanaf: vandaag,
   })
   const [openTask, setOpenTask] = useState<TaskInstanceWithRelations | null>(null)
 

@@ -146,17 +146,30 @@ describe('KalenderPage — de te late taken uit het verleden', () => {
     expect(await screen.findByText(/12 taken te laat/)).toBeInTheDocument()
   })
 
-  it('toont die achterstand standaard: het vinkje staat uit', async () => {
+  it('begint bij vandaag: het vinkje staat aan en de query heeft een ondergrens', async () => {
+    // Met honderd dossiers loopt de achterstand maanden terug. Wie binnenkomt
+    // op de oudste maand moet eerst pagina's vooruit klikken voor hij ziet wat
+    // er deze week moet.
     install()
     render(<KalenderPage />)
     await screen.findByText('Klant 1')
 
-    expect(screen.getByRole('checkbox', { name: /te late taken/i })).not.toBeChecked()
-    // Geen ondergrens op de deadline: de achterstand zit gewoon in de lijst.
-    expect(lijstQueries[0].calls.some((c) => c.method === 'gte')).toBe(false)
+    expect(screen.getByRole('checkbox', { name: /te late taken/i })).toBeChecked()
+    expect(lijstQueries[0].calls).toContainEqual({ method: 'gte', args: ['due_date', vandaagIso()] })
   })
 
-  it('verbergt de achterstand serverside zodra het vinkje aan staat, en zegt hoeveel er verborgen is', async () => {
+  it('zegt meteen hoeveel er verborgen is, met één klik terug', async () => {
+    // Verbergen mag, stil verbergen niet: de balk staat er vanaf het eerste
+    // scherm, niet pas nadat je zelf iets aanvinkt.
+    install({ achterstand: 12 })
+    render(<KalenderPage />)
+    await screen.findByText('Klant 1')
+
+    const melding = await screen.findByRole('status', { name: /verborgen achterstand/i })
+    expect(within(melding).getByText(/12 te late taken verborgen/)).toBeInTheDocument()
+  })
+
+  it('haalt de achterstand er weer bij zodra je het vinkje uitzet', async () => {
     const user = userEvent.setup()
     install({ achterstand: 12 })
     render(<KalenderPage />)
@@ -165,10 +178,9 @@ describe('KalenderPage — de te late taken uit het verleden', () => {
     await user.click(screen.getByRole('checkbox', { name: /te late taken/i }))
 
     await waitFor(() => expect(lijstQueries).toHaveLength(2))
-    expect(lijstQueries[1].calls).toContainEqual({ method: 'gte', args: ['due_date', vandaagIso()] })
-
-    const melding = await screen.findByRole('status', { name: /verborgen achterstand/i })
-    expect(within(melding).getByText(/12 te late taken verborgen/)).toBeInTheDocument()
+    // Geen ondergrens meer: de achterstand zit gewoon in de lijst.
+    expect(lijstQueries[1].calls.some((c) => c.method === 'gte')).toBe(false)
+    expect(screen.queryByRole('status', { name: /verborgen achterstand/i })).toBeNull()
   })
 
   it('zet het bladeren terug op pagina 1 wanneer het vinkje verandert', async () => {
