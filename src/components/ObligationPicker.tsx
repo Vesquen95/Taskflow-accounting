@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Employee, ObligationType } from '../types'
+import type { Employee, ObligationType, Klantsoort } from '../types'
 import { kanPatrimoniumtaksHebben } from '../lib/rechtsvorm'
 import type { ObligationSelection } from '../lib/clientObligations'
 import {
@@ -66,6 +66,7 @@ export function ObligationPicker({
   btwRegime,
   rechtsvorm,
   verbergCodes = [],
+  klantsoort = 'rechtspersoon',
   onChange,
 }: {
   obligationTypes: ObligationType[]
@@ -74,6 +75,11 @@ export function ObligationPicker({
   btwRegime: string
   /** Bepaalt of de patrimoniumtaks hier aan de orde is. */
   rechtsvorm?: string
+  /** Rechtspersoon of natuurlijke persoon. Bepaalt welke verplichtingen hier
+   *  überhaupt kunnen bestaan: een natuurlijke persoon houdt geen algemene
+   *  vergadering en legt geen jaarrekening neer, een rechtspersoon doet geen
+   *  aangifte in de personenbelasting. */
+  klantsoort?: Klantsoort
   /** Verplichtingen die elders op het formulier bediend worden. Twee vakjes
    *  voor één keuze is erger dan een vakje op een onhandige plek. */
   verbergCodes?: string[]
@@ -157,6 +163,10 @@ export function ObligationPicker({
           // hoort bij het btw-regime). Ze hier ook tonen zou hetzelfde vinkje
           // twee keer zetten, dus verbergen mag onvoorwaardelijk.
           if (verbergCodes.includes(type.code)) return null
+          // Wat bij deze soort dossier niet kan bestaan, hoort er ook niet te
+          // staan. Een aangevinkte verplichting blijft wél zichtbaar: anders
+          // verdwijnt ze van het scherm terwijl ze opgeslagen blijft.
+          if (!sel.gekozen && !hoortBijKlantsoort(type.code, klantsoort)) return null
           // De patrimoniumtaks geldt voor verenigingen en stichtingen. Bij een
           // herkende vennootschapsvorm is ze niet aan de orde; bij een lege of
           // onbekende rechtsvorm blijft ze staan, want dan weet het scherm het
@@ -230,6 +240,13 @@ export function ObligationPicker({
                     />
                   )}
 
+                  {type.code === 'aangifte_pb' && (
+                    <PbVelden
+                      parameters={sel.parameters}
+                      onParameter={(k, v) => wijzigParameter(type.id, k, v)}
+                    />
+                  )}
+
                   {type.code === 'rapportering' && (
                     <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                       <label className="flex items-center gap-2">
@@ -284,6 +301,61 @@ export function ObligationPicker({
         })}
       </div>
     </fieldset>
+  )
+}
+
+/** Alleen bij een rechtspersoon: een natuurlijke persoon houdt geen algemene
+ *  vergadering, legt geen jaarrekening neer en valt niet onder de
+ *  vennootschaps- of rechtspersonenbelasting. */
+const ALLEEN_RECHTSPERSOON = [
+  'algemene_vergadering',
+  'neerlegging_jaarrekening',
+  'aangifte_venb_pb',
+  'aangifte_rpb',
+  'va_venb',
+  'patrimoniumtaks',
+]
+
+/** Alleen bij een natuurlijke persoon. */
+const ALLEEN_NATUURLIJK_PERSOON = ['aangifte_pb']
+
+function hoortBijKlantsoort(code: string, klantsoort: Klantsoort): boolean {
+  if (klantsoort === 'natuurlijk_persoon') return !ALLEEN_RECHTSPERSOON.includes(code)
+  return !ALLEEN_NATUURLIJK_PERSOON.includes(code)
+}
+
+/** De twee termijnen van de aangifte personenbelasting.
+ *
+ *  Sinds 2023 bestaat het aparte uitstel voor mandatarissen niet meer: de
+ *  termijn hangt af van de aangifte zelf. Bij een boekhoudkantoor is vrijwel
+ *  elk dossier complex, dus dat is de standaard. */
+function PbVelden({
+  parameters,
+  onParameter,
+}: {
+  parameters: ObligationParameters
+  onParameter: (sleutel: string, waarde: unknown) => void
+}) {
+  const vorm = parameters.aangifte_vorm === 'eenvoudig' ? 'eenvoudig' : 'complex'
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+      <label className="flex items-center gap-2">
+        Soort aangifte
+        <select
+          aria-label="Soort PB-aangifte"
+          value={vorm}
+          onChange={(e) => onParameter('aangifte_vorm', e.target.value)}
+          className={veldKlasse()}
+        >
+          <option value="complex">complex — 16 oktober</option>
+          <option value="eenvoudig">eenvoudig — 15 juli</option>
+        </select>
+      </label>
+      <p className="w-full text-[11px] text-slate-500">
+        Complex is de regel zodra er winsten of baten, een bedrijfsleiders&#173;bezoldiging
+        of buitenlands beroepsinkomen in de aangifte staan.
+      </p>
+    </div>
   )
 }
 

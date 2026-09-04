@@ -13,6 +13,7 @@ function employee(overrides: Partial<Employee> = {}): Employee {
     naam: 'Jan Janssens',
     email: 'jan@firm.be',
     rol: 'medewerker',
+    niveau: null,
     mag_goedkeuren: false,
     actief: true,
     created_at: '2026-01-01T00:00:00Z',

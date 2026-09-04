@@ -19,6 +19,7 @@ function klant(naam: string): NieuweKlant {
     naam,
     ondernemingsnummer: null,
     team_code: null,
+    klantsoort: 'rechtspersoon' as const,
     rechtsvorm: 'BV',
     boekjaar_einde_maand: 12,
     boekjaar_einde_dag: 31,

@@ -20,6 +20,7 @@ vi.mock('../hooks/useCurrentEmployee', () => ({
       naam: 'Jan',
       email: 'jan@rsm.be',
       rol: 'kantoorbeheerder',
+      niveau: null,
       mag_goedkeuren: true,
       actief: true,
       created_at: '2026-01-01T00:00:00Z',
@@ -35,6 +36,7 @@ function client(overrides: Partial<Client> = {}): Client {
     id: 'c1',
     firm_id: 'f1',
     naam: 'Acme BV',
+    klantsoort: 'rechtspersoon',
     ondernemingsnummer: 'BE0123.456.789',
     rechtsvorm: 'BV',
     boekjaar_einde_maand: 12,
@@ -190,6 +192,7 @@ describe('KlantenlijstPage — klanten importeren uit Excel', () => {
     expect(inserts.every((i) => i.firm_id === 'f1' && i.actief === true)).toBe(true)
     expect(inserts[0]).toMatchObject({
       naam: 'Voorbeeld BV',
+      klantsoort: 'rechtspersoon',
       ondernemingsnummer: 'BE0123.456.749',
       btw_regime: 'periodieke_aangever',
       btw_aangifte_frequentie: 'kwartaal',
@@ -197,6 +200,7 @@ describe('KlantenlijstPage — klanten importeren uit Excel', () => {
     })
     expect(inserts[1]).toMatchObject({
       naam: 'Tweede Voorbeeld VZW',
+      klantsoort: 'rechtspersoon',
       ondernemingsnummer: null,
       btw_regime: 'vrijgesteld_kleine_onderneming',
       btw_aangifte_frequentie: null,

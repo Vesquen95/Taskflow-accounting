@@ -43,6 +43,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
     const nieuw = await createClient({
       firm_id: employee.firm_id,
       naam: values.naam.trim(),
+      klantsoort: values.klantsoort,
       ondernemingsnummer: values.ondernemingsnummer.trim() || null,
       rechtsvorm: values.rechtsvorm.trim() || null,
       boekjaar_einde_maand: values.boekjaar_einde_maand,
@@ -90,12 +91,13 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
     // De teamcode uit het bestand omzetten naar een id: het inlezen kent de
     // databank niet, dus dat gebeurt hier. Een onbekende code is bij het lezen
     // al een rijfout, dus wat hier binnenkomt bestaat.
-    const { team_code, ...velden } = klant
+    const { team_code, klantsoort, ...velden } = klant
     const team = team_code ? teams.find((t) => t.code.toUpperCase() === team_code) : undefined
     const nieuw = await insertClient({
       firm_id: employee.firm_id,
       ...velden,
       team_id: team?.id ?? null,
+      klantsoort,
       vertrouwelijk: false,
       standaard_verantwoordelijke_id: null,
       actief: true,

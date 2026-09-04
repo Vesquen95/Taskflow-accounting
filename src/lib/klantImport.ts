@@ -69,6 +69,7 @@ export type VerplichtingSleutel =
   | 'va_venb'
   | 'patrimoniumtaks'
   | 'btw_bijzondere_aangifte'
+  | 'aangifte_pb'
   | 'rapportering'
   | 'fiche_281_20'
   | 'fiche_281_45'
@@ -82,9 +83,11 @@ export type ParameterSleutel =
   | 'jaarafsluiting_deadline'
   | 'rapportering_frequentie'
   | 'rapportering_termijn'
+  | 'pb_vorm'
 
 export type KolomSleutel =
   | 'naam'
+  | 'klantsoort'
   | 'team'
   | 'ondernemingsnummer'
   | 'rechtsvorm'
@@ -187,6 +190,16 @@ const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
     breedte: 18,
   },
   {
+    sleutel: 'aangifte_pb',
+    kop: 'Aangifte PB',
+    vereist: false,
+    verplichting: true,
+    uitleg:
+      'Ja of Nee. De aangifte in de personenbelasting, voor een natuurlijke persoon. Gaat niet samen met "Aangifte VenB" of "Aangifte RPB": een dossier valt onder één van de drie.',
+    synoniemen: ['personenbelasting', 'aangiftepersonenbelasting', 'pb'],
+    breedte: 14,
+  },
+  {
     sleutel: 'patrimoniumtaks',
     kop: 'Patrimoniumtaks',
     vereist: false,
@@ -273,6 +286,16 @@ const PARAMETER_KOLOMMEN: readonly Kolom[] = [
     breedte: 30,
   },
   {
+    sleutel: 'pb_vorm',
+    kop: 'Soort PB-aangifte',
+    vereist: false,
+    instelling: true,
+    uitleg:
+      'Optioneel, alleen bij een aangevinkte aangifte PB. "Complex" (winsten of baten, bedrijfsleidersbezoldiging, buitenlands beroepsinkomen) geeft 16 oktober; "Eenvoudig" geeft 15 juli. Leeg = complex, want dat is bij een boekhoudkantoor vrijwel altijd het geval.',
+    synoniemen: ['pbvorm', 'aangiftevorm', 'soortaangifte'],
+    breedte: 20,
+  },
+  {
     sleutel: 'rapportering_frequentie',
     kop: 'Rapportering frequentie',
     vereist: false,
@@ -300,6 +323,15 @@ export const KOLOMMEN: readonly Kolom[] = [
     uitleg: `Verplicht. De naam van de klant, hoogstens ${MAX_NAAM_LENGTE} tekens.`,
     synoniemen: ['klantnaam', 'klant', 'benaming'],
     breedte: 32,
+  },
+  {
+    sleutel: 'klantsoort',
+    kop: 'Soort',
+    vereist: false,
+    uitleg:
+      'Rechtspersoon of Natuurlijke persoon. Leeg = rechtspersoon. Een eenmanszaak of vrij beroep is een natuurlijke persoon: die heeft wel btw en fiches, maar geen algemene vergadering, geen neerlegging en geen vennootschapsbelasting.',
+    synoniemen: ['soortklant', 'type', 'klanttype', 'rechtspersoon'],
+    breedte: 20,
   },
   {
     sleutel: 'team',
@@ -383,6 +415,7 @@ export const KOLOMMEN: readonly Kolom[] = [
 export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
   {
     naam: 'Voorbeeld BV',
+    klantsoort: 'Rechtspersoon',
     team: 'ZAV1',
     ondernemingsnummer: 'BE0123.456.749',
     rechtsvorm: 'BV',
@@ -395,6 +428,8 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     jaarafsluiting: 'Ja',
     aangifte_venb_pb: 'Ja',
     aangifte_rpb: 'Nee',
+    aangifte_pb: 'Nee',
+    pb_vorm: '',
     va_venb: 'Ja',
     patrimoniumtaks: 'Nee',
     btw_bijzondere_aangifte: 'Nee',
@@ -409,6 +444,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
   },
   {
     naam: 'Tweede Voorbeeld VZW',
+    klantsoort: 'Rechtspersoon',
     team: 'AAL',
     ondernemingsnummer: '',
     rechtsvorm: 'VZW',
@@ -421,6 +457,8 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     jaarafsluiting: 'Ja',
     aangifte_venb_pb: 'Nee',
     aangifte_rpb: 'Ja',
+    aangifte_pb: 'Nee',
+    pb_vorm: '',
     va_venb: 'Nee',
     patrimoniumtaks: 'Ja',
     btw_bijzondere_aangifte: 'Ja',
@@ -440,6 +478,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
  *  actief: een nieuwe klant is altijd actief. */
 export interface NieuweKlant {
   naam: string
+  klantsoort: 'rechtspersoon' | 'natuurlijk_persoon'
   /** De teamcode zoals ze in het bestand stond, in hoofdletters. Het inlezen
    *  kent de databank niet en kan er dus geen id van maken; het scherm zet ze
    *  om vlak voor het opslaan. */
@@ -721,6 +760,35 @@ function leesTeam(ruw: string, bekendeCodes: string[] | undefined, fouten: strin
     return null
   }
   return code
+}
+
+/** Rechtspersoon of natuurlijke persoon. Leeg = rechtspersoon: dat is wat elk
+ *  bestaand dossier is, en wat het bestand zonder deze kolom bedoelde. */
+function leesKlantsoort(ruw: string, fouten: string[]): 'rechtspersoon' | 'natuurlijk_persoon' | null {
+  if (ruw === '') return 'rechtspersoon'
+  const genormaliseerd = normaliseerKop(ruw)
+  if (['rechtspersoon', 'vennootschap', 'vzw'].includes(genormaliseerd)) return 'rechtspersoon'
+  if (
+    ['natuurlijkepersoon', 'natuurlijkpersoon', 'eenmanszaak', 'persoon', 'prive', 'vrijberoep'].includes(
+      genormaliseerd
+    )
+  ) {
+    return 'natuurlijk_persoon'
+  }
+  fouten.push(`Soort "${kort(ruw, 20)}" is onbekend: vul "Rechtspersoon" of "Natuurlijke persoon" in, of laat de cel leeg.`)
+  return null
+}
+
+/** Complexe of eenvoudige aangifte. Leeg = complex: winsten of baten,
+ *  bedrijfsleidersbezoldiging of buitenlands beroepsinkomen, en dat is bij een
+ *  boekhoudkantoor vrijwel elk dossier. */
+function leesPbVorm(ruw: string, fouten: string[]): string | null {
+  if (ruw === '') return null
+  const genormaliseerd = normaliseerKop(ruw)
+  if (['complex', 'complexe', 'complexeaangifte'].includes(genormaliseerd)) return 'complex'
+  if (['eenvoudig', 'eenvoudige', 'eenvoudigeaangifte'].includes(genormaliseerd)) return 'eenvoudig'
+  fouten.push(`Soort PB-aangifte "${kort(ruw, 20)}" is onbekend: vul "Complex" of "Eenvoudig" in, of laat de cel leeg.`)
+  return null
 }
 
 function leesMaand(ruw: string, fouten: string[]): number | null {
@@ -1095,6 +1163,11 @@ function leesVerplichtingen(
       `Patrimoniumtaks staat op Ja bij rechtsvorm "${ruw.rechtsvorm.trim()}". Die taks geldt voor vzw's, ivzw's en private stichtingen, niet voor vennootschappen.`
     )
   }
+  if (bij('aangifte_pb') && (bij('aangifte_venb_pb') || bij('aangifte_rpb'))) {
+    fouten.push(
+      'Aangifte PB staat op Ja naast een aangifte VenB of RPB. Een dossier valt onder de personen-, de vennootschaps- óf de rechtspersonenbelasting, niet onder twee ervan.'
+    )
+  }
   if (bij('aangifte_rpb') && bij('va_venb')) {
     fouten.push(
       'Aangifte RPB en Voorafbetalingen staan allebei op Ja. Voorafbetalingen horen bij de vennootschapsbelasting; in de rechtspersonenbelasting bestaan ze niet.'
@@ -1132,6 +1205,12 @@ function leesVerplichtingen(
         'De jaarafsluiting rekent vanaf de algemene vergadering, maar "Algemene vergadering" staat op Nee. Zet die op Ja of geef een aantal maanden na het boekjaareinde.'
       )
     }
+  }
+
+  const pbKeuze = eisAangevinkt('pb_vorm', 'aangifte_pb')
+  if (pbKeuze) {
+    const vorm = leesPbVorm(ruw.pb_vorm, fouten)
+    if (vorm) pbKeuze.parameters.aangifte_vorm = vorm
   }
 
   const rapFrequentie = eisAangevinkt('rapportering_frequentie', 'rapportering')
@@ -1201,6 +1280,7 @@ function leesRij(
 
   const naam = leesNaam(ruw.naam, fouten, waarschuwingen)
   const teamCode = leesTeam(ruw.team, teamCodes, fouten)
+  const soort = leesKlantsoort(ruw.klantsoort, fouten)
   const ondernemingsnummer = leesOndernemingsnummer(ruw.ondernemingsnummer, excelRij, dubbels, fouten, waarschuwingen)
   const rechtsvorm = leesRechtsvorm(ruw.rechtsvorm, fouten)
   const boekjaar = leesBoekjaareinde(ruw.boekjaar_einde_maand, ruw.boekjaar_einde_dag, fouten, waarschuwingen)
@@ -1210,7 +1290,7 @@ function leesRij(
   const verplichtingen = leesVerplichtingen(ruw, boekjaar, fouten)
 
   const geldig =
-    fouten.length === 0 && naam !== null && boekjaar !== null && regime !== null && mandataris !== null && frequentie !== 'fout'
+    fouten.length === 0 && naam !== null && boekjaar !== null && regime !== null && mandataris !== null && frequentie !== 'fout' && soort !== null
 
   return {
     excelRij,
@@ -1221,6 +1301,7 @@ function leesRij(
     klant: geldig
       ? {
           naam: naam as string,
+          klantsoort: soort as 'rechtspersoon' | 'natuurlijk_persoon',
           team_code: teamCode,
           ondernemingsnummer,
           rechtsvorm,

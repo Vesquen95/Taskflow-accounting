@@ -21,6 +21,7 @@ function employee(overrides: Partial<Employee> = {}): Employee {
     naam: 'Jan Janssens',
     email: 'jan@firm.be',
     rol: 'medewerker',
+    niveau: null,
     mag_goedkeuren: false,
     actief: true,
     created_at: '2026-01-01T00:00:00Z',
@@ -208,6 +209,74 @@ describe('ObligationPicker — de jaarafsluiting voor de algemene vergadering', 
     expect((screen.getByLabelText('Maanden voor de algemene vergadering') as HTMLInputElement).value).toBe('3')
     // Het openen van een dossier mag er niets bij schrijven.
     expect(parametersVan('ot-jaar')).toEqual({ basis: 'voor_av', maanden_voor_av: 3 })
+  })
+})
+
+describe('ObligationPicker — wat bij deze soort dossier kan bestaan', () => {
+  const types: ObligationType[] = [
+    ...obligationTypes,
+    { id: 'ot-pb', code: 'aangifte_pb', naam: 'Aangifte personenbelasting', categorie: 'wettelijk', deadline_mechanisme: 'jaarlijkse_kalender', standaard_periodiciteit: 'jaarlijks', werkstroom: 'vennootschapsbelasting' },
+  ]
+
+  function toon(klantsoort: 'rechtspersoon' | 'natuurlijk_persoon', initieel?: ObligationSelection[]) {
+    bewaard.selections = initieel ?? legeSelecties(types)
+    function Harnas() {
+      const [sel, setSel] = useState<ObligationSelection[]>(bewaard.selections)
+      return (
+        <ObligationPicker
+          obligationTypes={types}
+          employees={employees}
+          selections={sel}
+          btwRegime="geen"
+          klantsoort={klantsoort}
+          onChange={(next) => {
+            bewaard.selections = next
+            setSel(next)
+          }}
+        />
+      )
+    }
+    render(<Harnas />)
+  }
+
+  it('biedt bij een rechtspersoon geen aangifte personenbelasting aan', () => {
+    toon('rechtspersoon')
+    expect(screen.queryByText(/Aangifte personenbelasting/)).toBeNull()
+    expect(screen.getByText(/Algemene vergadering/)).toBeInTheDocument()
+  })
+
+  it('laat bij een natuurlijke persoon de algemene vergadering weg en de PB staan', () => {
+    // Een natuurlijke persoon houdt geen algemene vergadering en legt geen
+    // jaarrekening neer. Ze toch aanbieden zou een verplichting suggereren
+    // die niet bestaat.
+    toon('natuurlijk_persoon')
+    expect(screen.getByText(/Aangifte personenbelasting/)).toBeInTheDocument()
+    expect(screen.queryByText(/Algemene vergadering/)).toBeNull()
+  })
+
+  it('houdt een reeds aangevinkte verplichting zichtbaar, ook bij de andere soort', () => {
+    // Anders verdwijnt ze van het scherm terwijl ze opgeslagen blijft.
+    toon(
+      'natuurlijk_persoon',
+      legeSelecties(types).map((s) =>
+        s.obligation_type_id === 'ot-av' ? { ...s, gekozen: true } : s
+      )
+    )
+    expect(screen.getByText(/Algemene vergadering/)).toBeInTheDocument()
+  })
+
+  it('laat de termijn van de PB-aangifte kiezen, met complex als standaard', async () => {
+    const user = userEvent.setup()
+    toon('natuurlijk_persoon')
+
+    await user.click(screen.getByRole('checkbox', { name: /Aangifte personenbelasting/ }))
+    const keuze = screen.getByLabelText('Soort PB-aangifte') as HTMLSelectElement
+    expect(keuze.value).toBe('complex')
+
+    await user.selectOptions(keuze, 'eenvoudig')
+    expect(bewaard.selections.find((s) => s.obligation_type_id === 'ot-pb')?.parameters).toEqual({
+      aangifte_vorm: 'eenvoudig',
+    })
   })
 })
 

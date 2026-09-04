@@ -47,6 +47,9 @@ export interface Employee {
   naam: string
   email: string
   rol: EmployeeRol
+  /** Leeg = nog niet ingevuld; dan blijft mag_goedkeuren staan zoals het met
+   *  de hand gezet was. */
+  niveau: MedewerkerNiveau | null
   mag_goedkeuren: boolean
   actief: boolean
   created_at: string
@@ -67,10 +70,30 @@ export interface Team {
   created_at: string
 }
 
+/** Rechtspersoon of natuurlijke persoon.
+ *
+ *  De breuklijn ligt niet waar je ze verwacht: een EENMANSZAAK is al een
+ *  natuurlijke persoon -- met btw en een ondernemingsnummer, maar zonder
+ *  algemene vergadering en zonder vennootschapsbelasting. Het onderscheid is
+ *  dus natuurlijk persoon versus rechtspersoon, niet "privé versus zaak"
+ *  (migratie 0041). */
+export type Klantsoort = 'rechtspersoon' | 'natuurlijk_persoon'
+
+/** De beroepsgraad. Vanaf manager mag je aangiftes goedkeuren; dat recht volgt
+ *  uit de graad en wordt niet meer per persoon aangevinkt (migratie 0042). */
+export type MedewerkerNiveau =
+  | 'junior'
+  | 'senior'
+  | 'supervisor'
+  | 'manager'
+  | 'director'
+  | 'partner'
+
 export interface Client {
   id: string
   firm_id: string
   naam: string
+  klantsoort: Klantsoort
   ondernemingsnummer: string | null
   rechtsvorm: string | null
   boekjaar_einde_maand: number

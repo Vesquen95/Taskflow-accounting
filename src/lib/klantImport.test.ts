@@ -13,9 +13,12 @@ const KOPPEN = KOLOMMEN.map((k) => k.kop)
 /** Een geldige voorbeeldrij, in de kolomvolgorde van het sjabloon: eerst de
  *  velden van de klant, dan een cel per verplichting. */
 const GOEDE_RIJ: unknown[] = [
-  'Acme BV', 'ZAV1', 'BE0123.456.749', 'BV', 12, 31, 'Periodieke aangever', 'Kwartaal', 'Ja',
-  'Ja', 'Ja', 'Ja', 'Nee', 'Ja', 'Nee', 'Nee', 'Nee', '', '', '',
-  '15/05', '1 maand voor AV', '', '',
+  // naam, soort, team, ondernemingsnummer, rechtsvorm, boekjaar, btw, mandaat
+  'Acme BV', 'Rechtspersoon', 'ZAV1', 'BE0123.456.749', 'BV', 12, 31, 'Periodieke aangever', 'Kwartaal', 'Ja',
+  // AV, jaarafsluiting, VenB, RPB, VA, PB, patrimonium, bijzondere btw, rapportering, drie fiches
+  'Ja', 'Ja', 'Ja', 'Nee', 'Ja', 'Nee', 'Nee', 'Nee', 'Nee', '', '', '',
+  // av_datum, jaarafsluiting_deadline, pb_vorm, rapportering_frequentie, rapportering_termijn
+  '15/05', '1 maand voor AV', '', '', '',
 ]
 
 /** Bouwt een bladmatrix: kopregel + de meegegeven rijen. */
@@ -41,6 +44,7 @@ describe('leesKlantRijen — een goed bestand', () => {
     expect(rij.excelRij).toBe(2)
     expect(rij.klant).toEqual({
       naam: 'Acme BV',
+      klantsoort: 'rechtspersoon',
       team_code: 'ZAV1',
       ondernemingsnummer: 'BE0123.456.749',
       rechtsvorm: 'BV',
@@ -575,6 +579,56 @@ describe('leesKlantRijen — de aangifte RPB', () => {
     const codes = rij.verplichtingen.map((v) => v.code)
     expect(codes).not.toContain('aangifte_venb_pb')
     expect(codes).not.toContain('aangifte_rpb')
+  })
+})
+
+describe('leesKlantRijen — soort dossier en de aangifte personenbelasting', () => {
+  it('leest "Natuurlijke persoon" en de gebruikelijke schrijfwijzen', () => {
+    for (const geschreven of ['Natuurlijke persoon', 'natuurlijk persoon', 'Eenmanszaak', 'Vrij beroep']) {
+      const rij = leesKlantRijen(blad(metVeld('klantsoort', geschreven))).rijen[0]
+      expect(rij.fouten).toEqual([])
+      expect(rij.klant?.klantsoort).toBe('natuurlijk_persoon')
+    }
+  })
+
+  it('telt een lege cel als rechtspersoon', () => {
+    // Dat is wat elk bestaand dossier is, en wat een bestand zonder deze kolom
+    // bedoelde. Een lege cel mag geen rij blokkeren.
+    const rij = leesKlantRijen(blad(metVeld('klantsoort', ''))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.klant?.klantsoort).toBe('rechtspersoon')
+  })
+
+  it('weigert een soort die niet bestaat', () => {
+    const rij = leesKlantRijen(blad(metVeld('klantsoort', 'VOF-achtig'))).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/Rechtspersoon.*Natuurlijke persoon/i)
+  })
+
+  it('leest de PB-aangifte met haar termijn', () => {
+    const rij = leesKlantRijen(
+      blad(
+        metVeld('aangifte_venb_pb', 'Nee',
+          metVeld('va_venb', 'Nee',
+            metVeld('aangifte_pb', 'Ja', metVeld('pb_vorm', 'Eenvoudig'))))
+      )
+    ).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.verplichtingen.find((v) => v.code === 'aangifte_pb')?.parameters).toEqual({
+      aangifte_vorm: 'eenvoudig',
+    })
+  })
+
+  it('weigert de PB naast een aangifte VenB', () => {
+    const rij = leesKlantRijen(blad(metVeld('aangifte_pb', 'Ja'))).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/niet onder twee/i)
+  })
+
+  it('weigert een termijn zonder aangevinkte PB-aangifte', () => {
+    const rij = leesKlantRijen(blad(metVeld('pb_vorm', 'Complex'))).rijen[0]
+    expect(rij.klant).toBeNull()
+    expect(rij.fouten.join(' ')).toMatch(/Aangifte PB/i)
   })
 })
 

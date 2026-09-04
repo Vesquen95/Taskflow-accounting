@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { useEmployees } from '../hooks/useEmployees'
 import { useTeams } from '../hooks/useTeams'
+import { NIVEAUS, niveauMagGoedkeuren } from '../lib/niveaus'
 import { teamsVan } from '../lib/teams'
 import { ErrorState } from '../components/ErrorState'
-import type { EmployeeRol } from '../types'
+import type { EmployeeRol, MedewerkerNiveau } from '../types'
 import { reportError } from '../lib/errorMessage'
 
 /** Medewerkersbeheer (§1/§5/§6, kantoorbeheerder-only): rollen,
@@ -63,6 +64,18 @@ export function MedewerkersPage() {
       else await voegLidToe(employeeId, teamId)
     } catch (err) {
       setRowError(reportError(err, 'Het team wijzigen is mislukt'))
+    }
+  }
+
+  /** De graad, en daarmee het goedkeuringsrecht. Vroeger stonden die twee los
+   *  naast elkaar: het vinkje kon op een junior staan zonder dat iets
+   *  protesteerde. Nu volgt het uit de graad (migratie 0042). */
+  async function zetNiveau(id: string, niveau: string) {
+    setRowError(null)
+    try {
+      await updateEmployee(id, { niveau: (niveau || null) as MedewerkerNiveau | null })
+    } catch (err) {
+      setRowError(reportError(err, 'Het niveau wijzigen is mislukt'))
     }
   }
 
@@ -135,6 +148,7 @@ export function MedewerkersPage() {
                 <th className="px-3 py-2">Naam</th>
                 <th className="px-3 py-2">E-mail</th>
                 <th className="px-3 py-2">Rol</th>
+                <th className="px-3 py-2">Niveau</th>
                 <th className="px-3 py-2">Teams</th>
                 <th className="px-3 py-2">Mag goedkeuren</th>
                 <th className="px-3 py-2">Status</th>
@@ -147,6 +161,21 @@ export function MedewerkersPage() {
                   <td className="px-3 py-2 font-medium text-slate-800">{emp.naam}</td>
                   <td className="px-3 py-2 text-slate-500">{emp.email}</td>
                   <td className="px-3 py-2 text-slate-600">{emp.rol === 'kantoorbeheerder' ? 'Kantoorbeheerder' : 'Medewerker'}</td>
+                  <td className="px-3 py-2">
+                    <select
+                      aria-label={`Niveau van ${emp.naam}`}
+                      value={emp.niveau ?? ''}
+                      onChange={(e) => zetNiveau(emp.id, e.target.value)}
+                      className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    >
+                      <option value="">— nog niet ingevuld —</option>
+                      {NIVEAUS.map((n) => (
+                        <option key={n.waarde} value={n.waarde}>
+                          {n.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="px-3 py-2">
                     {/* Aanklikbare codes en geen keuzelijst: meervoudig
                         lidmaatschap is normaal, en dan wil je in één oogopslag
@@ -177,9 +206,19 @@ export function MedewerkersPage() {
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <button type="button" onClick={() => toggleMagGoedkeuren(emp.id, emp.mag_goedkeuren)} className="text-xs font-medium text-brand-600 hover:text-brand-700">
-                      {emp.mag_goedkeuren ? 'Ja — intrekken' : 'Nee — toekennen'}
-                    </button>
+                    {emp.niveau ? (
+                      // Geen knop meer: het recht volgt de graad. Een knop die
+                      // je mag indrukken en die daarna terugspringt, is erger
+                      // dan geen knop.
+                      <span className="text-xs text-slate-600">
+                        {niveauMagGoedkeuren(emp.niveau) ? 'Ja' : 'Nee'}
+                        <span className="text-slate-400"> — volgt het niveau</span>
+                      </span>
+                    ) : (
+                      <button type="button" onClick={() => toggleMagGoedkeuren(emp.id, emp.mag_goedkeuren)} className="text-xs font-medium text-brand-600 hover:text-brand-700">
+                        {emp.mag_goedkeuren ? 'Ja — intrekken' : 'Nee — toekennen'}
+                      </button>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     {emp.auth_user_id ? (

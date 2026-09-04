@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Modal } from './Modal'
-import type { BtwFrequentie, BtwRegime, Client, Employee, ObligationType } from '../types'
+import type { BtwFrequentie, BtwRegime, Client, Employee, ObligationType, Klantsoort } from '../types'
 import { reportError } from '../lib/errorMessage'
 import { ObligationPicker } from './ObligationPicker'
 import { useTeams } from '../hooks/useTeams'
@@ -22,6 +22,7 @@ export interface ClientFormValues {
   vertrouwelijk: boolean
   standaard_verantwoordelijke_id: string
   team_id: string
+  klantsoort: Klantsoort
   actief: boolean
   /** Alle verplichtingen die het kantoor voor deze klant doet, in één keer
    *  ingevuld -- zie docs/PLAN.md §10. */
@@ -45,6 +46,7 @@ function toFormValues(
     vertrouwelijk: client?.vertrouwelijk ?? false,
     standaard_verantwoordelijke_id: client?.standaard_verantwoordelijke_id ?? '',
     team_id: client?.team_id ?? '',
+    klantsoort: client?.klantsoort ?? 'rechtspersoon',
     actief: client?.actief ?? true,
     obligations: legeSelecties(obligationTypes).map((leeg) => {
       const bestaand = bestaandeSelecties.find((b) => b.obligation_type_id === leeg.obligation_type_id)
@@ -174,6 +176,23 @@ export function ClientFormModal({
             required
           />
         </div>
+        {/* Bovenaan, want dit bepaalt welke velden en welke verplichtingen
+            hieronder nog zin hebben. Een eenmanszaak is een natuurlijke
+            persoon: die heeft wél btw en fiches, maar geen algemene
+            vergadering en geen vennootschapsbelasting. */}
+        <div>
+          <label htmlFor="client-klantsoort" className="mb-1 block text-xs font-medium text-slate-500">Soort dossier</label>
+          <select
+            id="client-klantsoort"
+            value={values.klantsoort}
+            onChange={(e) => setValues((v) => ({ ...v, klantsoort: e.target.value as Klantsoort }))}
+            className="w-full rounded-md border border-slate-300 px-2 py-1.5"
+          >
+            <option value="rechtspersoon">Rechtspersoon — vennootschap, vzw, stichting</option>
+            <option value="natuurlijk_persoon">Natuurlijke persoon — eenmanszaak, vrij beroep, bedrijfsleider</option>
+          </select>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="client-ondernemingsnummer" className="mb-1 block text-xs font-medium text-slate-500">Ondernemingsnummer</label>
@@ -202,6 +221,15 @@ export function ClientFormModal({
           </div>
         </div>
 
+        {values.klantsoort === 'natuurlijk_persoon' ? (
+          // Een natuurlijke persoon wordt belast per kalenderjaar. Het veld
+          // tonen zou suggereren dat er iets te kiezen valt; het weglaten
+          // zonder uitleg zou suggereren dat het vergeten is.
+          <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            Een natuurlijke persoon wordt belast per kalenderjaar; er valt geen
+            boekjaareinde te kiezen.
+          </p>
+        ) : (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="client-boekjaar-maand" className="mb-1 block text-xs font-medium text-slate-500">Boekjaareinde — maand</label>
@@ -231,6 +259,7 @@ export function ClientFormModal({
             />
           </div>
         </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -379,6 +408,7 @@ export function ClientFormModal({
         )}
 
         <ObligationPicker
+          klantsoort={values.klantsoort}
           rechtsvorm={values.rechtsvorm}
           verbergCodes={['btw_bijzondere_aangifte']}
           obligationTypes={obligationTypes}

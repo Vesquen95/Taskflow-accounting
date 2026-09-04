@@ -11,6 +11,7 @@ const medewerker: Employee = {
   naam: 'Jan',
   email: 'jan@rsm.be',
   rol: 'medewerker',
+  niveau: null,
   mag_goedkeuren: false,
   actief: true,
   created_at: '2026-01-01T00:00:00Z',

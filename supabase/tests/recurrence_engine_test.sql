@@ -5588,4 +5588,229 @@ begin
   raise notice 'PASS 44.4: met een naam erop geldt de kantoorgrens onverkort';
 end $$;
 
+
+-- ============================================================
+-- Sectie 45 (0041): de aangifte personenbelasting.
+--
+-- Sinds de hervorming van 2023 bestaat het aparte uitstel voor mandatarissen
+-- niet meer. De termijn hangt af van de aangifte zelf: complex (winsten of
+-- baten, bedrijfsleidersbezoldiging, buitenlands beroepsinkomen) tegen 16
+-- oktober, eenvoudig tegen 15 juli. Bij een boekhoudkantoor is vrijwel elk
+-- dossier complex, dus dat is de standaard.
+--
+--   45.1  standaard = complex = 16 oktober van het jaar NA het inkomstenjaar
+--   45.2  "eenvoudig" levert 15 juli op
+--   45.3  de periode is het kalenderjaar, niet een boekjaar
+--   45.4  de wettelijke kalender overschrijft, en enkel voor de juiste vorm
+--   45.5  PB gaat niet samen met VenB, in beide richtingen
+--   45.6  PB gaat niet samen met de RPB
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid;
+  v_ot_pb uuid; v_ot_venb uuid; v_ot_rpb uuid;
+  v_zaak uuid; v_privaat uuid; v_botser uuid;
+  v_d date; v_ps date; v_pe date; v_n int; v_ok boolean;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's45@test.local', now());
+  insert into public.firms (naam) values ('Sectie 45 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S45 Beheerder', 's45@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+
+  select id into v_ot_pb   from public.obligation_types where code = 'aangifte_pb';
+  select id into v_ot_venb from public.obligation_types where code = 'aangifte_venb_pb';
+  select id into v_ot_rpb  from public.obligation_types where code = 'aangifte_rpb';
+  if v_ot_pb is null then
+    raise exception 'FAIL 45.0: de aangifte personenbelasting staat niet in de catalogus';
+  end if;
+
+  -- Een eenmanszaak: natuurlijke persoon MET btw. Dat de klantsoort bestaat en
+  -- naast een btw-regime kan staan, is precies het punt.
+  insert into public.clients (firm_id, naam, klantsoort, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S45 Eenmanszaak', 'natuurlijk_persoon', 'Eenmanszaak', 12, 31, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_zaak;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_zaak, v_ot_pb, true, current_date);
+
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+
+  -- 45.1 Standaard is complex: 16 oktober van het jaar na het inkomstenjaar.
+  select due_date_wettelijk, periode_start, periode_eind into v_d, v_ps, v_pe
+  from public.task_instances ti
+  where ti.client_id = v_zaak and ti.obligation_type_id = v_ot_pb
+  order by ti.due_date_wettelijk limit 1;
+
+  if v_d is null then
+    raise exception 'FAIL 45.1: de aangifte personenbelasting leverde geen taken op';
+  end if;
+  if extract(month from v_d) <> 10 or extract(day from v_d) <> 16 then
+    raise exception 'FAIL 45.1: de complexe aangifte valt op % in plaats van 16 oktober', v_d;
+  end if;
+  if extract(year from v_d) <> extract(year from v_pe) + 1 then
+    raise exception 'FAIL 45.1: de deadline (%) hoort in het jaar NA het inkomstenjaar (%)', v_d, v_pe;
+  end if;
+  raise notice 'PASS 45.1: de complexe aangifte valt op 16 oktober na het inkomstenjaar (%)', v_d;
+
+  -- 45.3 De periode is het kalenderjaar. De personenbelasting kent geen
+  -- boekjaar, ook niet wanneer het dossier er toevallig een heeft staan.
+  if extract(month from v_ps) <> 1 or extract(day from v_ps) <> 1
+     or extract(month from v_pe) <> 12 or extract(day from v_pe) <> 31 then
+    raise exception 'FAIL 45.3: de periode loopt van % tot % in plaats van een kalenderjaar', v_ps, v_pe;
+  end if;
+  raise notice 'PASS 45.3: de periode is het kalenderjaar (% tot %)', v_ps, v_pe;
+
+  -- 45.2 Een eenvoudige aangifte: 15 juli.
+  insert into public.clients (firm_id, naam, klantsoort, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S45 Particulier', 'natuurlijk_persoon', 12, 31, 'geen', true)
+    returning id into v_privaat;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters)
+    values (v_privaat, v_ot_pb, true, current_date, jsonb_build_object('aangifte_vorm', 'eenvoudig'));
+
+  perform public.generate_task_instances_intern(v_firm, 36, 0, null);
+
+  select due_date_wettelijk into v_d from public.task_instances
+   where client_id = v_privaat and obligation_type_id = v_ot_pb
+   order by due_date_wettelijk limit 1;
+  if extract(month from v_d) <> 7 or extract(day from v_d) <> 15 then
+    raise exception 'FAIL 45.2: de eenvoudige aangifte valt op % in plaats van 15 juli', v_d;
+  end if;
+  raise notice 'PASS 45.2: de eenvoudige aangifte valt op 15 juli (%)', v_d;
+
+  -- 45.4 De wettelijke kalender overschrijft, en enkel voor de vorm waarvoor
+  -- ze ingevuld is: een campagnedatum voor de eenvoudige aangifte mag de
+  -- complexe niet verzetten.
+  insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, aangemaakt_door, gewijzigd_door)
+  values (v_ot_pb, extract(year from v_pe)::int, 'vorm_complex', make_date(extract(year from v_pe)::int + 1, 11, 4), true, v_admin, v_admin);
+
+  -- recalc_due_dates_on_legal_calendar_override() verzet de lopende taken al
+  -- bij het invoeren; de generator neemt de datum daarna sowieso over.
+  select due_date_wettelijk into v_d from public.task_instances
+   where client_id = v_zaak and obligation_type_id = v_ot_pb and periode_eind = v_pe;
+  if v_d <> make_date(extract(year from v_pe)::int + 1, 11, 4) then
+    raise exception 'FAIL 45.4: de campagnedatum uit de wettelijke kalender werd niet gevolgd (% i.p.v. %)',
+      v_d, make_date(extract(year from v_pe)::int + 1, 11, 4);
+  end if;
+  raise notice 'PASS 45.4: een campagnedatum uit de wettelijke kalender wint (%)', v_d;
+
+  -- En ze geldt enkel voor de vorm waarvoor ze ingevuld is: de eenvoudige
+  -- aangifte van de particulier mag er niet door verschuiven.
+  select due_date_wettelijk into v_d from public.task_instances
+   where client_id = v_privaat and obligation_type_id = v_ot_pb and periode_eind = v_pe;
+  if extract(month from v_d) <> 7 or extract(day from v_d) <> 15 then
+    raise exception 'FAIL 45.4: een campagnedatum voor de complexe aangifte verzette ook de eenvoudige (%)', v_d;
+  end if;
+  raise notice 'PASS 45.4b: de campagnedatum raakt enkel de vorm waarvoor ze geldt';
+
+  -- 45.5/45.6 Wat niet samen kan.
+  insert into public.clients (firm_id, naam, klantsoort, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S45 Botser', 'rechtspersoon', 12, 31, 'geen', true)
+    returning id into v_botser;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_botser, v_ot_venb, true, current_date);
+
+  v_ok := false;
+  begin
+    insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+      values (v_botser, v_ot_pb, true, current_date);
+  exception when check_violation then
+    v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 45.5: een dossier kreeg de personenbelasting naast de vennootschapsbelasting';
+  end if;
+  raise notice 'PASS 45.5: PB gaat niet samen met de VenB';
+
+  -- En de andere richting: eerst PB, dan VenB.
+  update public.client_obligations set actief = false
+   where client_id = v_botser and obligation_type_id = v_ot_venb;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_botser, v_ot_pb, true, current_date);
+
+  v_ok := false;
+  begin
+    insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+      values (v_botser, v_ot_rpb, true, current_date);
+  exception when check_violation then
+    v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 45.6: een dossier kreeg de RPB naast de personenbelasting';
+  end if;
+  raise notice 'PASS 45.6: PB gaat niet samen met de RPB, ook in deze richting';
+end $$;
+
+-- ============================================================
+-- Sectie 46 (0042): het goedkeuringsrecht volgt de graad.
+--
+-- Zes niveaus, en vanaf manager mag je aangiftes goedkeuren. Vroeger stond dat
+-- als een los vinkje naast de rol: het kon op een junior staan zonder dat iets
+-- protesteerde, en ontbreken bij een manager zonder dat iemand het zag.
+--
+--   46.1  een junior mag niet goedkeuren, ook niet als je het vinkje zet
+--   46.2  een manager mag het, zonder dat je iets aanvinkt
+--   46.3  bevorderd worden geeft het recht mee
+--   46.4  zonder niveau blijft het handmatige vinkje staan
+--   46.5  de rol staat er los van: kantoorbeheerder is geen graad
+-- ============================================================
+do $$
+declare
+  v_firm uuid;
+  v_junior uuid; v_manager uuid; v_oud uuid; v_beheerder uuid;
+  v_mag boolean;
+begin
+  insert into public.firms (naam) values ('Sectie 46 kantoor') returning id into v_firm;
+
+  -- 46.1 Het vinkje meteen mee proberen zetten bij een junior.
+  insert into public.employees (firm_id, naam, email, rol, niveau, mag_goedkeuren, actief)
+    values (v_firm, 'S46 Junior', 's46-junior@test.local', 'medewerker', 'junior', true, true)
+    returning id into v_junior;
+  select mag_goedkeuren into v_mag from public.employees where id = v_junior;
+  if v_mag then
+    raise exception 'FAIL 46.1: een junior kreeg goedkeuringsrecht omdat het vinkje aanstond';
+  end if;
+  raise notice 'PASS 46.1: bij een junior springt het vinkje terug, ook als je het zet';
+
+  -- 46.2 En bij een manager komt het er vanzelf bij.
+  insert into public.employees (firm_id, naam, email, rol, niveau, mag_goedkeuren, actief)
+    values (v_firm, 'S46 Manager', 's46-manager@test.local', 'medewerker', 'manager', false, true)
+    returning id into v_manager;
+  select mag_goedkeuren into v_mag from public.employees where id = v_manager;
+  if not v_mag then
+    raise exception 'FAIL 46.2: een manager mag niet goedkeuren';
+  end if;
+  raise notice 'PASS 46.2: een manager mag goedkeuren zonder dat je iets aanvinkt';
+
+  -- 46.3 Bevorderd worden.
+  update public.employees set niveau = 'director' where id = v_junior;
+  select mag_goedkeuren into v_mag from public.employees where id = v_junior;
+  if not v_mag then
+    raise exception 'FAIL 46.3: bevorderd tot director en nog altijd geen goedkeuringsrecht';
+  end if;
+  raise notice 'PASS 46.3: bevorderen geeft het goedkeuringsrecht mee';
+
+  -- 46.4 Zonder niveau verandert er niets aan wat er met de hand stond. Anders
+  -- zou deze migratie bestaande medewerkers stil hun recht afnemen.
+  insert into public.employees (firm_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, 'S46 Zonder graad', 's46-zonder@test.local', 'medewerker', true, true)
+    returning id into v_oud;
+  select mag_goedkeuren into v_mag from public.employees where id = v_oud;
+  if not v_mag then
+    raise exception 'FAIL 46.4: zonder niveau werd het handmatige vinkje toch gewist';
+  end if;
+  raise notice 'PASS 46.4: zonder niveau blijft het handmatige vinkje staan';
+
+  -- 46.5 De rol is een andere as: beheer in de app, geen beroepsgraad.
+  insert into public.employees (firm_id, naam, email, rol, niveau, mag_goedkeuren, actief)
+    values (v_firm, 'S46 Beheerder', 's46-beheer@test.local', 'kantoorbeheerder', 'supervisor', true, true)
+    returning id into v_beheerder;
+  select mag_goedkeuren into v_mag from public.employees where id = v_beheerder;
+  if v_mag then
+    raise exception 'FAIL 46.5: kantoorbeheerder gaf goedkeuringsrecht aan een supervisor';
+  end if;
+  raise notice 'PASS 46.5: kantoorbeheerder zijn is geen graad en geeft geen goedkeuringsrecht';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

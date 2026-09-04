@@ -15,6 +15,7 @@ function client(overrides: Partial<Client> = {}): Client {
     id: 'c1',
     firm_id: 'f1',
     naam: 'Acme BV',
+    klantsoort: 'rechtspersoon',
     ondernemingsnummer: 'BE0123.456.789',
     rechtsvorm: 'BV',
     boekjaar_einde_maand: 12,

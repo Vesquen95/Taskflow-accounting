@@ -41,7 +41,7 @@ export function useEmployees() {
 
   async function updateEmployee(
     id: string,
-    updates: Partial<Pick<Employee, 'naam' | 'rol' | 'mag_goedkeuren' | 'actief'>>
+    updates: Partial<Pick<Employee, 'naam' | 'rol' | 'niveau' | 'mag_goedkeuren' | 'actief'>>
   ) {
     const { error: err } = await supabase.from('employees').update(updates).eq('id', id)
     if (err) throw err

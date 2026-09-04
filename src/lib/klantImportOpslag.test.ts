@@ -7,6 +7,7 @@ function rij(excelRij: number, naam: string, geldig = true): ImportRij {
     naam,
     ondernemingsnummer: null,
     team_code: null,
+    klantsoort: 'rechtspersoon' as const,
     rechtsvorm: null,
     boekjaar_einde_maand: 12,
     boekjaar_einde_dag: 31,
