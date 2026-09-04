@@ -5813,4 +5813,192 @@ begin
   raise notice 'PASS 46.5: kantoorbeheerder zijn is geen graad en geeft geen goedkeuringsrecht';
 end $$;
 
+
+-- ============================================================
+-- Sectie 47 (0043): het weekoverzicht.
+--
+-- De inhoud van de maandagmail. Wat hier fout gaat, gaat per e-mail de deur
+-- uit en is niet meer terug te halen -- vandaar dat de muur van 0039 hier even
+-- hard moet staan als op het scherm.
+--
+--   47.1  wat te laat is en op jouw naam staat, staat in het blok "te laat"
+--   47.2  wat deze week vervalt, staat apart
+--   47.3  werk zonder naam uit JOUW team staat in de teambak
+--   47.4  ... en dat van een ander team niet
+--   47.5  een dossier van een ander team komt nergens in het overzicht
+--   47.6  wie niet mag goedkeuren, krijgt geen goedkeuringsblok
+--   47.7  wie niets te melden heeft, staat niet bij de ontvangers
+--   47.8  de lijsten worden afgekapt, met het volledige aantal ernaast
+-- ============================================================
+do $$
+declare
+  v_firm uuid;
+  v_ik uuid;     v_ik_uid uuid := gen_random_uuid();
+  v_baas uuid;   v_baas_uid uuid := gen_random_uuid();
+  v_ander uuid;
+  v_t_mijn uuid; v_t_ander uuid;
+  v_k_mijn uuid; v_k_ander uuid;
+  v_ot uuid;
+  v_o jsonb; v_baas_o jsonb; v_n int; v_i int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_ik_uid, 's47-ik@test.local', now()), (v_baas_uid, 's47-baas@test.local', now());
+  insert into public.firms (naam) values ('Sectie 47 kantoor') returning id into v_firm;
+
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, niveau, actief)
+    values (v_firm, v_ik_uid, 'S47 Ik', 's47-ik@test.local', 'medewerker', 'senior', true)
+    returning id into v_ik;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, niveau, actief)
+    values (v_firm, v_baas_uid, 'S47 Manager', 's47-baas@test.local', 'medewerker', 'manager', true)
+    returning id into v_baas;
+  insert into public.employees (firm_id, naam, email, rol, niveau, actief)
+    values (v_firm, 'S47 Ander team', 's47-ander@test.local', 'medewerker', 'senior', true)
+    returning id into v_ander;
+
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'MIJN', 'Mijn team', 'Aalst')
+    returning id into v_t_mijn;
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'AND', 'Ander team', 'Antwerpen')
+    returning id into v_t_ander;
+  insert into public.employee_teams (employee_id, team_id) values
+    (v_ik, v_t_mijn), (v_baas, v_t_mijn), (v_ander, v_t_ander);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S47 Mijn klant', 12, 31, 'geen', true, v_t_mijn) returning id into v_k_mijn;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S47 Andermans klant', 12, 31, 'geen', true, v_t_ander) returning id into v_k_ander;
+
+  select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
+  perform set_config('taskflow.generating', 'on', true);
+
+  -- Op mijn naam: één te laat, één deze week, één ver weg.
+  insert into public.task_instances (client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+  values
+    (v_k_mijn, v_ot, 'TE-LAAT', current_date - 10, current_date - 10, 'open', v_ik, 'automatisch_gegenereerd', true),
+    (v_k_mijn, v_ot, 'DEZE-WEEK', current_date + 3, current_date + 3, 'open', v_ik, 'automatisch_gegenereerd', true),
+    (v_k_mijn, v_ot, 'LATER', current_date + 90, current_date + 90, 'open', v_ik, 'automatisch_gegenereerd', true);
+
+  -- Zonder naam: één in mijn team, één in het andere, en één in mijn team dat
+  -- nog ver weg ligt. Die laatste bewaakt de horizon van de bak: zonder die
+  -- rij zou het weglaten van de datumgrens niets breken en zou de test groen
+  -- blijven om de verkeerde reden.
+  insert into public.task_instances (client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+  values
+    (v_k_mijn, v_ot, 'BAK-MIJN', current_date + 5, current_date + 5, 'open', null, 'automatisch_gegenereerd', true),
+    (v_k_mijn, v_ot, 'BAK-VERWEG', current_date + 90, current_date + 90, 'open', null, 'automatisch_gegenereerd', true),
+    (v_k_ander, v_ot, 'BAK-ANDER', current_date + 5, current_date + 5, 'open', null, 'automatisch_gegenereerd', true);
+
+  -- Iets dat op goedkeuring wacht, bij een collega van mijn team. En hetzelfde
+  -- bij een dossier van het ANDERE team: dat is wat de muur moet tegenhouden.
+  -- Zonder die tweede rij zou het weghalen van mag_klant_zien() niets breken.
+  insert into public.task_instances (client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+  -- En één van een collega op MIJN dossier: die zou in mijn goedkeuringsblok
+  -- belanden als de rechtencontrole zou wegvallen. Zonder deze rij blijft die
+  -- test groen om de verkeerde reden.
+  values
+    (v_k_mijn, v_ot, 'GOEDKEURING', current_date + 4, current_date + 4, 'open', v_ik, 'automatisch_gegenereerd', true),
+    (v_k_mijn, v_ot, 'GOEDKEURING-COLLEGA', current_date + 4, current_date + 4, 'open', v_baas, 'automatisch_gegenereerd', true),
+    (v_k_ander, v_ot, 'GOEDKEURING-ANDER', current_date + 4, current_date + 4, 'open', v_ander, 'automatisch_gegenereerd', true);
+  perform set_config('taskflow.generating', 'off', true);
+
+  -- Ze moeten de echte weg lopen naar "wacht op goedkeuring": migratie 0013
+  -- weigert motoroutput in een verzonnen status, dus een rechtstreekse insert
+  -- met die status wordt stil als 'open' bewaard. Dat is precies waarom deze
+  -- fixture eerst groen bleef terwijl ze niets bewees.
+  perform set_config('taskflow.test_uid', v_ik_uid::text, true);
+  update public.task_instances set status = 'wacht_op_goedkeuring'
+   where periode_label in ('GOEDKEURING', 'GOEDKEURING-COLLEGA', 'GOEDKEURING-ANDER')
+     and client_id in (v_k_mijn, v_k_ander);
+
+  if (select count(*) from public.task_instances ti
+      where ti.periode_label like 'GOEDKEURING%' and ti.status = 'wacht_op_goedkeuring'
+        and ti.client_id in (v_k_mijn, v_k_ander)) <> 3 then
+    raise exception 'FAIL 47.0: de fixture kreeg de goedkeuringsstatus niet gezet';
+  end if;
+
+  v_o := public.weekoverzicht_voor(v_ik);
+
+  -- 47.1
+  if (v_o #>> '{blokken,te_laat,totaal}')::int <> 1
+     or (v_o #>> '{blokken,te_laat,taken,0,periode}') <> 'TE-LAAT' then
+    raise exception 'FAIL 47.1: het blok "te laat" klopt niet (%)', v_o #> '{blokken,te_laat}';
+  end if;
+  raise notice 'PASS 47.1: wat te laat is en op jouw naam staat, staat vooraan';
+
+  -- 47.2 Twee taken van mij vervallen deze week: de gewone, en die welke op
+  -- goedkeuring wacht. Die laatste blijft mijn werk zolang ze niet goedgekeurd
+  -- is, dus ze hoort hier thuis -- ze staat straks óók in het goedkeuringsblok
+  -- van de manager, en dat is niet dubbel maar twee verschillende vragen.
+  -- De taak van over drie maanden hoort er niet bij.
+  if (v_o #>> '{blokken,deze_week,totaal}')::int <> 2
+     or v_o #>> '{blokken,deze_week}' not like '%DEZE-WEEK%'
+     or v_o #>> '{blokken,deze_week}' not like '%GOEDKEURING%'
+     or v_o #>> '{blokken,deze_week}' like '%LATER%' then
+    raise exception 'FAIL 47.2: het blok "deze week" klopt niet (%)', v_o #> '{blokken,deze_week}';
+  end if;
+  raise notice 'PASS 47.2: deze week staat apart, en wat later komt blijft eruit';
+
+  -- 47.3/47.4 Alleen BAK-MIJN: niet dat van het andere team, en niet dat van
+  -- over drie maanden.
+  if (v_o #>> '{blokken,teambak,totaal}')::int <> 1
+     or (v_o #>> '{blokken,teambak,taken,0,periode}') <> 'BAK-MIJN' then
+    raise exception 'FAIL 47.3: de teambak klopt niet (%)', v_o #> '{blokken,teambak}';
+  end if;
+  raise notice 'PASS 47.3/47.4: enkel het werk zonder naam uit je eigen team, en enkel wat eraan komt';
+
+  -- 47.5 Niets van het andere team, in geen enkel blok.
+  if v_o::text like '%Andermans klant%' then
+    raise exception 'FAIL 47.5: een dossier van een ander team staat in het weekoverzicht';
+  end if;
+  raise notice 'PASS 47.5: de muur van 0039 geldt ook per e-mail';
+
+  -- 47.6 Ik ben senior en mag niet goedkeuren.
+  if v_o #> '{blokken,wacht_op_jou}' is not null then
+    raise exception 'FAIL 47.6: een senior kreeg een goedkeuringsblok';
+  end if;
+  -- De manager wel -- maar alleen voor het dossier van zijn eigen team. Het
+  -- dossier van het andere team wacht óók op goedkeuring en mag er niet in.
+  v_baas_o := public.weekoverzicht_voor(v_baas);
+
+  if (v_baas_o #>> '{blokken,wacht_op_jou,totaal}')::int <> 1
+     or (v_baas_o #>> '{blokken,wacht_op_jou,taken,0,periode}') <> 'GOEDKEURING' then
+    raise exception 'FAIL 47.6: het goedkeuringsblok van de manager klopt niet (%)',
+      v_baas_o #> '{blokken,wacht_op_jou}';
+  end if;
+  if v_baas_o::text like '%Andermans klant%' then
+    raise exception 'FAIL 47.6: de manager ziet een dossier van een ander team in zijn goedkeuringsblok';
+  end if;
+  raise notice 'PASS 47.6: het goedkeuringsblok verschijnt enkel bij wie mag goedkeuren, en enkel voor zijn eigen dossiers';
+
+  -- 47.7 Wie in geen enkel blok voorkomt, krijgt geen mail.
+  select count(*) into v_n from public.weekoverzicht_ontvangers()
+   where employee_id = v_ander;
+  if v_n <> 0 then
+    raise exception 'FAIL 47.7: iemand zonder werk staat toch bij de ontvangers';
+  end if;
+  select count(*) into v_n from public.weekoverzicht_ontvangers() where employee_id = v_ik;
+  if v_n <> 1 then
+    raise exception 'FAIL 47.7: wie wél werk heeft, staat niet bij de ontvangers';
+  end if;
+  raise notice 'PASS 47.7: alleen wie iets te melden heeft, krijgt een mail';
+
+  -- 47.8 Afkappen, met het volledige aantal ernaast. Een mail die zwijgt over
+  -- wat ze weglaat, is erger dan geen mail.
+  perform set_config('taskflow.generating', 'on', true);
+  for v_i in 1..20 loop
+    insert into public.task_instances (client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_k_mijn, v_ot, 'BULK-' || v_i, current_date - 20 - v_i, current_date - 20 - v_i, 'open', v_ik, 'automatisch_gegenereerd', true);
+  end loop;
+  perform set_config('taskflow.generating', 'off', true);
+
+  v_o := public.weekoverzicht_voor(v_ik, current_date, 5);
+  if (v_o #>> '{blokken,te_laat,totaal}')::int <> 21 then
+    raise exception 'FAIL 47.8: het totaal klopt niet (% i.p.v. 21)', v_o #>> '{blokken,te_laat,totaal}';
+  end if;
+  if jsonb_array_length(v_o #> '{blokken,te_laat,taken}') <> 5 then
+    raise exception 'FAIL 47.8: er staan % regels in plaats van de vijf gevraagde',
+      jsonb_array_length(v_o #> '{blokken,te_laat,taken}');
+  end if;
+  raise notice 'PASS 47.8: de lijst wordt afgekapt op 5, met het volledige aantal (21) ernaast';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
