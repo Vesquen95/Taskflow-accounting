@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useClientDetail } from '../hooks/useClientDetail'
 import { useEmployees } from '../hooks/useEmployees'
+import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useObligationTypes } from '../hooks/useObligationTypes'
 import { ErrorState } from '../components/ErrorState'
 import { StatusBadge } from '../components/StatusBadge'
@@ -51,6 +52,9 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     reactivateClient,
   } = useClientDetail(clientId)
   const { employees } = useEmployees()
+  // Nodig voor het teamveld in het klantformulier: het team weghalen mag sinds
+  // 0045 alleen een kantoorbeheerder.
+  const { employee } = useCurrentEmployee()
   const { obligationTypes } = useObligationTypes()
   const [openTask, setOpenTask] = useState<TaskInstanceWithRelations | null>(null)
   const [showEdit, setShowEdit] = useState(false)
@@ -414,6 +418,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           employees={employees}
           obligationTypes={obligationTypes}
           bestaandeVerplichtingen={bestaandeVerplichtingen}
+          huidigeMedewerker={employee}
           onClose={() => setShowEdit(false)}
           onSubmit={handleEdit}
         />

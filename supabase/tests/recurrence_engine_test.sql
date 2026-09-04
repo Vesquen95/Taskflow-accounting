@@ -6017,13 +6017,17 @@ end $$;
 do $$
 declare
   v_firm uuid; v_ik uuid; v_ik_uid uuid := gen_random_uuid();
+  v_baas uuid; v_baas_uid uuid := gen_random_uuid();
   v_t_a uuid; v_t_b uuid; v_klant uuid;
   v_n int; v_oud text; v_nieuw text;
 begin
-  insert into auth.users (id, email, email_confirmed_at) values (v_ik_uid, 's48@test.local', now());
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_ik_uid, 's48@test.local', now()), (v_baas_uid, 's48-baas@test.local', now());
   insert into public.firms (naam) values ('S48 Kantoor') returning id into v_firm;
   insert into public.employees (firm_id, auth_user_id, naam, email, rol, actief)
     values (v_firm, v_ik_uid, 'S48 Ik', 's48@x.be', 'medewerker', true) returning id into v_ik;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, actief)
+    values (v_firm, v_baas_uid, 'S48 Beheerder', 's48-baas@x.be', 'kantoorbeheerder', true) returning id into v_baas;
   insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S48A', 'Team A', 'Aalst')
     returning id into v_t_a;
   insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S48B', 'Team B', 'Brussel')
@@ -6047,7 +6051,10 @@ begin
   raise notice 'PASS 48.1: een verhuizing naar een ander team staat in de historiek, met beide teams erbij';
 
   -- 48.2 Het team wegnemen is de gevaarlijkste variant -- dan ziet het hele
-  -- kantoor het dossier -- en moet dus zeker een spoor nalaten.
+  -- kantoor het dossier -- en moet dus zeker een spoor nalaten. Sinds 0045 mag
+  -- alleen een kantoorbeheerder dat nog; dat het spoor er dan staat, is precies
+  -- wat hier getest wordt.
+  perform set_config('taskflow.test_uid', v_baas_uid::text, true);
   update public.clients set team_id = null where id = v_klant;
   select count(*) into v_n from public.client_change_log
     where client_id = v_klant and veld = 'team_id' and nieuwe_waarde is null;
@@ -6065,6 +6072,195 @@ begin
     raise exception 'FAIL 48.3: een naamswijziging voegde een teamregel toe (% in plaats van 2)', v_n;
   end if;
   raise notice 'PASS 48.3: een gewone wijziging laat de teamhistoriek met rust';
+end $$;
+
+
+-- ============================================================
+-- Sectie 49 (0045): alleen lopend werk opent een dossier, en het team
+-- weghalen is een beheerdersbeslissing.
+--
+-- De gevaarlijkste van deze regels is niet dat er iets dichtgaat, maar WANNEER
+-- het dichtgaat: wie zijn laatste taak op een dossier van een ander team
+-- afwerkt, verliest daarmee de toegang -- mogelijk midden in die handeling
+-- zelf. 49.3 gaat daar rechtstreeks op af. Zonder die test zou de regel er
+-- correct uitzien en in de praktijk het afwerken van werk blokkeren.
+-- ============================================================
+do $$
+declare
+  v_firm uuid;
+  v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_mw uuid;    v_mw_uid uuid := gen_random_uuid();
+  v_t_mijn uuid; v_t_ander uuid;
+  v_klant uuid; v_vertr uuid; v_eigen uuid;
+  v_taak uuid; v_taak2 uuid; v_status text; v_n int; v_ok boolean;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's49-admin@test.local', now()), (v_mw_uid, 's49-mw@test.local', now());
+  insert into public.firms (naam) values ('S49 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S49 Beheerder', 's49-admin@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_mw_uid, 'S49 Medewerker', 's49-mw@test.local', 'medewerker', false, true)
+    returning id into v_mw;
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S49M', 'Mijn team', 'Aalst')
+    returning id into v_t_mijn;
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S49A', 'Ander team', 'Antwerpen')
+    returning id into v_t_ander;
+  insert into public.employee_teams (employee_id, team_id) values (v_mw, v_t_mijn);
+
+  -- Een dossier van het ANDERE team: enkel bereikbaar via werk.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S49 Ander team', 12, 31, 'geen', true, v_t_ander) returning id into v_klant;
+
+  -- Ad-hoc taken, met opzet: een wettelijke taak moet langs goedkeuring, en
+  -- deze medewerker heeft dat recht niet. Voor de muur maakt de soort taak
+  -- niets uit -- ze kijkt enkel naar wie ze op zijn naam heeft en of ze loopt.
+  insert into public.task_instances (client_id, title, due_date, due_date_wettelijk,
+                                     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant, 'S49-1', current_date + 5, current_date + 5, 'open', v_mw, 'handmatig_adhoc', false)
+    returning id into v_taak;
+  insert into public.task_instances (client_id, title, due_date, due_date_wettelijk,
+                                     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant, 'S49-2', current_date + 6, current_date + 6, 'open', v_mw, 'handmatig_adhoc', false)
+    returning id into v_taak2;
+
+  -- 49.0 De fixture moet kloppen: lopend werk geeft toegang.
+  if not public.can_view_client(v_klant, v_mw) then
+    raise exception 'FAIL 49.0: lopend werk gaf geen toegang tot het dossier van het andere team';
+  end if;
+  raise notice 'PASS 49.0: lopend werk opent een dossier van een ander team';
+
+  -- 49.1 Eén taak afwerken terwijl er nog een tweede loopt: toegang blijft.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_taak;
+  if not public.can_view_client(v_klant, v_mw) then
+    raise exception 'FAIL 49.1: de toegang viel weg terwijl er nog lopend werk was';
+  end if;
+  raise notice 'PASS 49.1: zolang er lopend werk is, blijft het dossier open';
+
+  -- 49.3 De handeling zelf mag niet blokkeren. Dit is de kern: de medewerker
+  -- werkt zijn LAATSTE taak af, en die handeling beëindigt zijn eigen toegang
+  -- tot het dossier. Doet de policy dat in de verkeerde volgorde, dan kan hij
+  -- zijn werk niet afwerken.
+  set local role authenticated;
+  v_ok := true;
+  begin
+    update public.task_instances set status = 'ingediend_afgerond' where id = v_taak2;
+    get diagnostics v_n = row_count;
+    if v_n <> 1 then v_ok := false; end if;
+  exception when others then v_ok := false;
+  end;
+  set local role postgres;
+  if not v_ok then
+    raise exception 'FAIL 49.3: de medewerker kon zijn laatste taak op dit dossier niet afwerken';
+  end if;
+  select status into v_status from public.task_instances where id = v_taak2;
+  if v_status <> 'ingediend_afgerond' then
+    raise exception 'FAIL 49.3: de laatste taak bleef op status %', v_status;
+  end if;
+  raise notice 'PASS 49.3: je kunt je laatste taak afwerken, ook al sluit dat het dossier voor je';
+
+  -- 49.2 En daarna is het dossier dicht. (Na 49.3, want die heeft de laatste
+  -- taak nodig.)
+  if public.can_view_client(v_klant, v_mw) then
+    raise exception 'FAIL 49.2: het dossier bleef open op afgewerkt werk';
+  end if;
+  raise notice 'PASS 49.2: afgewerkt werk houdt een dossier van een ander team niet langer open';
+
+  -- 49.4 Hetzelfde voor een vertrouwelijk dossier, want dat is de scherpere kant.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  -- Een vertrouwelijk dossier moet een standaard verantwoordelijke hebben
+  -- (controle uit 0009). Die staat los van de muur: hij bepaalt wie het werk
+  -- krijgt, niet wie het dossier ziet.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime,
+                              vertrouwelijk, standaard_verantwoordelijke_id, actief, team_id)
+    values (v_firm, 'S49 Vertrouwelijk', 12, 31, 'geen', true, v_mw, true, v_t_mijn) returning id into v_vertr;
+  insert into public.task_instances (client_id, title, due_date, due_date_wettelijk,
+                                     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_vertr, 'S49-V', current_date + 5, current_date + 5, 'open', v_mw, 'handmatig_adhoc', false)
+    returning id into v_taak;
+  if not public.can_view_client(v_vertr, v_mw) then
+    raise exception 'FAIL 49.4: lopend werk gaf geen toegang tot het vertrouwelijke dossier';
+  end if;
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_taak;
+  if public.can_view_client(v_vertr, v_mw) then
+    raise exception 'FAIL 49.4: een vertrouwelijk dossier bleef open op afgewerkt werk';
+  end if;
+  raise notice 'PASS 49.4: ook een vertrouwelijk dossier gaat dicht zodra het werk af is';
+
+  -- 49.5 Je eigen afgewerkte taak blijft van jou: het dossier gaat dicht, je
+  -- werk verdwijnt niet uit je eigen zicht.
+  if not public.can_access_task_row(v_vertr, v_mw, 'ingediend_afgerond') then
+    raise exception 'FAIL 49.5: de medewerker verloor zijn eigen afgewerkte taak uit het zicht';
+  end if;
+  raise notice 'PASS 49.5: het dossier gaat dicht, je eigen afgewerkte taak blijft van jou';
+
+  -- Voor de teamregels een dossier dat deze medewerker ECHT ziet: in zijn eigen
+  -- team, niet vertrouwelijk. Zonder dat zou RLS de update al tegenhouden en
+  -- zou 49.6 groen worden zonder dat de trigger iets gedaan heeft.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S49 Eigen team', 12, 31, 'geen', true, v_t_mijn) returning id into v_eigen;
+  if not public.can_view_client(v_eigen, v_mw) then
+    raise exception 'FAIL 49.6: fixture -- de medewerker ziet zijn eigen teamdossier niet';
+  end if;
+
+  -- 49.6 Het team weghalen mag een medewerker niet.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  v_ok := false;
+  begin
+    update public.clients set team_id = null where id = v_eigen;
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  set local role postgres;
+  if not v_ok then
+    raise exception 'FAIL 49.6: een medewerker kon het team van een dossier weghalen';
+  end if;
+  raise notice 'PASS 49.6: het team weghalen is voorbehouden aan een kantoorbeheerder';
+
+  -- 49.7 Verhuizen naar een team waar je ZELF in zit, blijft gewoon werk.
+  -- Meervoudig lidmaatschap is normaal: een vennoot volgt twee teams op.
+  insert into public.employee_teams (employee_id, team_id) values (v_mw, v_t_ander);
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  update public.clients set team_id = v_t_ander where id = v_eigen;
+  get diagnostics v_n = row_count;
+  set local role postgres;
+  if v_n <> 1 then
+    raise exception 'FAIL 49.7: verhuizen naar een eigen team raakte % rijen', v_n;
+  end if;
+  raise notice 'PASS 49.7: verhuizen tussen je eigen teams blijft dagelijks werk';
+
+  -- 49.9 Maar niet naar een team waar je zelf NIET in zit. Dat volgt uit de
+  -- policy zelf en niet uit een aparte controle: het gewijzigde dossier zou
+  -- buiten je eigen bereik vallen, en dat weigert RLS. Het staat hier omdat
+  -- het dragend is en nergens opgeschreven stond -- wie ooit de policy
+  -- versoepelt, hoort hierop te stuiten.
+  delete from public.employee_teams where employee_id = v_mw and team_id = v_t_mijn;
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  set local role authenticated;
+  v_ok := false;
+  begin
+    update public.clients set team_id = v_t_mijn where id = v_eigen;
+    get diagnostics v_n = row_count;
+    if v_n = 0 then v_ok := true; end if;
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  set local role postgres;
+  if not v_ok then
+    raise exception 'FAIL 49.9: een medewerker kon een dossier naar een team duwen waar hij zelf niet in zit';
+  end if;
+  raise notice 'PASS 49.9: je kunt een dossier niet naar een team duwen waar je zelf niet in zit';
+
+  -- 49.8 En een kantoorbeheerder mag het team wél weghalen.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  update public.clients set team_id = null where id = v_eigen;
+  select count(*) into v_n from public.clients where id = v_eigen and team_id is null;
+  if v_n <> 1 then
+    raise exception 'FAIL 49.8: de kantoorbeheerder kon het team niet weghalen';
+  end if;
+  raise notice 'PASS 49.8: een kantoorbeheerder mag het team wel weghalen';
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

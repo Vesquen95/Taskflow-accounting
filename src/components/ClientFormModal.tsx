@@ -4,7 +4,7 @@ import type { BtwFrequentie, BtwRegime, Client, Employee, ObligationType, Klants
 import { reportError } from '../lib/errorMessage'
 import { ObligationPicker } from './ObligationPicker'
 import { useTeams } from '../hooks/useTeams'
-import { collegasVoorDossier, teamLabel } from '../lib/teams'
+import { collegasVoorDossier, teamLabel, teamsVan } from '../lib/teams'
 import { legeSelecties, type ObligationSelection } from '../lib/clientObligations'
 import { omschrijfOpenstaandeTaken } from '../lib/klantArchief'
 
@@ -61,6 +61,7 @@ export function ClientFormModal({
   obligationTypes,
   bestaandeVerplichtingen = [],
   openstaandeTaken,
+  huidigeMedewerker,
   onClose,
   onSubmit,
 }: {
@@ -68,6 +69,11 @@ export function ClientFormModal({
   employees: Employee[]
   obligationTypes: ObligationType[]
   bestaandeVerplichtingen?: ObligationSelection[]
+  /** Wie dit formulier openheeft. Bepaalt of het teamveld leeggemaakt mag
+   *  worden: een dossier zonder team is voor het hele kantoor zichtbaar, en
+   *  sinds migratie 0045 mag alleen een kantoorbeheerder dat nog. Weggelaten
+   *  = de voorzichtige kant. */
+  huidigeMedewerker?: Employee | null
   /** Hoeveel taken er geannuleerd worden als "Actief" hier uitgevinkt wordt.
    *  Zonder dit getal blijft het vinkje een stille archivering. */
   openstaandeTaken?: number
@@ -79,6 +85,29 @@ export function ClientFormModal({
   )
 
   const { teams, leden } = useTeams()
+
+  // Wat het teamveld mag aanbieden.
+  //
+  // De databank weigert twee dingen sinds 0045, en een keuzelijst die ze toch
+  // toont, is een knop die faalt bij het opslaan:
+  //
+  //  1. Het team van een bestaand dossier weghalen mag alleen een
+  //     kantoorbeheerder -- zonder team ziet het hele kantoor het dossier.
+  //  2. Een dossier verhuizen naar een team waar je zelf niet in zit, lukt
+  //     sowieso niet: het gewijzigde dossier valt dan buiten je eigen bereik
+  //     en RLS weigert de rij. Dat is geen aparte controle maar een gevolg
+  //     van de policy zelf.
+  //
+  // Bij een NIEUW dossier geldt geen van beide: dat mag je zonder team of voor
+  // een ander team aanmaken.
+  const bestaandTeam = client?.team_id ?? null
+  const isBeheerder = huidigeMedewerker?.rol === 'kantoorbeheerder'
+  const magTeamLeegmaken = !bestaandTeam || isBeheerder
+  const eigenTeams = teamsVan(leden, huidigeMedewerker?.id)
+  const kiesbareTeams =
+    !bestaandTeam || isBeheerder
+      ? teams
+      : teams.filter((t) => eigenTeams.includes(t.id) || t.id === bestaandTeam)
 
   // De keuzelijst met collega's volgt het team van het dossier: met zes teams
   // is een lijst van iedereen een lijst waarin je de verkeerde aanklikt. Wie
@@ -325,8 +354,7 @@ export function ClientFormModal({
         <div>
           {/* Het team eerst, de persoon daarna: het team bepaalt wie het
               dossier überhaupt ziet, en het snoeit meteen de keuzelijst
-              eronder. Leeg mag: dan ziet het hele kantoor het dossier, en dat
-              zegt het scherm er ook bij. */}
+              eronder. */}
           <label htmlFor="client-team" className="mb-1 block text-xs font-medium text-slate-500">Team</label>
           <select
             id="client-team"
@@ -334,8 +362,8 @@ export function ClientFormModal({
             onChange={(e) => setValues((v) => ({ ...v, team_id: e.target.value }))}
             className="w-full rounded-md border border-slate-300 px-2 py-1.5"
           >
-            <option value="">— nog geen team —</option>
-            {teams.map((t) => (
+            {magTeamLeegmaken && <option value="">— nog geen team —</option>}
+            {kiesbareTeams.map((t) => (
               <option key={t.id} value={t.id}>
                 {teamLabel(t)}
               </option>
@@ -345,6 +373,13 @@ export function ClientFormModal({
             <p className="mt-1 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
               Zonder team is dit dossier zichtbaar voor het hele kantoor. Kies een
               team om het af te schermen.
+            </p>
+          )}
+          {bestaandTeam && !magTeamLeegmaken && (
+            <p className="mt-1 text-[11px] text-slate-500">
+              Een dossier zonder team is zichtbaar voor het hele kantoor; het team
+              weghalen kan daarom alleen een kantoorbeheerder. Verhuizen naar een
+              team waar je zelf in zit, kan wel.
             </p>
           )}
         </div>

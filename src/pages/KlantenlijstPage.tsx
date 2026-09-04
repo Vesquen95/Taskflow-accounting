@@ -337,7 +337,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
       )}
 
       {showCreate && (
-        <ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} onClose={() => setShowCreate(false)} onSubmit={handleCreate} />
+        <ClientFormModal client={null} employees={employees} obligationTypes={obligationTypes} huidigeMedewerker={employee} onClose={() => setShowCreate(false)} onSubmit={handleCreate} />
       )}
     </div>
   )

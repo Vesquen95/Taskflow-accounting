@@ -614,3 +614,100 @@ describe('ClientFormModal — het team van het dossier', () => {
     expect(namen).not.toContain('Jan Janssens')
   })
 })
+
+describe('ClientFormModal — het teamveld biedt niets aan wat de databank weigert', () => {
+  // Sinds 0045 weigert de databank twee dingen. Een keuzelijst die ze toch
+  // toont, is een knop die pas bij het opslaan faalt — en dan heeft de
+  // gebruiker het formulier al ingevuld.
+  const inAal = [{ employee_id: 'e1', team_id: 't-aal' }]
+
+  function toon(props: Partial<Parameters<typeof ClientFormModal>[0]> = {}) {
+    render(
+      <ClientFormModal
+        client={null}
+        employees={employees}
+        obligationTypes={obligationTypes}
+        onClose={onClose}
+        onSubmit={onSubmit}
+        {...props}
+      />
+    )
+    return screen.getByLabelText('Team') as HTMLSelectElement
+  }
+
+  function keuzes(select: HTMLSelectElement): string[] {
+    return [...select.options].map((o) => o.textContent ?? '')
+  }
+
+  it('laat een nieuw dossier zonder team aanmaken', async () => {
+    // Bij een nieuw dossier geldt de beperking niet: dat mag je zonder team
+    // aanbrengen, met de waarschuwing erbij.
+    const select = toon({ huidigeMedewerker: employee({ rol: 'medewerker' }) })
+    await screen.findByText(/zichtbaar voor het hele kantoor/i)
+    expect(keuzes(select)).toContain('— nog geen team —')
+  })
+
+  it('biedt een medewerker niet aan om het team van een bestaand dossier weg te halen', async () => {
+    const select = toon({
+      client: client({ team_id: 't-aal' }),
+      huidigeMedewerker: employee({ id: 'e1', rol: 'medewerker' }),
+    })
+    await screen.findByText(/alleen een kantoorbeheerder/i)
+    expect(keuzes(select)).not.toContain('— nog geen team —')
+  })
+
+  it('laat een kantoorbeheerder het team wel weghalen', async () => {
+    const select = toon({
+      client: client({ team_id: 't-aal' }),
+      huidigeMedewerker: employee({ id: 'e1', rol: 'kantoorbeheerder' }),
+    })
+    await screen.findByLabelText('Team')
+    expect(keuzes(select)).toContain('— nog geen team —')
+    expect(screen.queryByText(/alleen een kantoorbeheerder/i)).not.toBeInTheDocument()
+  })
+
+  it('toont een medewerker alleen de teams waar hij zelf in zit, plus het huidige', async () => {
+    // Verhuizen naar een team waar je zelf niet in zit, weigert RLS: het
+    // gewijzigde dossier zou buiten je eigen bereik vallen. ANT staat er dus
+    // niet bij; ZAV1 wel, want dáár staat het dossier nu — de huidige waarde
+    // mag nooit uit haar eigen keuzelijst verdwijnen.
+    const derde: Team = { id: 't-ant', firm_id: 'f1', code: 'ANT', naam: 'Antwerpen', vestiging: 'Antwerpen', actief: true, created_at: '2026-01-01T00:00:00Z' }
+    const mock = createSupabaseMock({
+      teams: () => ({ data: [...teams, derde], error: null }),
+      employee_teams: () => ({ data: inAal, error: null }),
+    })
+    ;(supabase.from as Mock).mockImplementation(mock.from)
+
+    const select = toon({
+      client: client({ team_id: 't-zav1' }),
+      huidigeMedewerker: employee({ id: 'e1', rol: 'medewerker' }),
+    })
+    await screen.findByText(/alleen een kantoorbeheerder/i)
+    expect(keuzes(select)).toEqual(['AAL — Aalst', 'ZAV1 — Zaventem 1'])
+  })
+
+  it('toont een kantoorbeheerder ook de teams waar hij zelf niet in zit', async () => {
+    const derde: Team = { id: 't-ant', firm_id: 'f1', code: 'ANT', naam: 'Antwerpen', vestiging: 'Antwerpen', actief: true, created_at: '2026-01-01T00:00:00Z' }
+    const mock = createSupabaseMock({
+      teams: () => ({ data: [...teams, derde], error: null }),
+      employee_teams: () => ({ data: inAal, error: null }),
+    })
+    ;(supabase.from as Mock).mockImplementation(mock.from)
+
+    const select = toon({
+      client: client({ team_id: 't-zav1' }),
+      huidigeMedewerker: employee({ id: 'e1', rol: 'kantoorbeheerder' }),
+    })
+    await screen.findByLabelText('Team')
+    expect(keuzes(select)).toContain('ANT — Antwerpen')
+  })
+
+  it('toont een kantoorbeheerder alle teams', async () => {
+    const select = toon({
+      client: client({ team_id: 't-aal' }),
+      huidigeMedewerker: employee({ id: 'e1', rol: 'kantoorbeheerder' }),
+    })
+    await screen.findByLabelText('Team')
+    expect(keuzes(select)).toEqual(['— nog geen team —', 'AAL — Aalst', 'ZAV1 — Zaventem 1'])
+  })
+})
