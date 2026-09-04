@@ -71,9 +71,31 @@ foutmelding over de proxy maar een lege pagina met de tekst van de relay erin,
 en de test faalt op "wacht op E-mailadres" — wat eruitziet alsof het inlogveld
 weg is.
 
-## Wat het testaccount niet kan
+## De testaccounts
 
-Het testaccount is een medewerker zonder goedkeuringsrecht. Drie schermen
-liggen daardoor buiten bereik van deze tests: Workload, Wettelijke kalender en
-Medewerkers (kantoorbeheerder), en Goedkeuren (goedkeuringsrecht). Wie die wil
-dekken, heeft een tweede testaccount nodig met die rechten.
+Vier schermen lagen buiten bereik zolang er maar één testaccount was: Workload,
+Wettelijke kalender en Medewerkers vragen de rol kantoorbeheerder, Goedkeuren
+vraagt goedkeuringsrecht. En de teammuur (migratie 0039) valt alleen van
+BUITEN te beproeven — met een account dat er niet bij hoort.
+
+Daarom zijn er vijf. Ze staan in `e2e/helpers.ts` als `ACCOUNTS` en delen
+allemaal hetzelfde `TASKFLOW_TEST_PASSWORD`: bewust, zodat er geen tweede
+geheim is om kwijt te raken.
+
+| account | rol | niveau | team | waarvoor |
+| --- | --- | --- | --- | --- |
+| `test@pato.be` | medewerker | junior | AAL | het gewone werk; heeft taken op zijn naam |
+| `e2e-beheer@pato.be` | kantoorbeheerder | partner | ZAV1 | de drie beheerschermen |
+| `e2e-manager@pato.be` | medewerker | manager | ZAV1 | goedkeuren zonder beheerrechten |
+| `e2e-ant@pato.be` | medewerker | senior | ANT | de teammuur, van buitenaf |
+| `e2e-geenteam@pato.be` | medewerker | junior | — | wat iemand zonder team ziet |
+
+De laatste twee hebben met opzet **geen enkele taak** op hun naam. De muur kent
+een uitzondering voor dossiers waar een taak van jou op staat; zonder taken meet
+je de teamregel zuiver.
+
+`e2e-manager` en `e2e-beheer` bewijzen samen dat de twee assen los staan:
+goedkeuren hangt aan de graad (migratie 0042), beheren aan de rol.
+
+Deze accounts bestaan alleen op de testomgeving en horen niet in een echte
+kantoorinstallatie. Wie Taskflow ergens anders opzet: laat ze weg.
