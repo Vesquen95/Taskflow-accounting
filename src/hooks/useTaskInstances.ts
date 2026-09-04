@@ -47,6 +47,13 @@ export interface TaskInstanceFilters {
    *  dezelfde afbakening als de lijst, maar zonder `dueVanaf`. Zo kan het
    *  scherm zeggen hoeveel achterstand het verbergt. */
   telAchterstandVoor?: string
+  /** Beperk tot deze statussen. Leeg of weggelaten = alle lopende statussen.
+   *
+   *  De afbakening op `NOT_FINAL` blijft er onverkort naast staan: dit filter
+   *  kan enkel versmallen, nooit verbreden. Een scherm dat hier
+   *  'ingediend_afgerond' in zou zetten, krijgt niets -- afgesloten werk hoort
+   *  in de historiek van het dossier, niet in een werklijst. */
+  statussen?: TaskStatus[]
   /** Nog niet bevragen. Een scherm dat zijn filters pas kent na een eerste
    *  ronde (de werkstromen halen hun verplichtingstypes uit de catalogus) zou
    *  anders eerst een query afvuren die het meteen weer overdoet. */
@@ -95,10 +102,18 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
         opties: { count: 'exact'; head?: boolean },
         metOndergrens: boolean
       ) => {
+        // De doorsnede en niet de opgegeven lijst: zo kan een scherm zich
+        // versmallen tot één status zonder dat het per ongeluk afgesloten
+        // taken uit de historiek kan opvissen.
+        const statussen =
+          filters.statussen && filters.statussen.length > 0
+            ? NOT_FINAL.filter((s) => filters.statussen!.includes(s))
+            : NOT_FINAL
+
         let query = supabase
           .from('task_instances')
           .select(kolommen, opties)
-          .in('status', NOT_FINAL)
+          .in('status', statussen)
 
         if (filters.toegewezenAan === TEAMBAK) {
           query = query.is('toegewezen_medewerker_id', null)

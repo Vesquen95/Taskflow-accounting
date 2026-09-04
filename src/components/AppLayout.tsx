@@ -8,7 +8,18 @@ interface NavItem {
   view: string
   param?: string
   label: string
-  adminOnly?: boolean
+  /** Wat je moet hebben om dit item te zien. Twee verschillende assen: het
+   *  beheer van de app hangt aan de rol, het goedkeuren van aangiftes aan de
+   *  graad (migratie 0042). Een partner die geen kantoorbeheerder is, hoort
+   *  wél het goedkeuringsscherm te zien en niet de medewerkerslijst. */
+  vereist?: 'kantoorbeheerder' | 'goedkeuringsrecht'
+}
+
+/** Ziet deze medewerker dit menu-item? */
+function magZien(item: NavItem, employee: Employee): boolean {
+  if (item.vereist === 'kantoorbeheerder') return employee.rol === 'kantoorbeheerder'
+  if (item.vereist === 'goedkeuringsrecht') return employee.mag_goedkeuren
+  return true
 }
 
 interface NavGroep {
@@ -35,20 +46,27 @@ function navGroepen(kleinScherm: boolean): NavGroep[] {
   {
     id: 'werk',
     titel: 'Werk',
-    items: INGANGEN.map((ingang) => ({
-      view: 'werk',
-      param: ingang.pad,
-      label: ingang.label,
-    })),
+    items: [
+      ...INGANGEN.map((ingang) => ({
+        view: 'werk',
+        param: ingang.pad,
+        label: ingang.label,
+      })),
+      // Onderaan de werkstromen en niet erbovenaan: goedkeuren is wat je doet
+      // nadat het werk gedaan is. Voor wie het recht niet heeft, bestaat dit
+      // item niet -- een menu-item dat je aanklikt om te horen dat het niet
+      // voor jou is, is erger dan geen menu-item.
+      { view: 'goedkeuring', label: 'Goedkeuren', vereist: 'goedkeuringsrecht' as const },
+    ],
   },
   {
     id: 'beheer',
     titel: 'Beheer',
     items: [
       { view: 'klanten', label: 'Klanten' },
-      { view: 'workload', label: 'Workload', adminOnly: true },
-      { view: 'wettelijke-kalender', label: 'Wettelijke kalender', adminOnly: true },
-      { view: 'medewerkers', label: 'Medewerkers', adminOnly: true },
+      { view: 'workload', label: 'Workload', vereist: 'kantoorbeheerder' },
+      { view: 'wettelijke-kalender', label: 'Wettelijke kalender', vereist: 'kantoorbeheerder' },
+      { view: 'medewerkers', label: 'Medewerkers', vereist: 'kantoorbeheerder' },
     ],
   },
   ]
@@ -166,9 +184,7 @@ export function AppLayout({
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
           {groepen.map((groep) => {
-            const items = groep.items.filter(
-              (item) => !item.adminOnly || employee.rol === 'kantoorbeheerder'
-            )
+            const items = groep.items.filter((item) => magZien(item, employee))
             if (items.length === 0) return null
             return (
               <div key={groep.id} className="space-y-0.5">

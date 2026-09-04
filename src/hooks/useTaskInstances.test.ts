@@ -72,6 +72,62 @@ describe('useTaskInstances — filter wiring', () => {
     expect(inCall?.args).toEqual(['status', ['open', 'in_uitvoering', 'wacht_op_klant', 'wacht_op_goedkeuring']])
   })
 
+  it('versmalt tot de gevraagde statussen — het goedkeuringsscherm ziet enkel wat op goedkeuring wacht', async () => {
+    let capturedState: ChainState | undefined
+    install({
+      task_instances: (state) => {
+        capturedState = state
+        return { data: [], error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances({ statussen: ['wacht_op_goedkeuring'] }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const inCall = capturedState?.calls.find((c) => c.method === 'in' && c.args[0] === 'status')
+    expect(inCall?.args).toEqual(['status', ['wacht_op_goedkeuring']])
+  })
+
+  it('kan met een statusfilter geen afgesloten werk uit de historiek opvissen', async () => {
+    // De afbakening op de lopende statussen is een grens, geen standaardwaarde.
+    // Een scherm dat hier 'ingediend_afgerond' in zet, hoort er niets extra
+    // door te krijgen: afgerond werk staat in het dossier, niet in een werklijst.
+    let capturedState: ChainState | undefined
+    install({
+      task_instances: (state) => {
+        capturedState = state
+        return { data: [], error: null }
+      },
+    })
+
+    const { result } = renderHook(() =>
+      useTaskInstances({ statussen: ['ingediend_afgerond', 'geannuleerd', 'open'] })
+    )
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const inCall = capturedState?.calls.find((c) => c.method === 'in' && c.args[0] === 'status')
+    expect(inCall?.args).toEqual(['status', ['open']])
+  })
+
+  it('een lege statuslijst betekent alle lopende statussen, niet niets', async () => {
+    let capturedState: ChainState | undefined
+    install({
+      task_instances: (state) => {
+        capturedState = state
+        return { data: [], error: null }
+      },
+    })
+
+    const { result } = renderHook(() => useTaskInstances({ statussen: [] }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    const inCall = capturedState?.calls.find((c) => c.method === 'in' && c.args[0] === 'status')
+    expect(inCall?.args).toEqual([
+      'status',
+      ['open', 'in_uitvoering', 'wacht_op_klant', 'wacht_op_goedkeuring'],
+    ])
+  })
+
   it('beperkt tot de verplichtingstypes van één werkstroom', async () => {
     let capturedState: ChainState | undefined
     install({

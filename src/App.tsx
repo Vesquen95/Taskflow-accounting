@@ -14,6 +14,7 @@ import { useKleinScherm } from './hooks/useKleinScherm'
 import { KlantenlijstPage } from './pages/KlantenlijstPage'
 import { KlantDossierPage } from './pages/KlantDossierPage'
 import { WorkloadDashboardPage } from './pages/WorkloadDashboardPage'
+import { GoedkeuringPage } from './pages/GoedkeuringPage'
 import { WettelijkeKalenderPage } from './pages/WettelijkeKalenderPage'
 import { MedewerkersPage } from './pages/MedewerkersPage'
 
@@ -74,6 +75,12 @@ function AuthenticatedApp({ onDeactivated }: { onDeactivated: () => void }) {
     }
     case 'klanten':
       page = route.param ? <KlantDossierPage clientId={route.param} navigate={navigate} /> : <KlantenlijstPage navigate={navigate} />
+      break
+    case 'goedkeuring':
+      // Zonder goedkeuringsrecht is dit scherm leeg per definitie: de databank
+      // laat die stap niet toe (migratie 0011). Terug naar het hoofdscherm in
+      // plaats van een lijst die je niets kunt aandoen.
+      page = employee.mag_goedkeuren ? <GoedkeuringPage /> : naarHoofdscherm()
       break
     case 'workload':
       page = employee.rol === 'kantoorbeheerder' ? <WorkloadDashboardPage /> : naarHoofdscherm()

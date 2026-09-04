@@ -48,3 +48,32 @@ De uitgaande proxy van de Claude-omgeving verbreekt de TLS 1.3-handshake van de
 browser, terwijl `curl` in diezelfde omgeving wel werkt. Zonder die vlag faalt
 elke test op `net::ERR_CONNECTION_RESET`, wat er ten onrechte uitziet alsof de
 site stuk is. Buiten die omgeving is de vlag onschadelijk.
+
+## Een nieuw scherm bekijken vóór het gedeployd is
+
+`TASKFLOW_URL` wijst standaard naar de live site op GitHub Pages, dus een
+scherm dat je net gebouwd hebt, staat daar nog niet. Tegen een lokale build
+draaien kan wel — met één addertje:
+
+```bash
+npm run build && npx vite preview --port 4173 --host 127.0.0.1
+```
+
+en dan een config met de baseURL erop én een omweg om de proxy heen:
+
+```ts
+proxy: { server: process.env.HTTPS_PROXY!, bypass: '127.0.0.1,localhost' }
+```
+
+Zonder die `bypass` stuurt Chromium ook het verkeer naar 127.0.0.1 door de
+agent-proxy, die alleen CONNECT-tunnels aanvaardt. Je krijgt dan geen
+foutmelding over de proxy maar een lege pagina met de tekst van de relay erin,
+en de test faalt op "wacht op E-mailadres" — wat eruitziet alsof het inlogveld
+weg is.
+
+## Wat het testaccount niet kan
+
+Het testaccount is een medewerker zonder goedkeuringsrecht. Drie schermen
+liggen daardoor buiten bereik van deze tests: Workload, Wettelijke kalender en
+Medewerkers (kantoorbeheerder), en Goedkeuren (goedkeuringsrecht). Wie die wil
+dekken, heeft een tweede testaccount nodig met die rechten.

@@ -83,6 +83,45 @@ describe('AppLayout — de navigatie op een klein scherm', () => {
   })
 })
 
+describe('AppLayout — wie welk menu-item ziet', () => {
+  function toonAls(overrides: Partial<Employee>) {
+    render(
+      <AppLayout employee={{ ...employee, ...overrides }} activeView="kalender" navigate={vi.fn()}>
+        <p>inhoud</p>
+      </AppLayout>
+    )
+    return screen.getByRole('complementary')
+  }
+
+  it('toont "Goedkeuren" aan wie goedkeuringsrecht heeft', () => {
+    expect(toonAls({ mag_goedkeuren: true })).toHaveTextContent('Goedkeuren')
+  })
+
+  it('toont het niet aan wie het recht niet heeft', () => {
+    // Een menu-item dat je aanklikt om te horen dat het niet voor jou is, is
+    // erger dan geen menu-item: de databank weigert die stap sowieso
+    // (migratie 0011).
+    expect(toonAls({ mag_goedkeuren: false })).not.toHaveTextContent('Goedkeuren')
+  })
+
+  it('hangt goedkeuren aan de graad en niet aan de rol', () => {
+    // Twee assen: het beheer van de app hangt aan `rol`, het goedkeuren van
+    // aangiftes aan het niveau (migratie 0042). Een partner die geen
+    // kantoorbeheerder is, hoort wél te kunnen goedkeuren en niet in de
+    // medewerkerslijst te kunnen.
+    const zijbalk = toonAls({ rol: 'medewerker', niveau: 'partner', mag_goedkeuren: true })
+    expect(zijbalk).toHaveTextContent('Goedkeuren')
+    expect(zijbalk).not.toHaveTextContent('Medewerkers')
+  })
+
+  it('houdt de beheerschermen bij de kantoorbeheerder', () => {
+    const zijbalk = toonAls({ rol: 'medewerker', mag_goedkeuren: true })
+    for (const label of ['Workload', 'Wettelijke kalender', 'Medewerkers']) {
+      expect(zijbalk).not.toHaveTextContent(label)
+    }
+  })
+})
+
 describe('AppLayout — het hoofdscherm heet op een telefoon anders', () => {
   let herstel: (() => void) | null = null
   afterEach(() => {
