@@ -6263,4 +6263,107 @@ begin
   raise notice 'PASS 49.8: een kantoorbeheerder mag het team wel weghalen';
 end $$;
 
+
+-- ============================================================
+-- Sectie 50 (0046): de jaarlijkse UBO-bevestiging.
+--
+-- De wet geeft hier geen kalenderdatum -- ze zegt alleen "elk jaar", en een
+-- wijziging binnen de maand. Het anker is daarom het boekjaar, op dezelfde
+-- grens als de algemene vergadering. Wat deze sectie bewaakt is dat er ELK
+-- jaar precies één valt, op die grens, en dat het anker met het boekjaar
+-- meeschuift in plaats van voor iedereen op dezelfde dag te vallen.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_dec uuid; v_jun uuid; v_ot uuid;
+  v_n int; v_due date; v_jaar int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's50@test.local', now());
+  insert into public.firms (naam) values ('S50 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S50 Beheerder', 's50@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  -- Twee dossiers met een ander boekjaar: het anker moet meeschuiven.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S50 Boekjaar december', 12, 31, 'geen', true) returning id into v_dec;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S50 Boekjaar juni', 6, 30, 'geen', true) returning id into v_jun;
+
+  select id into v_ot from public.obligation_types where code = 'ubo_bevestiging';
+  if v_ot is null then
+    raise exception 'FAIL 50.0: het verplichtingstype ubo_bevestiging bestaat niet';
+  end if;
+
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_dec, v_ot, true, date '2000-01-01'), (v_jun, v_ot, true, date '2000-01-01');
+
+  perform public.generate_task_instances(24, 12);
+
+  -- 50.1 Het boekjaar bepaalt de datum, niet de kalender. Let op het label:
+  -- dat is het jaar van het BOEKJAAREINDE, terwijl de deadline een half jaar
+  -- later valt. Voor een boekjaar dat op 31 december sluit, ligt de
+  -- bevestiging dus in het jaar erna.
+  v_jaar := extract(year from current_date)::int - 1;
+
+  select due_date_wettelijk into v_due from public.task_instances
+   where client_id = v_dec and obligation_type_id = v_ot and periode_label = v_jaar::text;
+  if v_due is null then
+    raise exception 'FAIL 50.1: geen UBO-taak voor boekjaar % van het december-dossier', v_jaar;
+  end if;
+  if v_due <> make_date(v_jaar + 1, 6, 30) then
+    raise exception 'FAIL 50.1: december-boekjaar % gaf % in plaats van 30 juni %', v_jaar, v_due, v_jaar + 1;
+  end if;
+
+  -- 30 juni + 6 maanden is 30 december, niet 31: Postgres houdt de dag van de
+  -- maand aan. Dat is precies wat de AV-tak ook doet, en die twee horen
+  -- gelijk te lopen -- ze meten dezelfde wettelijke termijn.
+  select due_date_wettelijk into v_due from public.task_instances
+   where client_id = v_jun and obligation_type_id = v_ot and periode_label = v_jaar::text;
+  if v_due <> (make_date(v_jaar, 6, 30) + interval '6 months')::date then
+    raise exception 'FAIL 50.1: juni-boekjaar % gaf % in plaats van 30 december %', v_jaar, v_due, v_jaar;
+  end if;
+  raise notice 'PASS 50.1: de bevestiging valt zes maanden na het boekjaareinde en schuift dus mee met het boekjaar';
+
+  -- 50.2 Precies één per jaar. Een verplichting die je "elk jaar" moet doen,
+  -- mag niet twee keer in hetzelfde jaar opduiken en al helemaal niet
+  -- overgeslagen worden.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_dec and obligation_type_id = v_ot;
+  if v_n < 2 then
+    raise exception 'FAIL 50.2: maar % UBO-taken over het hele venster', v_n;
+  end if;
+  select count(*) into v_n from (
+    select periode_label, count(*) as aantal from public.task_instances
+     where client_id = v_dec and obligation_type_id = v_ot group by periode_label having count(*) > 1
+  ) dubbel;
+  if v_n <> 0 then
+    raise exception 'FAIL 50.2: % jaren met meer dan één UBO-taak', v_n;
+  end if;
+  raise notice 'PASS 50.2: elk jaar precies één bevestiging, geen dubbele en geen gaten';
+
+  -- 50.3 Een tweede generatieronde mag niets bijmaken. Zonder deze controle
+  -- zou de maandelijkse onderhoudsronde de lijst stilaan verdubbelen.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_dec and obligation_type_id = v_ot;
+  perform public.generate_task_instances(24, 12);
+  if (select count(*) from public.task_instances
+       where client_id = v_dec and obligation_type_id = v_ot) <> v_n then
+    raise exception 'FAIL 50.3: een tweede ronde maakte extra UBO-taken aan';
+  end if;
+  raise notice 'PASS 50.3: een tweede generatieronde maakt niets bij';
+
+  -- 50.4 Ze hoort in de werkstroom van de afsluiting: daar wordt de
+  -- aandeelhoudersstructuur toch al nagekeken.
+  if (select werkstroom from public.obligation_types where id = v_ot) <> 'afsluiting' then
+    raise exception 'FAIL 50.4: de UBO-bevestiging staat niet in de werkstroom afsluiting';
+  end if;
+  if (select categorie from public.obligation_types where id = v_ot) <> 'wettelijk' then
+    raise exception 'FAIL 50.4: de UBO-bevestiging staat niet als wettelijke verplichting';
+  end if;
+  raise notice 'PASS 50.4: wettelijk, en in de werkstroom van de afsluiting';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Employee, ObligationType, Klantsoort } from '../types'
-import { kanPatrimoniumtaksHebben } from '../lib/rechtsvorm'
+import { heeftUboVerplichting, kanPatrimoniumtaksHebben } from '../lib/rechtsvorm'
 import type { ObligationSelection } from '../lib/clientObligations'
 import {
   AV_GEEN_STATUTAIRE_DATUM,
@@ -176,6 +176,17 @@ export function ObligationPicker({
           if (type.code === 'patrimoniumtaks' && !sel.gekozen && !kanPatrimoniumtaksHebben(rechtsvorm)) {
             return null
           }
+          // Het UBO-register geldt voor vennootschappen, (i)vzw's en
+          // stichtingen. Een eenmanszaak valt erbuiten: er is geen entiteit om
+          // achter te kijken. Bij een onbekende vorm blijft ze staan, om
+          // dezelfde reden als hierboven.
+          if (
+            type.code === 'ubo_bevestiging' &&
+            !sel.gekozen &&
+            !heeftUboVerplichting(klantsoort, rechtsvorm)
+          ) {
+            return null
+          }
           const afgeleid = AFGELEID_UIT_BTW_REGIME.includes(type.code)
           const actiefViaBtw =
             (type.code === 'btw_aangifte' && btwRegime === 'periodieke_aangever') ||
@@ -314,6 +325,10 @@ const ALLEEN_RECHTSPERSOON = [
   'aangifte_rpb',
   'va_venb',
   'patrimoniumtaks',
+  // ubo_bevestiging staat hier bewust NIET bij: heeftUboVerplichting() zegt
+  // al nee voor een natuurlijke persoon, en die regel moet ook de eenmanszaak
+  // afhandelen. Ze in twee lijsten zetten levert twee plaatsen op waar ze
+  // uit elkaar kunnen lopen.
 ]
 
 /** Alleen bij een natuurlijke persoon. */

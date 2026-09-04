@@ -1,5 +1,5 @@
 import type { BtwFrequentie, BtwRegime } from '../types'
-import { kanPatrimoniumtaksHebben } from './rechtsvorm'
+import { heeftUboVerplichting, kanPatrimoniumtaksHebben } from './rechtsvorm'
 
 /**
  * Klanten inlezen uit een Excel-bestand — de pure kant.
@@ -68,6 +68,7 @@ export type VerplichtingSleutel =
   | 'aangifte_rpb'
   | 'va_venb'
   | 'patrimoniumtaks'
+  | 'ubo_bevestiging'
   | 'btw_bijzondere_aangifte'
   | 'aangifte_pb'
   | 'rapportering'
@@ -207,6 +208,16 @@ const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
     uitleg:
       'Ja of Nee. Alleen voor vzw\'s, ivzw\'s en private stichtingen. Elk jaar tegen 31 maart nakijken of de taks verschuldigd is en ze indienen. Onder 50.000 euro vermogen is er niets verschuldigd en geen aangifte, maar die drempel toets je elk jaar opnieuw — vandaar een taak, ook in een jaar dat je niets indient.',
     synoniemen: ['patrimonium', 'patrimoniumtaks', 'vermogenstaks'],
+    breedte: 16,
+  },
+  {
+    sleutel: 'ubo_bevestiging',
+    kop: 'UBO-bevestiging',
+    vereist: false,
+    verplichting: true,
+    uitleg:
+      'Ja of Nee. De jaarlijkse bevestiging in het UBO-register, ook wanneer er niets veranderd is. Geldt voor vennootschappen, (i)vzw\'s en stichtingen; niet voor een eenmanszaak. De taak valt zes maanden na het boekjaareinde, samen met de afsluiting — de wet zelf geeft geen datum, alleen "elk jaar".',
+    synoniemen: ['ubo', 'uboregister', 'ubobevestiging', 'begunstigden'],
     breedte: 16,
   },
   {
@@ -432,6 +443,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     pb_vorm: '',
     va_venb: 'Ja',
     patrimoniumtaks: 'Nee',
+    ubo_bevestiging: 'Ja',
     btw_bijzondere_aangifte: 'Nee',
     rapportering: 'Ja',
     fiche_281_20: 'Ja',
@@ -461,6 +473,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     pb_vorm: '',
     va_venb: 'Nee',
     patrimoniumtaks: 'Ja',
+    ubo_bevestiging: 'Ja',
     btw_bijzondere_aangifte: 'Ja',
     rapportering: '',
     fiche_281_20: 'Nee',
@@ -1130,6 +1143,7 @@ function leesRapporteringTermijn(ruw: string, fouten: string[]): number | null {
 function leesVerplichtingen(
   ruw: Record<KolomSleutel, string>,
   boekjaar: Boekjaareinde | null,
+  klantsoort: 'rechtspersoon' | 'natuurlijk_persoon' | null,
   fouten: string[]
 ): VerplichtingKeuze[] {
   const keuzes: VerplichtingKeuze[] = []
@@ -1161,6 +1175,17 @@ function leesVerplichtingen(
   if (bij('patrimoniumtaks') && !kanPatrimoniumtaksHebben(ruw.rechtsvorm)) {
     fouten.push(
       `Patrimoniumtaks staat op Ja bij rechtsvorm "${ruw.rechtsvorm.trim()}". Die taks geldt voor vzw's, ivzw's en private stichtingen, niet voor vennootschappen.`
+    )
+  }
+  // Het UBO-register geldt voor vennootschappen, (i)vzw's en stichtingen. Een
+  // eenmanszaak valt erbuiten: er is geen entiteit om achter te kijken.
+  // Zonder leesbare klantsoort valt er niets te oordelen; dat is al een eigen
+  // fout, en er twee van maken helpt niemand vooruit.
+  if (bij('ubo_bevestiging') && klantsoort !== null && !heeftUboVerplichting(klantsoort, ruw.rechtsvorm)) {
+    fouten.push(
+      klantsoort === 'natuurlijk_persoon'
+        ? 'UBO-bevestiging staat op Ja bij een natuurlijke persoon. Het UBO-register geldt voor vennootschappen, (i)vzw\'s en stichtingen.'
+        : `UBO-bevestiging staat op Ja bij rechtsvorm "${ruw.rechtsvorm.trim()}". Een eenmanszaak is niet informatieplichtig: er is geen entiteit om achter te kijken.`
     )
   }
   if (bij('aangifte_pb') && (bij('aangifte_venb_pb') || bij('aangifte_rpb'))) {
@@ -1287,7 +1312,7 @@ function leesRij(
   const regime = leesRegime(ruw.btw_regime, fouten)
   const frequentie = leesFrequentie(ruw.btw_aangifte_frequentie, regime, fouten)
   const mandataris = leesJaNee(ruw.mandataris, 'Fiscaal mandaat', fouten)
-  const verplichtingen = leesVerplichtingen(ruw, boekjaar, fouten)
+  const verplichtingen = leesVerplichtingen(ruw, boekjaar, soort, fouten)
 
   const geldig =
     fouten.length === 0 && naam !== null && boekjaar !== null && regime !== null && mandataris !== null && frequentie !== 'fout' && soort !== null

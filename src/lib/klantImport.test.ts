@@ -10,16 +10,54 @@ import {
 
 const KOPPEN = KOLOMMEN.map((k) => k.kop)
 
-/** Een geldige voorbeeldrij, in de kolomvolgorde van het sjabloon: eerst de
- *  velden van de klant, dan een cel per verplichting. */
-const GOEDE_RIJ: unknown[] = [
-  // naam, soort, team, ondernemingsnummer, rechtsvorm, boekjaar, btw, mandaat
-  'Acme BV', 'Rechtspersoon', 'ZAV1', 'BE0123.456.749', 'BV', 12, 31, 'Periodieke aangever', 'Kwartaal', 'Ja',
-  // AV, jaarafsluiting, VenB, RPB, VA, PB, patrimonium, bijzondere btw, rapportering, drie fiches
-  'Ja', 'Ja', 'Ja', 'Nee', 'Ja', 'Nee', 'Nee', 'Nee', 'Nee', '', '', '',
-  // av_datum, jaarafsluiting_deadline, pb_vorm, rapportering_frequentie, rapportering_termijn
-  '15/05', '1 maand voor AV', '', '', '',
-]
+/**
+ * Een geldige voorbeeldrij.
+ *
+ * Op sleutel en niet op positie. Dit stond hier eerst als een platte lijst in
+ * kolomvolgorde, en die brak bij elke nieuwe kolom: alles achter de invoegplek
+ * schoof op, en dan komt "15/05" plots in de fichekolom terecht. Drie keer
+ * gebeurd. Zo gebeurt het niet meer -- en een kolom zonder waarde hier valt
+ * meteen op als lege cel in plaats van als verschoven waarde.
+ */
+const RIJ_PER_KOLOM: Record<string, unknown> = {
+  naam: 'Acme BV',
+  klantsoort: 'Rechtspersoon',
+  team: 'ZAV1',
+  ondernemingsnummer: 'BE0123.456.749',
+  rechtsvorm: 'BV',
+  boekjaar_einde_maand: 12,
+  boekjaar_einde_dag: 31,
+  btw_regime: 'Periodieke aangever',
+  btw_aangifte_frequentie: 'Kwartaal',
+  mandataris: 'Ja',
+  algemene_vergadering: 'Ja',
+  jaarafsluiting: 'Ja',
+  aangifte_venb_pb: 'Ja',
+  aangifte_rpb: 'Nee',
+  va_venb: 'Ja',
+  aangifte_pb: 'Nee',
+  patrimoniumtaks: 'Nee',
+  ubo_bevestiging: 'Nee',
+  btw_bijzondere_aangifte: 'Nee',
+  rapportering: 'Nee',
+  fiche_281_20: '',
+  fiche_281_45: '',
+  fiche_281_50: '',
+  av_datum: '15/05',
+  jaarafsluiting_deadline: '1 maand voor AV',
+  pb_vorm: '',
+  rapportering_frequentie: '',
+  rapportering_termijn: '',
+}
+
+const GOEDE_RIJ: unknown[] = KOLOMMEN.map((k) => {
+  if (!(k.sleutel in RIJ_PER_KOLOM)) {
+    throw new Error(
+      `De voorbeeldrij mist kolom "${k.sleutel}". Vul ze aan in RIJ_PER_KOLOM.`
+    )
+  }
+  return RIJ_PER_KOLOM[k.sleutel]
+})
 
 /** Bouwt een bladmatrix: kopregel + de meegegeven rijen. */
 function blad(...rijen: unknown[][]): unknown[][] {
@@ -716,5 +754,46 @@ describe('leesKlantRijen — patrimoniumtaks en bijzondere btw-aangifte', () => 
     ).rijen[0]
     expect(rij.fouten).toEqual([])
     expect(rij.verplichtingen.map((v) => v.code)).toContain('patrimoniumtaks')
+  })
+})
+
+describe('leesKlantRijen — het UBO-register', () => {
+  it('neemt de bevestiging mee voor een vennootschap', () => {
+    const rij = leesKlantRijen(blad(metVeld('ubo_bevestiging', 'Ja'))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.verplichtingen.map((v) => v.code)).toContain('ubo_bevestiging')
+  })
+
+  it('neemt ze mee voor een vzw', () => {
+    const rij = leesKlantRijen(
+      blad(metVeld('rechtsvorm', 'VZW', metVeld('ubo_bevestiging', 'Ja')))
+    ).rijen[0]
+    expect(rij.verplichtingen.map((v) => v.code)).toContain('ubo_bevestiging')
+  })
+
+  it('weigert ze bij een eenmanszaak, met de reden erbij', () => {
+    // Er is geen entiteit om achter te kijken: de ondernemer ís de
+    // natuurlijke persoon.
+    const rij = leesKlantRijen(
+      blad(metVeld('rechtsvorm', 'Eenmanszaak', metVeld('ubo_bevestiging', 'Ja')))
+    ).rijen[0]
+    expect(rij.fouten.join(' ')).toMatch(/eenmanszaak is niet informatieplichtig/i)
+  })
+
+  it('weigert ze bij een natuurlijke persoon', () => {
+    const rij = leesKlantRijen(
+      blad(metVeld('klantsoort', 'Natuurlijke persoon', metVeld('ubo_bevestiging', 'Ja')))
+    ).rijen[0]
+    expect(rij.fouten.join(' ')).toMatch(/natuurlijke persoon/i)
+  })
+
+  it('laat ze staan bij een rechtsvorm die het sjabloon niet kent', () => {
+    // Zo goed als elke rechtspersoon is informatieplichtig; niet weten is geen
+    // reden om een wettelijke verplichting stil weg te laten.
+    const rij = leesKlantRijen(
+      blad(metVeld('rechtsvorm', 'Buitenlandse entiteit', metVeld('ubo_bevestiging', 'Ja')))
+    ).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.verplichtingen.map((v) => v.code)).toContain('ubo_bevestiging')
   })
 })

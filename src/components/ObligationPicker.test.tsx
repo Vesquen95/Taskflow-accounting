@@ -386,3 +386,79 @@ describe('ObligationPicker — verplichtingen die niet samen kunnen', () => {
     expect(screen.getByRole('checkbox', { name: /^Voorafbetaling/ })).toBeEnabled()
   })
 })
+
+describe('ObligationPicker — het UBO-register', () => {
+  const types: ObligationType[] = [
+    ...obligationTypes,
+    { id: 'ot-ubo', code: 'ubo_bevestiging', naam: 'UBO-bevestiging', categorie: 'wettelijk', deadline_mechanisme: 'boekjaar_relatief', standaard_periodiciteit: 'jaarlijks', werkstroom: 'afsluiting' },
+  ]
+
+  function toon(
+    klantsoort: 'rechtspersoon' | 'natuurlijk_persoon',
+    rechtsvorm?: string,
+    initieel?: ObligationSelection[]
+  ) {
+    bewaard.selections = initieel ?? legeSelecties(types)
+    function Harnas() {
+      const [sel, setSel] = useState<ObligationSelection[]>(bewaard.selections)
+      return (
+        <ObligationPicker
+          obligationTypes={types}
+          employees={employees}
+          selections={sel}
+          btwRegime="geen"
+          klantsoort={klantsoort}
+          rechtsvorm={rechtsvorm}
+          onChange={(next) => {
+            bewaard.selections = next
+            setSel(next)
+          }}
+        />
+      )
+    }
+    render(<Harnas />)
+  }
+
+  it('biedt de bevestiging aan bij een vennootschap', () => {
+    toon('rechtspersoon', 'BV')
+    expect(screen.getByText(/UBO-bevestiging/)).toBeInTheDocument()
+  })
+
+  it('biedt ze ook aan bij een vzw', () => {
+    toon('rechtspersoon', 'VZW')
+    expect(screen.getByText(/UBO-bevestiging/)).toBeInTheDocument()
+  })
+
+  it('laat ze weg bij een eenmanszaak', () => {
+    // Er is geen entiteit om achter te kijken: de ondernemer ís de
+    // natuurlijke persoon. Ze toch aanbieden zou een verplichting suggereren
+    // die niet bestaat.
+    toon('rechtspersoon', 'Eenmanszaak')
+    expect(screen.queryByText(/UBO-bevestiging/)).toBeNull()
+  })
+
+  it('laat ze weg bij een natuurlijke persoon', () => {
+    toon('natuurlijk_persoon', 'BV')
+    expect(screen.queryByText(/UBO-bevestiging/)).toBeNull()
+  })
+
+  it('biedt ze aan bij een rechtsvorm die het scherm niet herkent', () => {
+    // Zo goed als elke rechtspersoon is informatieplichtig; niet weten is geen
+    // reden om een wettelijke verplichting stil weg te laten.
+    toon('rechtspersoon', 'Buitenlandse entiteit')
+    expect(screen.getByText(/UBO-bevestiging/)).toBeInTheDocument()
+  })
+
+  it('houdt ze zichtbaar wanneer ze al aanstaat, ook bij een eenmanszaak', () => {
+    // Anders verdwijnt ze van het scherm terwijl ze opgeslagen blijft: wie de
+    // rechtsvorm wijzigt hoort ze zelf uit te vinken.
+    toon(
+      'rechtspersoon',
+      'Eenmanszaak',
+      legeSelecties(types).map((s) =>
+        s.obligation_type_id === 'ot-ubo' ? { ...s, gekozen: true } : s
+      )
+    )
+    expect(screen.getByText(/UBO-bevestiging/)).toBeInTheDocument()
+  })
+})

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { kanPatrimoniumtaksHebben, rechtsvormSoort } from './rechtsvorm'
+import { heeftUboVerplichting, kanPatrimoniumtaksHebben, rechtsvormSoort } from './rechtsvorm'
 
 describe('rechtsvormSoort', () => {
   it('herkent verenigingen en stichtingen, hoe ze ook geschreven staan', () => {
@@ -40,5 +40,36 @@ describe('kanPatrimoniumtaksHebben', () => {
     expect(kanPatrimoniumtaksHebben('')).toBe(true)
     expect(kanPatrimoniumtaksHebben(null)).toBe(true)
     expect(kanPatrimoniumtaksHebben('GmbH')).toBe(true)
+  })
+})
+
+describe('UBO-register — wie is informatieplichtig', () => {
+  it('geldt voor vennootschappen en verenigingen', () => {
+    for (const vorm of ['BV', 'NV', 'CV', 'VZW', 'Stichting', 'IVZW']) {
+      expect(heeftUboVerplichting('rechtspersoon', vorm)).toBe(true)
+    }
+  })
+
+  it('geldt niet voor een eenmanszaak', () => {
+    // Er is geen entiteit om achter te kijken: de ondernemer ís de
+    // natuurlijke persoon. De vorm staat wél in de vennootschapslijst, want
+    // die dient om "geen vereniging" te kunnen zeggen — hier maakt het
+    // verschil wel uit.
+    expect(heeftUboVerplichting('rechtspersoon', 'eenmanszaak')).toBe(false)
+    expect(heeftUboVerplichting('rechtspersoon', 'Eenmanszaak')).toBe(false)
+  })
+
+  it('geldt nooit voor een natuurlijke persoon', () => {
+    expect(heeftUboVerplichting('natuurlijk_persoon', 'BV')).toBe(false)
+    expect(heeftUboVerplichting('natuurlijk_persoon', null)).toBe(false)
+  })
+
+  it('geldt bij een onbekende of lege rechtsvorm wel', () => {
+    // Zo goed als elke rechtspersoon is informatieplichtig. Een wettelijke
+    // verplichting verbergen omdat een veld leeg is, is erger dan er een
+    // aanbieden die achteraf niet nodig blijkt.
+    expect(heeftUboVerplichting('rechtspersoon', null)).toBe(true)
+    expect(heeftUboVerplichting('rechtspersoon', '')).toBe(true)
+    expect(heeftUboVerplichting('rechtspersoon', 'Comm.V. buitenlands')).toBe(true)
   })
 })
