@@ -173,6 +173,9 @@ export interface TaskInstance {
   title: string | null
   description: string | null
   afgerond_op: string | null
+  /** Sinds wanneer deze taak op de klant wacht; leeg als ze dat niet doet.
+   *  Gezet en gewist door de statusmachine (migratie 0047). */
+  wacht_op_klant_sinds: string | null
   created_at: string
   updated_at: string
 }

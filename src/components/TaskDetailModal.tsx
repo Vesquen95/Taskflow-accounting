@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { StatusBadge } from './StatusBadge'
+import { WachtDuurBadge } from './WachtDuurBadge'
 import { UrgencyBadge } from './UrgencyBadge'
 import { dagenVerschil, formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
@@ -186,6 +187,7 @@ export function TaskDetailModal({
       <div className="space-y-4 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={task.status} />
+          <WachtDuurBadge sinds={task.wacht_op_klant_sinds} />
           <UrgencyBadge dueDate={task.due_date} status={task.status} categorie={task.obligation_type?.categorie} />
           {task.review_vereist && (
             <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">

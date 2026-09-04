@@ -52,6 +52,7 @@ function task(overrides: Partial<TaskInstanceWithRelations> = {}): TaskInstanceW
     title: null,
     description: null,
     afgerond_op: null,
+    wacht_op_klant_sinds: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     client: { id: 'c1', naam: 'Pattyn Diepvries', vertrouwelijk: false, actief: true, team_id: null },

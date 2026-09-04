@@ -1,5 +1,6 @@
 import type { Employee, TaskInstanceWithRelations, TaskStatus } from '../types'
 import { TaskStatusControl } from './TaskStatusControl'
+import { WachtDuurBadge } from './WachtDuurBadge'
 import { UrgencyBadge } from './UrgencyBadge'
 import { formatDate } from '../lib/urgency'
 import { taakNaam } from '../lib/taakLabel'
@@ -80,12 +81,15 @@ export function TaakKaart({ task, onOpen, currentEmployee, onStatusChange, onSta
             <span className="font-medium text-amber-700"> · Nog niemand</span>
           )}
         </span>
-        <TaskStatusControl
-          task={task}
-          currentEmployee={currentEmployee}
-          onStatusChange={onStatusChange}
-          onError={onStatusFout}
-        />
+        <span className="flex items-center gap-1.5">
+          <WachtDuurBadge sinds={task.wacht_op_klant_sinds} />
+          <TaskStatusControl
+            task={task}
+            currentEmployee={currentEmployee}
+            onStatusChange={onStatusChange}
+            onError={onStatusFout}
+          />
+        </span>
       </div>
     </li>
   )

@@ -6366,4 +6366,94 @@ begin
   raise notice 'PASS 50.4: wettelijk, en in de werkstroom van de afsluiting';
 end $$;
 
+
+-- ============================================================
+-- Sectie 51 (0047): sinds wanneer wacht dit dossier op de klant?
+--
+-- De kolom moet drie dingen doen en één ding niet doen. Ze moet gezet worden
+-- bij het binnengaan, gewist bij het verlaten, opnieuw gezet bij een tweede
+-- wachtbeurt -- en ze mag NIET door een medewerker zelf te zetten zijn. Dat
+-- laatste is het punt: kan iemand de wachttijd terugzetten, dan ziet een
+-- dossier dat al maanden ligt er jong uit, en dat is precies de kant waarop
+-- het niet mag liegen.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_mw uuid; v_mw_uid uuid := gen_random_uuid();
+  v_klant uuid; v_taak uuid;
+  v_sinds timestamptz; v_eerste timestamptz; v_n int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_mw_uid, 's51@test.local', now());
+  insert into public.firms (naam) values ('S51 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_mw_uid, 'S51 Medewerker', 's51@test.local', 'medewerker', true, true)
+    returning id into v_mw;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S51 Klant', 12, 31, 'geen', true) returning id into v_klant;
+
+  insert into public.task_instances (client_id, title, due_date, due_date_wettelijk,
+                                     status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant, 'S51 Taak', current_date + 10, current_date + 10, 'open', v_mw, 'handmatig_adhoc', false)
+    returning id into v_taak;
+
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+
+  -- 51.1 Een taak die nog niet wacht, draagt geen stempel.
+  select wacht_op_klant_sinds into v_sinds from public.task_instances where id = v_taak;
+  if v_sinds is not null then
+    raise exception 'FAIL 51.1: een open taak droeg al een wachtstempel';
+  end if;
+
+  -- 51.2 Binnengaan zet de stempel.
+  update public.task_instances set status = 'wacht_op_klant' where id = v_taak;
+  select wacht_op_klant_sinds into v_eerste from public.task_instances where id = v_taak;
+  if v_eerste is null then
+    raise exception 'FAIL 51.2: het binnengaan van wacht_op_klant zette geen stempel';
+  end if;
+  raise notice 'PASS 51.1/51.2: de stempel verschijnt precies bij het binnengaan';
+
+  -- 51.3 Verlaten wist de stempel. Anders zou een taak die allang weer loopt,
+  -- op het scherm nog altijd als wachtend tellen.
+  update public.task_instances set status = 'in_uitvoering' where id = v_taak;
+  select wacht_op_klant_sinds into v_sinds from public.task_instances where id = v_taak;
+  if v_sinds is not null then
+    raise exception 'FAIL 51.3: de stempel bleef staan na het verlaten van de status';
+  end if;
+  raise notice 'PASS 51.3: het verlaten van de status wist de stempel';
+
+  -- 51.4 Een tweede wachtbeurt zet de stempel opnieuw.
+  --
+  -- Let op wat hier NIET getest kan worden: dat de tweede stempel later is dan
+  -- de eerste. `now()` is transactiegebonden, dus binnen dit blok dragen alle
+  -- stempels dezelfde tijd. Een `<` erop zou altijd falen en een `<=` zou
+  -- altijd slagen -- in beide gevallen zonder iets te bewijzen.
+  --
+  -- Het echte bewijs zit in 51.3: de stempel wordt gewist bij het verlaten.
+  -- Daardoor kan er bij het opnieuw binnengaan niets ouds blijven staan, ook
+  -- niet als iemand hier later een coalesce(old, now()) van maakt.
+  update public.task_instances set status = 'wacht_op_klant' where id = v_taak;
+  select wacht_op_klant_sinds into v_sinds from public.task_instances where id = v_taak;
+  if v_sinds is null then
+    raise exception 'FAIL 51.4: de tweede wachtbeurt zette geen stempel';
+  end if;
+  select count(*) into v_n from public.task_status_log
+   where task_instance_id = v_taak and nieuw_status = 'wacht_op_klant';
+  if v_n <> 2 then
+    raise exception 'FAIL 51.4: het logboek telde % keer binnengaan in plaats van 2', v_n;
+  end if;
+  raise notice 'PASS 51.4: een tweede wachtbeurt zet de stempel opnieuw, en het logboek houdt beide beurten bij';
+
+  -- 51.5 De stempel is eigendom van de trigger. Wie hem met de hand
+  -- terugzet, hoort hem te zien terugspringen -- anders is de teller
+  -- waardeloos precies bij het dossier dat te lang ligt.
+  update public.task_instances
+     set wacht_op_klant_sinds = now() - interval '1 day'
+   where id = v_taak;
+  select wacht_op_klant_sinds into v_eerste from public.task_instances where id = v_taak;
+  if v_eerste <> v_sinds then
+    raise exception 'FAIL 51.5: een medewerker kon de wachtstempel zelf verzetten naar %', v_eerste;
+  end if;
+  raise notice 'PASS 51.5: de stempel is niet met de hand te verzetten';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

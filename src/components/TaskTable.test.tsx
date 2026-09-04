@@ -47,6 +47,7 @@ function task(overrides: Partial<TaskInstanceWithRelations> = {}): TaskInstanceW
     title: null,
     description: null,
     afgerond_op: null,
+    wacht_op_klant_sinds: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     client: { id: 'c1', naam: 'Client A', vertrouwelijk: false, actief: true, team_id: null },
@@ -590,5 +591,46 @@ describe('TaskTable op een telefoon', () => {
     render(<TaskTable tasks={[task()]} employees={employees} onOpenTask={onOpenTask} />)
 
     expect(screen.getByRole('table')).toBeInTheDocument()
+  })
+})
+
+describe('TaskTable — hoelang een dossier al op de klant wacht', () => {
+  function toon(t: TaskInstanceWithRelations) {
+    return render(
+      <TaskTable tasks={[t]} employees={employees} onOpenTask={vi.fn()} currentEmployee={null} />
+    )
+  }
+
+  it('toont de wachttijd naast de status', () => {
+    const sinds = new Date(Date.now() - 5 * 86400000).toISOString()
+    toon(task({ status: 'wacht_op_klant', wacht_op_klant_sinds: sinds }))
+    expect(screen.getByText(/wacht 5 dagen/i)).toBeInTheDocument()
+  })
+
+  it('zwijgt bij een taak die niet op de klant wacht', () => {
+    // Geen streepje en geen lege badge: een taak die niet wacht heeft hier
+    // niets te melden.
+    toon(task({ status: 'open', wacht_op_klant_sinds: null }))
+    expect(screen.queryByText(/wacht /i)).toBeNull()
+  })
+
+  it('zegt met een woord, niet alleen met een kleur, dat het lang duurt', () => {
+    // Kleur mag nooit de enige drager van betekenis zijn: wie de amber tint
+    // niet ziet, hoort het verschil toch te lezen.
+    const kort = new Date(Date.now() - 5 * 86400000).toISOString()
+    const lang = new Date(Date.now() - 40 * 86400000).toISOString()
+
+    const { unmount } = toon(task({ status: 'wacht_op_klant', wacht_op_klant_sinds: kort }))
+    expect(screen.getByText(/^wacht 5 dagen$/i)).toBeInTheDocument()
+    unmount()
+
+    toon(task({ status: 'wacht_op_klant', wacht_op_klant_sinds: lang }))
+    expect(screen.getByText(/^wacht al 6 weken$/i)).toBeInTheDocument()
+  })
+
+  it('noemt de datum zelf in de tooltip — wie moet bellen wil weten sinds wanneer', () => {
+    const sinds = '2026-03-10T09:00:00.000Z'
+    toon(task({ status: 'wacht_op_klant', wacht_op_klant_sinds: sinds }))
+    expect(screen.getByTitle(/sinds 10 maart 2026/i)).toBeInTheDocument()
   })
 })

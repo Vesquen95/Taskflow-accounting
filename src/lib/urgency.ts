@@ -97,3 +97,47 @@ export function formatDateTime(datetime: string | null): string {
   const d = new Date(datetime)
   return d.toLocaleString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
+
+/**
+ * Hoelang een taak al op de klant wacht, in woorden.
+ *
+ * "Wacht op klant" is de enige status waarin het kantoor zelf niets kan doen,
+ * en dus de status waarin werk het langst blijft liggen. Op het scherm zagen
+ * alle wachtende taken er identiek uit: hetzelfde paarse bolletje, of het nu
+ * twee dagen of vier maanden was. Het ene is geduld, het andere is bellen.
+ *
+ * De eenheid schuift mee met de duur, want "97 dagen" laat je zelf rekenen:
+ * dagen tot twee weken, dan weken, en vanaf ruim twee maanden in maanden.
+ */
+export function wachtDuur(sinds: string | null | undefined, nu: Date = new Date()): string | null {
+  if (!sinds) return null
+  const begin = startOfDay(new Date(sinds))
+  const dagen = Math.round((startOfDay(nu).getTime() - begin.getTime()) / (1000 * 60 * 60 * 24))
+  // Een stempel uit de toekomst is onmogelijk maar niet ondenkbaar (een
+  // klok die verspringt). Dan liever "vandaag" dan een negatief getal.
+  if (dagen <= 0) return 'sinds vandaag'
+  if (dagen === 1) return '1 dag'
+  if (dagen < 14) return `${dagen} dagen`
+  if (dagen < 70) {
+    const weken = Math.round(dagen / 7)
+    return `${weken} weken`
+  }
+  const maanden = Math.round(dagen / 30.4)
+  return `${maanden} maanden`
+}
+
+/**
+ * Vanaf wanneer een wachtend dossier aandacht verdient.
+ *
+ * Drie weken: korter dan dat is een klant die gewoon nog bezig is, langer
+ * betekent dat de vraag waarschijnlijk ergens is blijven liggen. Bewust één
+ * grens en geen reeks kleuren -- de status zelf zegt al dat er gewacht wordt.
+ */
+export const WACHT_LANG_VANAF_DAGEN = 21
+
+export function wachtTeLang(sinds: string | null | undefined, nu: Date = new Date()): boolean {
+  if (!sinds) return false
+  const begin = startOfDay(new Date(sinds))
+  const dagen = Math.round((startOfDay(nu).getTime() - begin.getTime()) / (1000 * 60 * 60 * 24))
+  return dagen >= WACHT_LANG_VANAF_DAGEN
+}

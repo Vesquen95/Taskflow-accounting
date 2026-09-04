@@ -4,6 +4,7 @@ import type { BulkResultaat } from '../lib/bulkActie'
 import { TaskStatusControl } from './TaskStatusControl'
 import { TaskBulkBar } from './TaskBulkBar'
 import { UrgencyBadge } from './UrgencyBadge'
+import { WachtDuurBadge } from './WachtDuurBadge'
 import { formatDate } from '../lib/urgency'
 import { taakNaam } from '../lib/taakLabel'
 import { EmptyState } from './EmptyState'
@@ -185,12 +186,15 @@ export function TaskTable({
                 </div>
               </td>
               <td className="px-3 py-2">
-                <TaskStatusControl
-                  task={task}
-                  currentEmployee={currentEmployee}
-                  onStatusChange={onStatusChange}
-                  onError={setStatusFout}
-                />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <TaskStatusControl
+                    task={task}
+                    currentEmployee={currentEmployee}
+                    onStatusChange={onStatusChange}
+                    onError={setStatusFout}
+                  />
+                  <WachtDuurBadge sinds={task.wacht_op_klant_sinds} />
+                </div>
               </td>
               <td className="max-w-[160px] truncate px-3 py-2 text-slate-600">
                 {task.toegewezen_medewerker?.naam ?? (
