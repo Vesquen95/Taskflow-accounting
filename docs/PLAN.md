@@ -637,3 +637,12 @@ hoort ad hoc.
 
 **De jaarlijkse vennootschapsbijdrage** is bewust géén verplichting in
 Taskflow: die betaalt de vennootschap zelf, het kantoor doet er niets mee.
+
+**Zelfregistratie is dicht — nagemeten op 04/09/2026.** §8 noemt dit een harde
+voorwaarde: zolang "Allow new users to sign up" openstaat en de site publiek
+bereikbaar is, kan een buitenstaander een eigen kantoor aanmaken en via de
+gedeelde wettelijke kalender de deadlines van de echte klanten verschuiven.
+Dat was tot nu een aanname. Een POST naar `/auth/v1/signup` met de publieke
+sleutel antwoordt `422 signup_disabled`, dus de voorwaarde is vervuld. De
+proef maakte geen account aan. Wie de instelling ooit weer aanzet, haalt
+daarmee ook §8 onderuit.
