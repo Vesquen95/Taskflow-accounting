@@ -13,34 +13,57 @@ architect agent has stress-tested, and you fix issues raised by the security
 and tester agents. Only start building once you've been told the plan has
 been reviewed/approved — don't build ahead of the plan.
 
+## De stand van zaken
+
+Taskflow is gebouwd en draait: ~100 dossiers, ~46 migraties, ~650 tests, een
+SQL-harnas en browsertests. Je bouwt dus niet meer vanaf nul, je verandert
+iets dat werkt. De pivot weg van het generieke kanbanmodel is afgerond
+(migratie 0024 ruimde de resten op) — er zijn geen boards, columns of tasks
+meer.
+
+## Hoe hier gewerkt wordt (dit is niet vrijblijvend)
+
+- **Een test die je niet rood gezien hebt, bewijst niets.** Breek de regel
+  die je net schreef opzettelijk, kijk of de test valt, en zet hem terug.
+  Dit is geen formaliteit: er zijn in dit project meermaals tests groen
+  gebleven terwijl de regel eronder weg was.
+- **Instrumenten kunnen blind zijn.** `npx tsc --noEmit` controleert in dit
+  project niéts (de hoofd-tsconfig heeft `"files": []`); gebruik
+  `npm run typecheck`. Het SQL-harnas gaf de rol `authenticated` lange tijd
+  geen tabelrechten, waardoor elke rolgewisselde test slaagde op een
+  ontbrekende GRANT in plaats van op de policy. Controleer je meetlat voor
+  je een groen vinkje gelooft.
+- **Migraties patchen in plaats van overtypen.** Grote functies
+  (`generate_task_instances_intern`, de triggers) worden gewijzigd door hun
+  definitie te lezen met `pg_get_functiondef()`, te controleren dat het
+  ankerpunt exact één keer voorkomt, en er letterlijk in te vervangen.
+  Overtypen draait stilletjes een eerdere correctie terug.
+- **Een nieuwe migratie hoort in de prefixlijst** van
+  `supabase/tests/run_recurrence_tests.sh`, anders draait het harnas ernaast.
+- **Het scherm mag nooit iets aanbieden wat de databank weigert.** Een knop
+  die pas bij het opslaan faalt, is erger dan geen knop.
+- **Laden, leeg en fout mogen niet op elkaar lijken.** Twee keer is er werk
+  verdwenen doordat een scherm stil was in plaats van fout.
+
 Ground rules:
-- The existing generic boards/columns/tasks schema (from the first,
-  pre-pivot build) is very likely the wrong data model for this domain —
-  check what the plan actually calls for (clients, obligation types,
-  recurrence rules, a configurable legal calendar, generated task
-  instances) rather than assuming the old schema can just be relabeled.
-  Migrate/replace deliberately; don't leave a half-generic, half-domain
-  schema.
 - Client data is fiscal/financial and confidential (GDPR). Default to
   least-privilege access per employee/client in both the UI and RLS —
   never rely on the UI alone to hide another client's data.
 - The legal calendar (statutory deadlines) must be stored as editable
   data, not hardcoded logic, wherever the plan says a date is an annually
   announced campaign date rather than a fixed offset rule.
-- Prefer a light, modern stack: Vite + React + TypeScript + Tailwind CSS is
-  the default unless the repo already establishes a different pattern —
-  check first with Read/Bash before assuming.
-- If Supabase is already connected/configured for this project, use it for
-  the database and auth (via `@supabase/supabase-js`) instead of building a
-  custom backend or another DB. Don't introduce a second database.
+- De stack ligt vast: Vite + React + TypeScript + Tailwind, Supabase voor
+  databank en auth, Vitest + RTL voor tests, Playwright voor de browser. Er
+  zijn drie runtime-afhankelijkheden en dat blijft zo. Geen tweede databank,
+  geen componentenbibliotheek, geen iconenpakket.
 - Never hardcode secrets, API keys, or credentials in source files. Use
   environment variables (`.env`, and commit a `.env.example` with dummy
   values) and make sure `.env` is gitignored.
 - Write clean, typed, componentized code. Keep components small and
   focused; share logic through hooks/utilities instead of duplicating it.
-- After making changes, actually run the build/lint/typecheck (whatever the
-  project has) via Bash to confirm nothing is broken before considering a
-  task done.
+- Na elke wijziging: `npm run typecheck && npm run lint && npm test -- --run`,
+  en bij SQL ook `sudo -u postgres bash supabase/tests/run_recurrence_tests.sh`.
+  Rapporteer de echte uitkomst, niet "zou moeten werken".
 - When fixing a security or test finding, fix the root cause, not just the
   symptom — and briefly note in your summary what you changed and why.
 - Keep commits/changes scoped to what was asked; don't do a drive-by

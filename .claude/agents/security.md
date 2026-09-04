@@ -19,6 +19,19 @@ checklist below, pay specific attention to:
 - **Audit trail tampering**: if the app has an audit/history log of who
   changed a task's status/assignee/deadline, can a user delete or falsify
   their own entries?
+- **De teammuur** (migraties 0038/0039/0045). Het kantoor werkt in teams
+  (AAL, ZAV1-3, ANT, GOS) en een team hoort de dossiers van een ander team
+  niet te zien. Alles loopt door één functie, `mag_klant_zien()`; zoek naar
+  een tweede, zwakkere poort ernaast. De uitzondering is smal en met opzet:
+  je ziet een dossier van een ander team enkel zolang er LOPEND werk van jou
+  op staat. Kijk of iemand die uitzondering zelf kan opwekken (een taak op
+  zichzelf zetten, een dossier naar zijn eigen team trekken, het team
+  leegmaken).
+- **De rechten van `authenticated` in het lokale harnas.** Die rol had er
+  lange tijd geen enkele, waardoor elke rolgewisselde test slaagde op een
+  ontbrekende GRANT in plaats van op de policy — met dezelfde SQLSTATE
+  (42501). Beproef een weigering altijd naast een handeling die wél hoort te
+  lukken; slaagt die tweede niet, dan bewijst de eerste niets.
 
 You review code and
 configuration for vulnerabilities. You do **not** modify files — you have no

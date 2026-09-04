@@ -574,3 +574,66 @@ Eenmanszaken (enkel personenbelasting, geen AV, geen neerlegging). De
 voorafbetalingen voor starters blijven wél gegenereerd, ook al zijn kleine
 vennootschappen de eerste drie boekjaren niet verplicht: ze zijn een aanleiding
 om erover na te denken.
+
+## §11 — Wat er sinds §10 beslist en gebouwd is (september 2026)
+
+§8 noemde meerdere teams binnen het kantoor nog "een mogelijke latere
+uitbreiding", en de slotparagraaf van §10 zette eenmanszaken buiten scope.
+Allebei achterhaald. Deze sectie houdt bij wat er sindsdien beslist is, zodat
+een latere lezer — of een agent die dit bestand als bron gebruikt — niet op
+een verouderd plan verder bouwt.
+
+**Teams (0038–0039).** Het kantoor werkt in teams: AAL, ZAV1, ZAV2, ZAV3, ANT
+en GOS. Een medewerker kan in meerdere teams zitten. Dossiers horen bij één
+team, en een team ziet de dossiers van een ander team niet — de afscherming
+zit in de databank (`mag_klant_zien`), niet in het scherm. ZAV1/2/3 staan los
+van elkaar. Werk zonder naam blijft in de bak van het team staan
+(`toegewezen_medewerker_id is null`), zichtbaar voor het hele team.
+
+**De uitzondering op de muur (0045).** Je ziet een dossier van een ander team
+zolang er **lopend** werk van jou op staat. Afgewerkt werk telt niet meer mee:
+tot september hield één afgeronde taak een dossier voorgoed open — op de
+testomgeving zag één medewerker 13 van zijn 31 dossiers alleen nog om die
+reden, waaronder een vertrouwelijk dossier.
+
+**Het team weghalen is een beheerdersbeslissing (0044–0045).** Verhuizen
+tussen teams waar je zelf in zit, blijft gewoon werk en wordt gelogd. Het team
+helemaal weghalen zet het dossier open voor het hele kantoor en mag daarom
+alleen een kantoorbeheerder. Naar een team duwen waar je zelf niet in zit, kan
+sowieso niet: de gewijzigde rij valt dan buiten je eigen bereik en RLS weigert
+ze.
+
+**Zes niveaus (0042).** Junior, senior, supervisor, manager, director,
+partner. Vanaf manager mag je aangiftes goedkeuren, en `mag_goedkeuren` wordt
+daaruit afgeleid in plaats van los aangevinkt. De rol (`medewerker` /
+`kantoorbeheerder`) blijft een aparte as: die gaat over beheer in de app, niet
+over beroepsniveau.
+
+**Natuurlijke personen en de aangifte PB (0041).** Een klantdossier is sinds
+0041 een rechtspersoon of een natuurlijke persoon. De aangifte
+personenbelasting valt op 15 juli (eenvoudig) of 16 oktober (complex); sinds
+2023 bestaat het aparte uitstel voor mandatarissen niet meer. Een eenmanszaak
+heeft **geen** voorafbetalingen in dit systeem. §9 zegt "er is geen vijfde
+voorafbetaling" — dat klopt voor vennootschappen, maar sinds inkomstenjaar
+2026 bestaat er wel een vijfde voor eenmanszaken. Die is bewust niet gebouwd.
+
+**Weekoverzicht (0043).** De maandagmail: te laat, deze week, de bak van je
+team, en wat op je goedkeuring wacht. Kijkt door dezelfde muur als het scherm.
+De inhoud staat in de databank en is getest; het verzenden hangt nog aan een
+mailprovider.
+
+**Goedkeuringsscherm.** Een eigen ingang voor wat op jouw goedkeuring wacht,
+zonder deadlinevenster — anders verstopt het venster juist het oudste werk. In
+twee lijsten: wat collega's indienden, en wat je zelf indiende (met de
+four-eyes-waarschuwing erboven, want wie in bulk goedkeurt opent geen enkele
+taak).
+
+**UBO-bevestiging (0046).** Jaarlijks, voor vennootschappen, (i)vzw's en
+stichtingen — niet voor een eenmanszaak. De wet geeft geen kalenderdatum,
+alleen "elk jaar"; het anker is daarom het boekjaareinde + 6 maanden, dezelfde
+grens als de algemene vergadering. De melding binnen de maand bij een
+wijziging is bewust géén terugkerende taak: die hangt aan een gebeurtenis en
+hoort ad hoc.
+
+**De jaarlijkse vennootschapsbijdrage** is bewust géén verplichting in
+Taskflow: die betaalt de vennootschap zelf, het kantoor doet er niets mee.

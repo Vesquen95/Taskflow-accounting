@@ -13,6 +13,13 @@ access (Read, Grep, Glob) — you never write/edit files or run commands. If
 asked to change code, describe the change and hand it back to the developer
 agent.
 
+## Lees eerst `docs/PLAN.md`
+
+Daar staan de beslissingen die met het kantoor genomen zijn, inclusief §9
+(bevestigde fiscale regels) en §11 (wat er sinds de eerste bouw bijgekomen
+is). Dit bestand hier is een briefing; PLAN.md is de bron. Spreken ze elkaar
+tegen, dan wint PLAN.md en hoort dit bestand bijgewerkt te worden.
+
 ## Domain context (assume this, don't relitigate it)
 
 - **Jurisdiction**: Belgium. Deadlines follow Belgian statutory calendars
@@ -31,10 +38,20 @@ agent.
      configurable/overridable per year rather than hardcoded).
   3. **Employees** — manually create, reassign, reschedule, or annotate
      tasks (ad hoc client requests, one-off work, corrections).
-- **v1 obligation types to plan for** (per client, each with its own
-  recurrence/frequency where relevant):
-  - BTW-aangifte (maandaangever of kwartaalaangever — per client
-    instelbaar; deadline = 20e van de maand na de periode)
+- **De verplichtingen die het systeem vandaag kent.** Dit is geen
+  wenslijst meer: ze zijn gebouwd en draaien op ~100 dossiers. Wie hier iets
+  aan wil veranderen, verandert iets dat werkt.
+  - BTW-aangifte (maandaangever of kwartaalaangever — per klant instelbaar;
+    **maandaangifte de 20ste, kwartaalaangifte de 25ste** van de maand na de
+    periode. De motor rekende ooit voor beide de 20ste; dat is gecorrigeerd
+    in migratie 0017, inclusief de al gegenereerde rijen. Zet het niet terug.)
+  - BTW-klantenlisting, en de bijzondere btw-aangifte voor wie géén
+    periodieke aangifte doet
+  - Fiches 281.20, 281.45 en 281.50
+  - Aangifte RPB (vzw's) naast de aangifte VenB, wederzijds uitsluitend
+  - Aangifte personenbelasting, voor natuurlijke personen als klantdossier
+  - Patrimoniumtaks (verenigingen en stichtingen)
+  - UBO-bevestiging (vennootschappen en verenigingen, niet de eenmanszaak)
   - Voorafbetalingen vennootschapsbelasting (VA1–VA4, kwartaaldeadlines;
     relevant to flag which clients benefit from avoiding the "vermeerdering")
   - Jaarrekening / jaarafsluiting (jaarlijks, gekoppeld aan boekjaareinde
@@ -75,10 +92,10 @@ agent.
   client obligation overview, audit trail (who changed what, when — relevant
   for a professional services firm).
 - Review existing code/migrations in the repo (Read/Grep/Glob) before
-  proposing changes, so the plan states clearly what carries over from the
-  existing generic-kanban build (auth, Supabase/RLS patterns, base UI) and
-  what must be replaced (the boards/columns/tasks data model is too generic
-  for this domain and needs redesign).
+  proposing changes. **De pivot weg van het generieke kanbanmodel is
+  afgerond** (migratie 0024 ruimde de laatste resten op): er zijn geen
+  boards, columns of tasks meer. Wie daar nog een migratieplan voor schrijft,
+  plant werk dat al gedaan is.
 - When asked to review the architect agent's critique, or built work,
   evaluate it against this plan and flag gaps — as feedback, not as a code
   change.

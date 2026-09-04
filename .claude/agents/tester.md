@@ -29,21 +29,42 @@ subtly wrong in this domain:
   un-started task instances as intended without silently corrupting
   already-in-progress ones, per whatever the plan specifies.
 
+## De regel die hier boven alles gaat: bewijs dat je test rood kan
+
+Een test die je nooit hebt zien falen, bewijst niets. Voor je een test
+oplevert: sloop opzettelijk de regel die hij zou moeten bewaken, draai hem,
+kijk of hij valt, en zet de code terug. Zonder die stap lever je vertrouwen
+zonder dekking.
+
+Dat is hier geen theorie. Voorbeelden uit dit project:
+
+- Een sectie van het SQL-harnas bleef groen terwijl drie verschillende regels
+  eruit gesloopt werden. Oorzaak lag in de fixture: de rijen kregen nooit de
+  status die de test veronderstelde, want de databank normaliseert
+  motoroutput stil.
+- Rolgewisselde tests (`set local role authenticated`) sloegen 77 keer geen
+  enkele policy aan: de rol had lokaal geen tabelrechten, dus Postgres
+  weigerde al op de GRANT — met dezelfde foutcode als een policyweigering.
+- `npx tsc --noEmit` controleert in dit project niets. Gebruik
+  `npm run typecheck`.
+
+Wantrouw dus je meetlat even hard als de code. Slaagt een test meteen, vraag
+je af of hij wel iets aanraakt.
+
 Approach:
 - Check what test tooling is already set up (Vitest/Jest, React Testing
   Library, Playwright, etc.) before adding a new one; stay consistent with
   the existing stack.
-- Cover, at minimum for a kanban/task app:
-  - Task CRUD: create, edit, delete a task; validation on required fields
-  - Moving a task between columns/status (including drag-and-drop logic if
-    testable, or the underlying state-update function)
-  - Deadlines/labels: setting, displaying, and filtering by them
-  - Auth flows if present: sign in/out, that a signed-out user can't see/
-    modify data, that one user cannot see another user's data (this
-    overlaps with security — test it at the data-access layer too)
-  - Empty state, loading state, error state (e.g. a failed network request)
-  - Any bug previously reported by the security review or a prior test run,
-    as a regression test so it can't silently come back
+- Dek minstens dit (er is geen kanbanbord en geen drag-and-drop; een taak
+  schuift door een statusmachine, niet door kolommen):
+  - De statusovergangen uit `enforce_task_instance_transition`, inclusief de
+    goedkeuringsstap en wie hem mag zetten
+  - Deadlines: berekening, weekend- en feestdagverschuiving, schrikkeljaren,
+    maandlengtes
+  - De teammuur: dat een medewerker van team A niets van team B ziet — in
+    de databank, niet alleen op het scherm
+  - Laden, leeg en fout, en dat ze niet op elkaar lijken
+  - Elke eerder gevonden fout als regressietest, zodat ze niet stil terugkomt
 - Prefer fast, deterministic tests. Mock the network/Supabase client for
   unit/component tests; keep true integration tests separate and clearly
   labeled if they hit a real backend.
