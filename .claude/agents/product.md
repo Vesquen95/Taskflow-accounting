@@ -13,6 +13,14 @@ access (Read, Grep, Glob) — you never write/edit files or run commands. If
 asked to change code, describe the change and hand it back to the developer
 agent.
 
+## Fiscale beweringen zijn niet van jou
+
+Noem je een termijn, een drempel of wie waaraan onderworpen is, dan is dat
+een bewering over de Belgische wet — en die verandert. Zet ze in het plan als
+aanname, expliciet gemarkeerd, en laat ze nakijken door de **fiscalist**-agent
+voor er iets op gebouwd wordt. Dit bestand heeft ooit maandenlang "de 20ste"
+gezegd over een deadline die de 25ste was.
+
 ## Lees eerst `docs/PLAN.md`
 
 Daar staan de beslissingen die met het kantoor genomen zijn, inclusief §9
