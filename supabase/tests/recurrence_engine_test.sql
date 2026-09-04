@@ -6456,4 +6456,113 @@ begin
   raise notice 'PASS 51.5: de stempel is niet met de hand te verzetten';
 end $$;
 
+
+-- ============================================================
+-- Sectie 52 (0048): de btw-kwartaaldeadline schuift niet meer op.
+--
+-- De data hieronder komen letterlijk uit de btw-kalender 2026 van de FOD.
+-- Ze zijn met opzet vast ingetypt en niet berekend: een test die dezelfde
+-- formule herhaalt als de motor, bewijst alleen dat de formule zichzelf
+-- gelijk is.
+--
+--   periodieke kwartaalaangiften   Q1-2026  27.04.2026   (laatste keer verschoven)
+--                                  Q2-2026  25.07.2026   zaterdag, geen uitstel
+--                                  Q3-2026  25.10.2026   zondag,   geen uitstel
+--   maandelijkse aangiften         mei 2026 22.06.2026   nog steeds verschoven
+--   bijzondere aangiften           Q3-2026  25.10.2026   zondag, nooit verschoven
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_kwartaal uuid; v_maand uuid; v_bijz uuid;
+  v_ot_btw uuid; v_ot_bijz uuid;
+  v_wettelijk date; v_werk date;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's52@test.local', now());
+  insert into public.firms (naam) values ('S52 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S52 Beheerder', 's52@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S52 Kwartaalaangever', 12, 31, 'periodieke_aangever', 'kwartaal', true) returning id into v_kwartaal;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S52 Maandaangever', 12, 31, 'periodieke_aangever', 'maand', true) returning id into v_maand;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S52 Vrijgesteld', 12, 31, 'vrijgesteld_kleine_onderneming', true) returning id into v_bijz;
+
+  select id into v_ot_btw from public.obligation_types where code = 'btw_aangifte';
+  select id into v_ot_bijz from public.obligation_types where code = 'btw_bijzondere_aangifte';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf) values
+    (v_bijz, v_ot_bijz, true, date '2000-01-01');
+
+  -- De btw-verplichting wordt door de trigger van 0004 aangemaakt met
+  -- geldig_vanaf = vandaag, en de motor genereert niets van voor die datum.
+  -- Voor 52.2 en 52.3 zijn juist de afgelopen kwartalen nodig.
+  update public.client_obligations set geldig_vanaf = date '2000-01-01'
+   where client_id in (v_kwartaal, v_maand);
+
+  perform public.generate_task_instances(24, 24);
+
+  -- 52.1 Q3-2026 valt op zondag 25 oktober en schuift NIET meer vooruit.
+  select due_date_wettelijk, due_date into v_wettelijk, v_werk
+    from public.task_instances
+   where client_id = v_kwartaal and obligation_type_id = v_ot_btw and periode_label = '2026-Q3';
+  if v_wettelijk is distinct from date '2026-10-25' then
+    raise exception 'FAIL 52.1: de wettelijke datum van Q3-2026 is % i.p.v. 25/10/2026', v_wettelijk;
+  end if;
+  if v_werk is distinct from date '2026-10-23' then
+    raise exception 'FAIL 52.1: de werkdatum van Q3-2026 is % i.p.v. vrijdag 23/10/2026', v_werk;
+  end if;
+  raise notice 'PASS 52.1: een zondagdeadline plant op de vrijdag ervoor, met de wet ernaast';
+
+  -- 52.2 Q1-2026 schoof nog wél vooruit. De regel is pas daarna veranderd, en
+  -- het systeem mag niet liegen over het verleden.
+  select due_date into v_werk from public.task_instances
+   where client_id = v_kwartaal and obligation_type_id = v_ot_btw and periode_label = '2026-Q1';
+  if v_werk is distinct from date '2026-04-27' then
+    raise exception 'FAIL 52.2: Q1-2026 staat op % i.p.v. maandag 27/04/2026', v_werk;
+  end if;
+  raise notice 'PASS 52.2: de kanteldatum wordt gerespecteerd, oudere kwartalen schuiven nog vooruit';
+
+  -- 52.3 De maandaangever schuift wél nog vooruit. Dat is geen inconsistentie
+  -- van ons: zo publiceert de FOD het.
+  select due_date_wettelijk, due_date into v_wettelijk, v_werk
+    from public.task_instances
+   where client_id = v_maand and obligation_type_id = v_ot_btw and periode_label = '2026-05';
+  if v_wettelijk is distinct from date '2026-06-20' then
+    raise exception 'FAIL 52.3: de wettelijke datum van mei 2026 is % i.p.v. 20/06/2026', v_wettelijk;
+  end if;
+  if v_werk is distinct from date '2026-06-22' then
+    raise exception 'FAIL 52.3: de maandaangifte van mei 2026 staat op % i.p.v. maandag 22/06/2026', v_werk;
+  end if;
+  raise notice 'PASS 52.3: de maandaangifte schuift onveranderd vooruit';
+
+  -- 52.4 De bijzondere aangifte schoof nooit mee, ook niet voor de kanteldatum.
+  select due_date_wettelijk, due_date into v_wettelijk, v_werk
+    from public.task_instances
+   where client_id = v_bijz and obligation_type_id = v_ot_bijz and periode_label = '2026-Q3';
+  if v_wettelijk is distinct from date '2026-10-25' then
+    raise exception 'FAIL 52.4: de wettelijke datum van de bijzondere aangifte Q3-2026 is %', v_wettelijk;
+  end if;
+  if v_werk is distinct from date '2026-10-23' then
+    raise exception 'FAIL 52.4: de bijzondere aangifte Q3-2026 staat op % i.p.v. vrijdag 23/10/2026', v_werk;
+  end if;
+  raise notice 'PASS 52.4: de bijzondere aangifte schuift ook achteruit';
+
+  -- 52.5 vorige_werkdag() slaat feestdagen over, niet alleen weekends.
+  -- 1 mei 2026 is een vrijdag én Dag van de Arbeid; de werkdag ervoor is
+  -- donderdag 30 april.
+  if public.vorige_werkdag(date '2026-05-02') is distinct from date '2026-04-30' then
+    raise exception 'FAIL 52.5: vorige_werkdag(02/05/2026) gaf % i.p.v. 30/04/2026',
+      public.vorige_werkdag(date '2026-05-02');
+  end if;
+  -- Een gewone werkdag blijft zichzelf.
+  if public.vorige_werkdag(date '2026-10-23') is distinct from date '2026-10-23' then
+    raise exception 'FAIL 52.5: vorige_werkdag() verzette een gewone werkdag';
+  end if;
+  raise notice 'PASS 52.5: vorige_werkdag() slaat weekends en feestdagen over en laat werkdagen staan';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

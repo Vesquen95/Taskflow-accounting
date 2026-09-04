@@ -382,9 +382,11 @@ Kwartaalaangifte: de 25ste van de maand na het kwartaal. De motor rekende voor
 beide de 20ste — gecorrigeerd in migratie 0017, inclusief herstel van de al
 gegenereerde rijen.
 
-**Werkdagverschuiving.** Een btw-deadline die op een zaterdag, zondag of
+**Werkdagverschuiving.** ~~Een btw-deadline die op een zaterdag, zondag of
 feestdag valt, schuift door naar de eerstvolgende werkdag. Dat geldt voor
-maand- én kwartaalaangiften. De maand/kwartaal-splitsing en de
+maand- én kwartaalaangiften.~~ **Achterhaald sinds 04/09/2026 — zie §12.**
+Voor maandaangevers klopt dit nog; voor kwartaalaangevers en voor de
+bijzondere aangifte is de tolerantie afgeschaft. De maand/kwartaal-splitsing en de
 overgangsregelingen uit de hervorming van de btw-ketting worden bewust NIET
 gemodelleerd: "hou geen rekening met speciale maatregelen". Eenmalige
 verlengingen (zoals de listing over 2025 tot 30 april 2026) horen in
@@ -646,3 +648,41 @@ Dat was tot nu een aanname. Een POST naar `/auth/v1/signup` met de publieke
 sleutel antwoordt `422 signup_disabled`, dus de voorwaarde is vervuld. De
 proef maakte geen account aan. Wie de instelling ooit weer aanzet, haalt
 daarmee ook §8 onderuit.
+
+## §12 — Correctie: de btw-kwartaaldeadline schuift niet meer op (04/09/2026)
+
+Gevonden bij het eerste nazicht door de fiscalist-agent, en nagetrokken tegen
+de btw-kalender 2026 van de FOD.
+
+§9 legde vast dat de verlenging naar de eerstvolgende werkdag geldt voor maand-
+én kwartaalaangiften. Dat was juist toen het opgeschreven werd en is het niet
+meer. De FOD-kalender toont het verschil zwart-op-wit:
+
+| | periode | FOD |
+| --- | --- | --- |
+| periodieke kwartaalaangifte | Q1-2026 | 27.04.2026 — nog verschoven |
+| | Q2-2026 | 25.07.2026 — zaterdag, geen uitstel |
+| | Q3-2026 | 25.10.2026 — zondag, geen uitstel |
+| maandelijkse aangifte | mei 2026 | 22.06.2026 — nog steeds verschoven |
+| bijzondere aangifte | Q1-2026 | 25.04.2026 — zaterdag, nooit verschoven |
+
+De bijzondere aangifte schoof zelfs nooit mee; die stond dus vanaf het begin
+fout.
+
+**De keuze van het kantoor.** Valt de wettelijke datum op een zondag en schuift
+ze niet op, dan plant Taskflow op de laatste werkdag ervóór. `due_date_wettelijk`
+blijft de wettelijke datum, `due_date` wordt de vrijdag. Het dossier houdt de
+wet bij, de takenlijst houdt het werk bij.
+
+**Waarom een parameter en geen kolom.** De regel verschilt bínnen één
+verplichtingstype: dezelfde `btw_aangifte` schuift vooruit voor een
+maandaangever en achteruit voor een kwartaalaangever. De motortak weet welke
+van de twee ze berekent en zegt het erbij (`p_verschuiving`, migratie 0048).
+
+**De kanteldatum wordt gemodelleerd.** Kwartalen met een deadline vóór
+01/05/2026 schuiven nog vooruit. Een oudere periode hergenereren hoort de
+datum van toen te geven; het systeem mag niet liegen over het verleden.
+
+Bij het live zetten zijn 49 kwartaaltaken en 11 bijzondere aangiftes
+herberekend, alleen die van vandaag of later. Wat al gepasseerd is blijft
+staan: de tolerantie bestond toen echt nog.
