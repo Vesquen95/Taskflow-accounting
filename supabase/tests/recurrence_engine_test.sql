@@ -4407,14 +4407,19 @@ begin
   end if;
   raise notice 'PASS 35.5: een schrikkeljaar levert de 29e op (%)', coalesce(v_d::text, 'buiten het venster');
 
-  -- 35.6 281.50: 30 juni van het jaar erna.
+  -- 35.6 281.50: 29 juni van het jaar erna.
+  --
+  -- Stond hier tot 04/09/2026 als 30 juni. Dat was fout, en de test hield de
+  -- fout in stand: de wet zegt "vóór 30 juni", dus ten laatste de 29ste, en
+  -- de FOD kondigde inkomstenjaar 2025 aan als "uiterlijk op maandag 29 juni
+  -- 2026". Gecorrigeerd in migratie 0049.
   select count(*) into v_n from public.task_instances
    where client_id = v_dec and obligation_type_id = v_ot_50
-     and due_date_wettelijk <> make_date(periode_label::int + 1, 6, 30);
+     and due_date_wettelijk <> make_date(periode_label::int + 1, 6, 29);
   if v_n <> 0 then
-    raise exception 'FAIL 35.6: % taken van 281.50 staan niet op 30 juni', v_n;
+    raise exception 'FAIL 35.6: % taken van 281.50 staan niet op 29 juni', v_n;
   end if;
-  raise notice 'PASS 35.6: 281.50 valt op 30 juni van het jaar erna';
+  raise notice 'PASS 35.6: 281.50 valt op 29 juni van het jaar erna';
 
   -- 35.7 Wie de fiche niet aangevinkt heeft, krijgt er ook geen taak voor.
   select count(*) into v_n from public.task_instances
@@ -6563,6 +6568,60 @@ begin
     raise exception 'FAIL 52.5: vorige_werkdag() verzette een gewone werkdag';
   end if;
   raise notice 'PASS 52.5: vorige_werkdag() slaat weekends en feestdagen over en laat werkdagen staan';
+end $$;
+
+
+-- ============================================================
+-- Sectie 53 (0049): fiche 281.50 valt op 29 juni.
+--
+-- "Vóór 30 juni" is ten laatste de 29ste. De FOD publiceert het ook zo:
+-- voor inkomstenjaar 2025 stond het aangekondigd als "uiterlijk op maandag
+-- 29 juni 2026". Deze sectie bewaakt meteen dat de fiches 281.20 en 281.45
+-- NIET meeschuiven -- die vallen eind februari en dat klopte al.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot_50 uuid; v_ot_20 uuid;
+  v_due date; v_jaar int := extract(year from current_date)::int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's53@test.local', now());
+  insert into public.firms (naam) values ('S53 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S53 Beheerder', 's53@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S53 Klant', 12, 31, 'geen', true) returning id into v_klant;
+
+  select id into v_ot_50 from public.obligation_types where code = 'fiche_281_50';
+  select id into v_ot_20 from public.obligation_types where code = 'fiche_281_20';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf) values
+    (v_klant, v_ot_50, true, date '2000-01-01'),
+    (v_klant, v_ot_20, true, date '2000-01-01');
+
+  perform public.generate_task_instances(24, 12);
+
+  -- 53.1 De 29ste, niet de 30ste.
+  select due_date_wettelijk into v_due from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_50 and periode_label = v_jaar::text;
+  if v_due is null then
+    raise exception 'FAIL 53.1: geen 281.50-taak voor inkomstenjaar %', v_jaar;
+  end if;
+  if v_due is distinct from make_date(v_jaar + 1, 6, 29) then
+    raise exception 'FAIL 53.1: fiche 281.50 van % staat op % i.p.v. 29 juni %', v_jaar, v_due, v_jaar + 1;
+  end if;
+  raise notice 'PASS 53.1: fiche 281.50 valt op 29 juni';
+
+  -- 53.2 De fiches van eind februari blijven waar ze stonden. Die rekent 0028
+  -- als "1 maart min een dag", wat ook in een schrikkeljaar juist is.
+  select due_date_wettelijk into v_due from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_20 and periode_label = v_jaar::text;
+  if v_due is distinct from (make_date(v_jaar + 1, 3, 1) - 1) then
+    raise exception 'FAIL 53.2: fiche 281.20 van % staat op % i.p.v. eind februari %', v_jaar, v_due, v_jaar + 1;
+  end if;
+  raise notice 'PASS 53.2: de fiches van eind februari zijn niet meeverschoven';
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
