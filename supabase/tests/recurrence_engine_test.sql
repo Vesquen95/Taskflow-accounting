@@ -6001,4 +6001,70 @@ begin
   raise notice 'PASS 47.8: de lijst wordt afgekapt op 5, met het volledige aantal (21) ernaast';
 end $$;
 
+
+-- ============================================================
+-- Sectie 48 (0044): een teamwissel laat een spoor na.
+--
+-- Achtergrond: bij de review van de teammuur bleek dat een gewone medewerker
+-- van een dossier dat hij ziet het team kan wegnemen -- waarna het hele
+-- kantoor het ziet. De databank had die afweging al gemaakt voor
+-- `vertrouwelijk` (kantoorbeheerder + audit); `team_id` doet sinds 0039
+-- hetzelfde werk en was door beide zeven gevallen.
+--
+-- Deze sectie legt het spoor vast, niet het slot: wie een dossier verhuist,
+-- mag dat blijven doen, maar het staat vanaf nu in de historiek.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_ik uuid; v_ik_uid uuid := gen_random_uuid();
+  v_t_a uuid; v_t_b uuid; v_klant uuid;
+  v_n int; v_oud text; v_nieuw text;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_ik_uid, 's48@test.local', now());
+  insert into public.firms (naam) values ('S48 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, actief)
+    values (v_firm, v_ik_uid, 'S48 Ik', 's48@x.be', 'medewerker', true) returning id into v_ik;
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S48A', 'Team A', 'Aalst')
+    returning id into v_t_a;
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S48B', 'Team B', 'Brussel')
+    returning id into v_t_b;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S48 Klant', 12, 31, 'geen', true, v_t_a) returning id into v_klant;
+
+  perform set_config('taskflow.test_uid', v_ik_uid::text, true);
+
+  -- 48.1 Verhuizen naar een ander team komt in de historiek.
+  update public.clients set team_id = v_t_b where id = v_klant;
+
+  select count(*), max(oude_waarde), max(nieuwe_waarde) into v_n, v_oud, v_nieuw
+    from public.client_change_log where client_id = v_klant and veld = 'team_id';
+  if v_n <> 1 then
+    raise exception 'FAIL 48.1: de teamwissel liet % sporen na in plaats van 1', v_n;
+  end if;
+  if v_oud is distinct from v_t_a::text or v_nieuw is distinct from v_t_b::text then
+    raise exception 'FAIL 48.1: het spoor noemt % -> % in plaats van % -> %', v_oud, v_nieuw, v_t_a, v_t_b;
+  end if;
+  raise notice 'PASS 48.1: een verhuizing naar een ander team staat in de historiek, met beide teams erbij';
+
+  -- 48.2 Het team wegnemen is de gevaarlijkste variant -- dan ziet het hele
+  -- kantoor het dossier -- en moet dus zeker een spoor nalaten.
+  update public.clients set team_id = null where id = v_klant;
+  select count(*) into v_n from public.client_change_log
+    where client_id = v_klant and veld = 'team_id' and nieuwe_waarde is null;
+  if v_n <> 1 then
+    raise exception 'FAIL 48.2: het wegnemen van het team liet % sporen na in plaats van 1', v_n;
+  end if;
+  raise notice 'PASS 48.2: het wegnemen van het team laat een spoor na';
+
+  -- 48.3 Een wijziging die niets met zichtbaarheid te maken heeft, hoort geen
+  -- teamregel in de historiek te zetten. Anders is het spoor ruis.
+  update public.clients set naam = 'S48 Klant hernoemd' where id = v_klant;
+  select count(*) into v_n from public.client_change_log
+    where client_id = v_klant and veld = 'team_id';
+  if v_n <> 2 then
+    raise exception 'FAIL 48.3: een naamswijziging voegde een teamregel toe (% in plaats van 2)', v_n;
+  end if;
+  raise notice 'PASS 48.3: een gewone wijziging laat de teamhistoriek met rust';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
