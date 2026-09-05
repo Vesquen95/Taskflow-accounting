@@ -238,7 +238,7 @@ const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
     vereist: false,
     verplichting: true,
     uitleg:
-      'Ja of Nee. De kwartaalaangifte bedrijfsvoorheffing via Finprof, tegen de 15de van de maand na het kwartaal. Alleen de kwartaalvariant: wie boven het grensbedrag van artikel 412 WIB 92 zit, moet maandelijks aangeven, en die kalender kondigt de FOD per jaar aan. Loopt de loonverwerking via een erkend sociaal secretariaat, dan geldt een andere termijn (voorlaatste werkdag van de maand).',
+      'Ja of Nee. De kwartaalaangifte bedrijfsvoorheffing via Finprof, tegen de 15de van de maand na het kwartaal. Alleen de kwartaalvariant: wie boven het grensbedrag van artikel 412 WIB 92 zit, moet maandelijks aangeven, en die kalender kondigt de FOD per jaar aan. Deze taak is voor de dossiers waar het kantoor de aangifte zelf doet. Loopt de loonverwerking via een erkend sociaal secretariaat, dan geldt een andere termijn (voorlaatste werkdag van de maand) en klopt deze taak niet.',
     synoniemen: ['bv', 'bedrijfsvoorheffing', 'finprof', 'voorheffing'],
     breedte: 18,
   },

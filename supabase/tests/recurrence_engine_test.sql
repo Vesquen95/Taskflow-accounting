@@ -7085,4 +7085,139 @@ begin
   raise notice 'PASS 56.9: de teammuur geldt ook voor de drie boekjaarfuncties';
 end $$;
 
+-- ============================================================
+-- Sectie 57 (0053): een verplichting die op een afgesproken datum stopt.
+--
+-- Het scenario is een vereffening. De vennootschap blijft na de ontbinding
+-- bestaan vóór haar vereffening (art. 2:76 WVV), dus alles loopt door tot de
+-- sluiting -- en dan houdt het op. Hier: de sluiting valt op 31/12/2026.
+--
+-- De scherpe kant zit in 57.2: de aangifte over boekjaar 2026 wordt pas op
+-- 30/09/2027 ingediend, negen maanden ná de einddatum, en moet er dus wél
+-- staan. De grens ligt op de periode, niet op de deadline.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot_venb uuid; v_ot_av uuid; v_ot_neer uuid; v_co_venb uuid;
+  v_n int; v_due date; v_status public.task_status;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's57@test.local', now());
+  insert into public.firms (naam) values ('S57 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S57 Beheerder', 's57@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S57 Vereffening BV', 12, 31, 'geen', true) returning id into v_klant;
+
+  select id into v_ot_venb from public.obligation_types where code = 'aangifte_venb_pb';
+  select id into v_ot_av   from public.obligation_types where code = 'algemene_vergadering';
+  select id into v_ot_neer from public.obligation_types where code = 'neerlegging_jaarrekening';
+
+  -- De sluiting van de vereffening valt op 31/12/2026.
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, geldig_tot)
+    values (v_klant, v_ot_venb, true, date '2000-01-01', date '2026-12-31')
+    returning id into v_co_venb;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, geldig_tot)
+    values (v_klant, v_ot_av, true, date '2000-01-01', date '2026-12-31');
+
+  perform public.generate_task_instances(36, 0);
+
+  -- 57.1 Niets over een boekjaar na de sluiting.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_venb
+     and periode_eind > date '2026-12-31';
+  if v_n <> 0 then
+    raise exception 'FAIL 57.1: % aangifte(s) voor een boekjaar na de sluiting van de vereffening', v_n;
+  end if;
+  raise notice 'PASS 57.1: na de einddatum wordt er niets meer gemaakt';
+
+  -- 57.2 De aangifte over het LAATSTE boekjaar staat er wél, ook al valt haar
+  --      deadline ruim na de einddatum. Dit is de test die het verschil maakt
+  --      tussen "grens op de periode" en "grens op de deadline".
+  select due_date into v_due from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_venb
+     and periode_eind = date '2026-12-31';
+  if v_due is null then
+    raise exception 'FAIL 57.2: de aangifte over het laatste boekjaar ontbreekt';
+  end if;
+  -- Geen vaste datum verwacht: er kan een campagnedatum uit legal_calendar
+  -- overheen liggen, en die mag winnen. Wat deze test wél moet vastleggen is
+  -- dat de deadline ná de einddatum valt -- anders bewijst ze het verschil
+  -- tussen "grens op de periode" en "grens op de deadline" niet.
+  if v_due <= date '2026-12-31' then
+    raise exception 'FAIL 57.2: deze test bewijst niets -- de deadline (%) valt niet na de einddatum', v_due;
+  end if;
+  raise notice 'PASS 57.2: de aangifte over het laatste boekjaar blijft, ook al valt ze na de einddatum';
+
+  -- 57.3 De neerlegging volgt de algemene vergadering en verdwijnt mee.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_neer
+     and periode_eind > date '2026-12-31';
+  if v_n <> 0 then
+    raise exception 'FAIL 57.3: % neerlegging(en) na de sluiting, terwijl de AV ophoudt', v_n;
+  end if;
+  raise notice 'PASS 57.3: de neerlegging houdt op zodra de algemene vergadering ophoudt';
+
+  -- ---------------------------------------------------------
+  -- 57.4 Een einddatum die er later bij komt, ruimt op wat er al staat.
+  --      Zonder dit geldt de grens alleen voor nieuwe taken, en met een
+  --      horizon van 36 maanden is dat bijna niets.
+  -- ---------------------------------------------------------
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S57 Stopt later', 12, 31, 'geen', true) returning id into v_klant;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot_venb, true, date '2000-01-01') returning id into v_co_venb;
+  perform public.generate_task_instances(36, 0);
+
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_venb
+     and periode_eind > date '2026-12-31' and status = 'open';
+  if v_n = 0 then
+    raise exception 'FAIL 57.4: geen taken na 2026 om op te ruimen -- de test bewijst niets';
+  end if;
+
+  update public.client_obligations set geldig_tot = date '2026-12-31' where id = v_co_venb;
+  perform public.sync_client_tasks(v_klant);
+
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_venb
+     and periode_eind > date '2026-12-31' and status = 'open';
+  if v_n <> 0 then
+    raise exception 'FAIL 57.4: % taak/taken na de einddatum blijven open staan', v_n;
+  end if;
+
+  select status into v_status from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_venb
+     and periode_eind = date '2027-12-31';
+  if v_status is distinct from 'geannuleerd' then
+    raise exception 'FAIL 57.4: de taak over 2027 staat op % i.p.v. geannuleerd', coalesce(v_status::text, 'niets');
+  end if;
+
+  -- En wat vóór de einddatum ligt, blijft ongemoeid.
+  select status into v_status from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_venb
+     and periode_eind = date '2026-12-31';
+  if v_status is distinct from 'open' then
+    raise exception 'FAIL 57.4: de taak over het laatste boekjaar is meegesneuveld (%)', coalesce(v_status::text, 'niets');
+  end if;
+  raise notice 'PASS 57.4: een einddatum ruimt op wat er al stond, en laat het laatste boekjaar staan';
+
+  -- 57.5 Zonder einddatum verandert er niets.
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S57 Loopt door', 12, 31, 'geen', true) returning id into v_klant;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot_venb, true, date '2000-01-01');
+  perform public.generate_task_instances(36, 0);
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_venb
+     and periode_eind > date '2026-12-31';
+  if v_n = 0 then
+    raise exception 'FAIL 57.5: een verplichting zonder einddatum genereert niets meer na 2026';
+  end if;
+  raise notice 'PASS 57.5: zonder einddatum loopt alles gewoon door';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

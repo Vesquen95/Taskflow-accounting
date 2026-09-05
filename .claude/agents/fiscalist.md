@@ -80,6 +80,7 @@ Dit is wat je nakijkt. Niet uit je hoofd bevestigen: opzoeken.
 | Fiche 281.50 | 29 juni van jaar N+1 (0049) |
 | UBO-bevestiging | jaarlijks, verankerd op boekjaareinde + 6 maanden |
 | Intracommunautaire opgave | maand: de 20ste mét verschuiving; kwartaal: de 25ste zonder. Frequentie volgt standaard het btw-ritme (0050) |
+| Aangifte bedrijfsvoorheffing | kwartaal: de 15de van de maand na het kwartaal, verschuiving naar de werkdag ervóór. Alleen de kwartaalvariant; de maandkalender is géén formule en hoort in `legal_calendar` (0051) |
 
 ## Twee staande afspraken van het kantoor — respecteer ze
 
@@ -88,7 +89,11 @@ Dit is wat je nakijkt. Niet uit je hoofd bevestigen: opzoeken.
    gemodelleerd. Kom je er een tegen, meld ze als een mogelijke
    `legal_calendar`-override voor dat ene jaar — niet als een fout in de
    formule.
-2. **De UBO-melding binnen de maand bij een wijziging** is bewust géén
+2. **De aangifte bedrijfsvoorheffing** doet het kantoor zelf. De afwijkende
+   termijn van een erkend sociaal secretariaat (voorlaatste werkdag van de
+   maand na het kwartaal) is bewust niet gemodelleerd — bevestigd op
+   05/09/2026.
+3. **De UBO-melding binnen de maand bij een wijziging** is bewust géén
    terugkerende taak: die hangt aan een gebeurtenis, niet aan een ritme.
    Hetzelfde geldt voor de jaarlijkse vennootschapsbijdrage, die het kantoor
    helemaal niet opvolgt.

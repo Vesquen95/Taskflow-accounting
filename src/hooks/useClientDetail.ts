@@ -127,6 +127,33 @@ export function useClientDetail(clientId: string | null) {
     await load()
   }
 
+  /**
+   * Een einddatum op een lopende verplichting: ze blijft actief, maar levert
+   * geen taken meer op voor een periode NA die datum (migratie 0053).
+   *
+   * Het schoolvoorbeeld is een vereffening. `actief` blijft bewust op true:
+   * de verplichting loopt nog, ze heeft alleen een horizon. Pas wanneer de
+   * datum voorbij is, valt ze vanzelf uit de selectie van de motor.
+   *
+   * `null` haalt de einddatum weer weg -- een vereffening die langer duurt dan
+   * gedacht, of een datum die verkeerd getypt was.
+   */
+  async function setObligationEinddatum(obligationRowId: string, geldigTot: string | null) {
+    const { error: err } = await supabase
+      .from('client_obligations')
+      .update({ geldig_tot: geldigTot })
+      .eq('id', obligationRowId)
+    if (err) throw err
+    // De opruiming en de aanvulling zitten allebei in sync_client_tasks: wat
+    // over een periode na de einddatum gaat wordt geannuleerd, en een
+    // teruggedraaide einddatum levert de taken weer op.
+    if (clientId) {
+      const { error: syncErr } = await supabase.rpc('sync_client_tasks', { p_client_id: clientId })
+      if (syncErr) throw syncErr
+    }
+    await load()
+  }
+
   async function deactivateObligation(obligationRowId: string) {
     const { error: err } = await supabase
       .from('client_obligations')
@@ -196,6 +223,7 @@ export function useClientDetail(clientId: string | null) {
     updateObligationParameters,
     addObligation,
     deactivateObligation,
+    setObligationEinddatum,
     createAdhocTask,
     archiveClient,
     reactivateClient,

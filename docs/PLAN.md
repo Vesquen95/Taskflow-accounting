@@ -767,3 +767,59 @@ ritme staan; het overgangsjaar zelf blijft handwerk via een handmatig
 afgesproken deadline per taak. Dat echt modelleren vraagt een tabel met een
 begin- en einddatum per boekjaar per klant — een eigen beslissing van het
 kantoor, en niet nodig zolang dit uitzonderlijk blijft.
+
+## §15 — Een verplichting die op een afgesproken datum stopt (05/09/2026)
+
+**De vraag van het kantoor**, over afwijkende boekjaren: *"Ik moet niet per se
+weten hoelang die duurt, maar welke taken er blijven bestaan."* Het
+schoolvoorbeeld is een vereffening.
+
+**Wat er misging.** `client_obligations.geldig_tot` bestond al en het scherm
+toonde hem, maar de motor keek er niet naar. De kolom deed één ding: een
+verplichting valt weg zodra haar einddatum vóórbij is. Zolang die datum in de
+toekomst lag, veranderde er niets. Nagespeeld, aangifte VenB met
+`geldig_tot = 31/12/2026`:
+
+| | boekjaar | aangifte |
+| --- | --- | --- |
+| 2025 | tot 31/12/2025 | 30/09/2026 |
+| 2026 | tot 31/12/2026 | 30/09/2027 |
+| 2027 | tot 31/12/2027 | 02/10/2028 — **hoort er niet** |
+
+Het kantoor kon dus wél opschrijven dat een verplichting stopt, en Taskflow
+bleef er taken voor maken.
+
+**De grens ligt op de PERIODE, niet op de deadline.** Dat is het hele punt.
+Sluit de vereffening op 31/12/2026, dan moet de aangifte over boekjaar 2026 er
+nog steeds staan — die wordt pas op 30/09/2027 ingediend, negen maanden ná de
+einddatum. Wat wegvalt is het boekjaar 2027, niet het papierwerk over 2026.
+
+**Waar de controle zit.** In `upsert_generated_task`, niet in de achttien
+takken van de motor: elke tak noemt zijn periode anders, maar ze komen
+allemaal op dezelfde uitgang uit. De neerleggingstaak volgt vanzelf — die
+wordt alleen gemaakt wanneer er een AV-taak voor diezelfde periode bestaat.
+
+**Geen goedkeuring nodig, anders dan bij §14.** Een boekjaareinde verzetten is
+vaak een typfout; een einddatum zetten is een uitdrukkelijke handeling met
+precies dit als bedoeling.
+
+### Wat een vereffening fiscaal betekent (opgezocht 05/09/2026)
+
+Voor de discussie over een "in vereffening"-markering, met de bronnen erbij:
+
+- **Alles blijft lopen tot de sluiting.** Een vennootschap wordt na ontbinding
+  geacht voort te bestaan vóór haar vereffening (art. 2:76 WVV); de
+  rechtspersoonlijkheid verdwijnt pas bij de sluiting. De vereffenaar dient de
+  gewone jaarlijkse aangifte in voor elk boekjaar tot de sluiting (art. 305,
+  derde lid in fine WIB 92) en legt jaarlijks een jaarrekening neer bij de NBB,
+  ten laatste zeven maanden na het boekjaareinde (art. 2:99 WVV).
+- **De ontbinding sluit het boekjaar** (art. 2:70, tweede lid WVV). Valt ze
+  niet samen met de statutaire afsluitdatum, dan ontstaat er een verkort
+  boekjaar met een eigen jaarrekening en een **"aangifte speciaal"**.
+- **De aangifte speciaal is géén formule.** Art. 310, tweede lid WIB 92: de
+  termijn mag niet korter zijn dan één maand vanaf de goedkeuring van de
+  resultaten van de vereffening, noch langer dan zes maanden vanaf de laatste
+  dag van het tijdperk. Het anker is dus een goedkeuringsdatum die Taskflow
+  niet kent — dat wordt een datum die het kantoor invult, geen berekening.
+- **Bij een ontbinding en vereffening in één akte (turboliquidatie)** is er
+  maar één bijzonder belastbaar tijdperk en dus maar één aangifte.

@@ -49,6 +49,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     reload,
     addObligation,
     deactivateObligation,
+    setObligationEinddatum,
     createAdhocTask,
     archiveClient,
     reactivateClient,
@@ -156,8 +157,14 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     return <p className="p-6 text-sm text-slate-400">Laden…</p>
   }
 
-  const activeObligations = obligations.filter((o) => o.actief && !o.geldig_tot)
-  const historicalObligations = obligations.filter((o) => !(o.actief && !o.geldig_tot))
+  // Een einddatum in de toekomst betekent dat de verplichting nog LOOPT: ze
+  // levert nog taken op, tot en met de laatste periode die op of vóór die
+  // datum eindigt (migratie 0053). Alleen wat echt voorbij is, is historiek.
+  const vandaag = new Date().toISOString().slice(0, 10)
+  const looptNog = (o: (typeof obligations)[number]) =>
+    o.actief && (!o.geldig_tot || o.geldig_tot >= vandaag)
+  const activeObligations = obligations.filter(looptNog)
+  const historicalObligations = obligations.filter((o) => !looptNog(o))
   // `tasks` comes back due_date-descending (useful for history "most
   // recent first") — the upcoming/open list reads better soonest-first.
   const upcoming = tasks.filter((t) => !isAfgesloten(t.status)).sort((a, b) => a.due_date.localeCompare(b.due_date))
@@ -284,7 +291,13 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
                 <tr key={o.id}>
                   <td className="px-3 py-2 font-medium text-slate-800">{o.obligation_type.naam}</td>
                   <td className="px-3 py-2 text-slate-600">{formatDate(o.geldig_vanaf)}</td>
-                  <td className="px-3 py-2 text-slate-600">—</td>
+                  <td className="px-3 py-2 text-slate-600">
+                    <ObligationEinddatum
+                      geldigTot={o.geldig_tot}
+                      naam={o.obligation_type.naam}
+                      onZet={(datum) => setObligationEinddatum(o.id, datum)}
+                    />
+                  </td>
                   <td className="px-3 py-2">
                     <span className="inline-flex rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
                       Actief
@@ -462,6 +475,74 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           onSubmit={createAdhocTask}
         />
       )}
+    </div>
+  )
+}
+
+/**
+ * De einddatum van een lopende verplichting.
+ *
+ * Waarom dit een veld is en geen tweede "deactiveren"-knop: deactiveren stopt
+ * een verplichting vandáág. Hier gaat het om een datum die je nu al kent maar
+ * die nog moet komen -- de sluiting van een vereffening, het einde van een
+ * mandaat. De verplichting blijft tot dan gewoon lopen.
+ *
+ * De grens ligt op de periode, niet op de deadline (migratie 0053): zet je
+ * 31/12/2026, dan blijft de aangifte over boekjaar 2026 staan, ook al wordt
+ * die pas in september 2027 ingediend.
+ */
+function ObligationEinddatum({
+  geldigTot,
+  naam,
+  onZet,
+}: {
+  geldigTot: string | null
+  naam: string
+  onZet: (datum: string | null) => Promise<void>
+}) {
+  const [bezig, setBezig] = useState(false)
+  const [fout, setFout] = useState<string | null>(null)
+
+  async function zet(datum: string | null) {
+    setFout(null)
+    setBezig(true)
+    try {
+      await onZet(datum)
+    } catch (err) {
+      setFout(reportError(err, 'De einddatum kon niet bewaard worden.'))
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <input
+          type="date"
+          aria-label={`Loopt tot en met — ${naam}`}
+          value={geldigTot ?? ''}
+          disabled={bezig}
+          onChange={(e) => void zet(e.target.value || null)}
+          className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 disabled:opacity-50"
+        />
+        {geldigTot && (
+          <button
+            type="button"
+            disabled={bezig}
+            onClick={() => void zet(null)}
+            className="text-xs text-slate-500 hover:text-slate-800 disabled:opacity-50"
+          >
+            Wissen
+          </button>
+        )}
+      </div>
+      {geldigTot && (
+        <span className="text-[11px] text-slate-500">
+          Geen taken meer voor een periode na deze datum.
+        </span>
+      )}
+      {fout && <span className="text-[11px] text-red-700">{fout}</span>}
     </div>
   )
 }
