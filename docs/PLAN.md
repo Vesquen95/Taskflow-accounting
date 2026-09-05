@@ -963,3 +963,68 @@ verandert.
 (30/09/2026 en 16/10/2026) zijn gelijk aan wat de motor rekent. De rijen voor
 aanslagjaar 2027 bestaan nog niet — die publiceert de FOD pas in het voorjaar
 van 2027.
+
+## §19 — Wat elke graad te zien krijgt (05/09/2026)
+
+Het kantoor: *"Denk na wat een junior zou moeten zien en wat een partner zou
+moeten zien. Partners zijn meestal lui en kijken hier niet veel en snel naar.
+Supervisor en manager zullen het meeste moeten doen."*
+
+Nagemeten, en het systeem stond precies omgekeerd.
+
+**De zes graden deden maar één ding.** `niveau` bepaalde uitsluitend of je mag
+goedkeuren (0042). Verder zag een junior exact dezelfde applicatie als een
+supervisor. Zes graden gemodelleerd, één bit gebruikt.
+
+**Het enige overzichtsscherm stond op `kantoorbeheerder`.** De twee graden die
+volgens het kantoor het meeste werk doen — supervisor en manager — hadden dus
+géén overzicht. Alleen de kantoorbeheerder had er een.
+
+**Iedereen opent op alles.** Gemeten op de testomgeving:
+
+| | graad | eigen werk | op het scherm |
+| --- | --- | --- | --- |
+| Testgebruiker | junior | 279 | 1.007 |
+| Leen Maes | supervisor | 694 | 1.403 |
+| Karel De Smet | manager | 673 | 1.565 |
+| Wibren | partner | 336 | 3.588 |
+
+De absolute getallen zijn opgeblazen door de testbackfill; de verhouding niet.
+Iedereen krijgt drie tot vier keer meer te zien dan van hem is, en de graad die
+het kortst kijkt krijgt het meest.
+
+### Wat er nu staat: het scherm Overzicht (0056)
+
+Vanaf **supervisor** — een lagere grens dan die voor goedkeuren (manager), want
+meekijken en tekenen zijn niet hetzelfde recht. Vier getallen per team:
+
+- **te laat, niemand op** — vooraan, want dit is het enige getal waar geen mens
+  achter zit die eraan herinnerd wordt. Kantoorbreed 28 op de testomgeving.
+- **te laat** — met het wettelijke deel apart: een gemiste wettelijke termijn
+  kost iets anders dan een gemiste interne rapportering.
+- **bij de klant > 21 dagen** — `wacht_op_klant` is waar werk blijft liggen. Op
+  de testomgeving wachtte 23 van de 27 al langer dan die grens.
+- **wacht op goedkeuring**.
+
+De afbakening komt van de muur zelf: een manager ziet zijn eigen team plus de
+dossiers zonder team, een partner ziet alle zeven rijen, gesorteerd op waar het
+het ergst is. Eén query, geen aparte "voor jou"- en "kantoorbrede" variant die
+uit elkaar kan lopen.
+
+### En de getallen worden in de databank geteld
+
+Het workload-dashboard haalde élke openstaande taak van het kantoor op — 3.588
+rijen met drie gejoinde objecten — om er in de browser 66 getallen van te
+maken. Er stond geen expliciete grens op die query, dus de standaardgrens van
+PostgREST bepaalde stilzwijgend hoeveel er meekwam, en een afgekapt totaal ziet
+er precies uit als een kloppend totaal. Beide schermen tellen nu waar de rijen
+staan.
+
+### Wat hier nog NIET in zit
+
+- **Junior en senior openen nog altijd op alles.** Het plan is: standaard "mijn
+  werk", met de teambak (412 taken zonder naam) als tweede tab. Nog te doen.
+- **De partner heeft hier weinig aan.** Wie zelden en kort kijkt, opent de app
+  niet. Voor die rol is de maandagmail geen extraatje maar het enige
+  realistische aanraakpunt — dat maakt het afwerken van de verzender
+  belangrijker dan het eerst leek.

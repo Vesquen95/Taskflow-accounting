@@ -1,40 +1,27 @@
-import { useMemo } from 'react'
-import { useTaskInstances } from '../hooks/useTaskInstances'
-import { useEmployees } from '../hooks/useEmployees'
+import { useWorkload } from '../hooks/useKantooroverzicht'
 import { ErrorState } from '../components/ErrorState'
-import { daysUntil } from '../lib/urgency'
 
-/** Workload-dashboard (§4 point 6, kantoorbeheerder/partner): capaciteit
- * per medewerker, aantal te laat, verwacht volume. */
+/** Workload-dashboard (§4 punt 6): wie zit vol, wie loopt achter.
+ *
+ *  Beantwoordt een andere vraag dan het Overzicht: dáár gaat het over wat er
+ *  misloopt, hier over wie het moet doen.
+ *
+ *  De getallen komen sinds 0056 uit de databank. Daarvóór haalde dit scherm
+ *  élke openstaande taak van het kantoor op -- op de testomgeving 3.588 rijen
+ *  met drie gejoinde objecten -- om er in de browser 66 getallen van te maken.
+ *  Er stond geen expliciete grens op die query, dus de standaardgrens van
+ *  PostgREST bepaalde stilzwijgend hoeveel er meekwam; een afgekapt totaal
+ *  ziet er precies uit als een kloppend totaal. */
 export function WorkloadDashboardPage() {
-  const { employees } = useEmployees()
-  const { tasks, loading, error, reload } = useTaskInstances({})
-
-  const rows = useMemo(() => {
-    return employees
-      .filter((e) => e.actief)
-      .map((emp) => {
-        const own = tasks.filter((t) => t.toegewezen_medewerker_id === emp.id)
-        const overdue = own.filter((t) => daysUntil(t.due_date) < 0).length
-        const dueThisWeek = own.filter((t) => {
-          const d = daysUntil(t.due_date)
-          return d >= 0 && d <= 7
-        }).length
-        const dueThisMonth = own.filter((t) => {
-          const d = daysUntil(t.due_date)
-          return d >= 0 && d <= 31
-        }).length
-        const wachtOpGoedkeuring = own.filter((t) => t.status === 'wacht_op_goedkeuring').length
-        return { emp, total: own.length, overdue, dueThisWeek, dueThisMonth, wachtOpGoedkeuring }
-      })
-      .sort((a, b) => b.overdue - a.overdue || b.total - a.total)
-  }, [employees, tasks])
+  const { rijen, loading, error, reload } = useWorkload()
 
   return (
     <div className="p-4 lg:p-6">
       <div className="mb-4">
         <h1 className="text-xl font-semibold text-slate-900">Workload-dashboard</h1>
-        <p className="text-sm text-slate-500">Capaciteit en achterstand per medewerker, kantoorbreed.</p>
+        <p className="text-sm text-slate-500">
+          Capaciteit en achterstand per medewerker, over de dossiers die je kan zien.
+        </p>
       </div>
 
       {error ? (
@@ -55,17 +42,17 @@ export function WorkloadDashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map(({ emp, total, overdue, dueThisWeek, dueThisMonth, wachtOpGoedkeuring }) => (
-                <tr key={emp.id}>
-                  <td className="px-3 py-2 font-medium text-slate-800">{emp.naam}</td>
-                  <td className="px-3 py-2 text-slate-600">{total}</td>
-                  <td className={`px-3 py-2 font-semibold ${overdue > 0 ? 'text-red-600' : 'text-slate-400'}`}>{overdue}</td>
-                  <td className="px-3 py-2 text-slate-600">{dueThisWeek}</td>
-                  <td className="px-3 py-2 text-slate-600">{dueThisMonth}</td>
-                  <td className="px-3 py-2 text-slate-600">{wachtOpGoedkeuring}</td>
+              {rijen.map((r) => (
+                <tr key={r.employee_id}>
+                  <td className="px-3 py-2 font-medium text-slate-800">{r.naam}</td>
+                  <td className="px-3 py-2 text-slate-600">{r.open_totaal}</td>
+                  <td className={`px-3 py-2 font-semibold ${r.te_laat > 0 ? 'text-red-600' : 'text-slate-400'}`}>{r.te_laat}</td>
+                  <td className="px-3 py-2 text-slate-600">{r.binnen_7_dagen}</td>
+                  <td className="px-3 py-2 text-slate-600">{r.binnen_31_dagen}</td>
+                  <td className="px-3 py-2 text-slate-600">{r.wacht_op_goedkeuring}</td>
                 </tr>
               ))}
-              {rows.length === 0 && (
+              {rijen.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-3 py-4 text-center text-slate-400">
                     Geen actieve medewerkers.

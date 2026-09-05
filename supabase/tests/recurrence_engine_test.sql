@@ -7455,4 +7455,199 @@ begin
   raise notice 'PASS 59.3: ook een kantoorbeheerder komt er niet meer bij';
 end $$;
 
+-- ============================================================
+-- Sectie 60 (0056): het kantooroverzicht.
+--
+-- Twee dingen moeten kloppen en ze trekken aan elkaar: het overzicht moet
+-- OPEN genoeg zijn (een supervisor hoort erbij te kunnen, dat was net het
+-- probleem) en tegelijk DICHT genoeg (de muur mag er niet door lekken).
+-- 60.3 en 60.4 bewaken die twee kanten.
+-- ============================================================
+do $$
+declare
+  v_firm uuid;
+  v_admin uuid;   v_admin_uid uuid := gen_random_uuid();
+  v_junior uuid;  v_junior_uid uuid := gen_random_uuid();
+  v_super uuid;   v_super_uid uuid := gen_random_uuid();
+  v_t_a uuid; v_t_b uuid;
+  v_klant_a uuid; v_klant_b uuid; v_ot uuid; v_taak uuid;
+  v_n int; v_rij record;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's60a@test.local', now()),
+    (v_junior_uid, 's60b@test.local', now()),
+    (v_super_uid, 's60c@test.local', now());
+  insert into public.firms (naam) values ('S60 Kantoor') returning id into v_firm;
+  insert into public.teams (firm_id, code, naam, vestiging) values
+    (v_firm, 'S60A', 'S60 Team A', 'Aalst') returning id into v_t_a;
+  insert into public.teams (firm_id, code, naam, vestiging) values
+    (v_firm, 'S60B', 'S60 Team B', 'Zaventem') returning id into v_t_b;
+
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, niveau, actief)
+    values (v_firm, v_admin_uid, 'S60 Beheerder', 's60a@test.local', 'kantoorbeheerder', 'partner', true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, niveau, actief)
+    values (v_firm, v_junior_uid, 'S60 Junior', 's60b@test.local', 'medewerker', 'junior', true)
+    returning id into v_junior;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, niveau, actief)
+    values (v_firm, v_super_uid, 'S60 Supervisor', 's60c@test.local', 'medewerker', 'supervisor', true)
+    returning id into v_super;
+  insert into public.employee_teams (employee_id, team_id) values
+    (v_super, v_t_a), (v_junior, v_t_a);
+
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S60 Klant A', 12, 31, 'geen', true, v_t_a) returning id into v_klant_a;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S60 Klant B', 12, 31, 'geen', true, v_t_b) returning id into v_klant_b;
+
+  select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
+
+  -- Team A: één taak te laat en zonder naam -- het gevaarlijkste geval.
+  -- De provenance-trigger (0013) herschrijft een met de hand ingevoegde
+  -- 'automatisch_gegenereerd' naar 'handmatig_adhoc'; dezelfde vlag als de
+  -- generator zet, zet dat recht. Nodig omdat alleen een gegenereerde taak
+  -- een verplichtingstype draagt, en dus meetelt in te_laat_wettelijk.
+  perform set_config('taskflow.generating', 'on', true);
+  insert into public.task_instances (client_id, obligation_type_id, periode_label,
+      periode_start, periode_eind, due_date, due_date_wettelijk, status,
+      toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant_a, v_ot, '2024', date '2024-01-01', date '2024-12-31',
+      current_date - 20, current_date - 20, 'open', null, 'automatisch_gegenereerd', true);
+  perform set_config('taskflow.generating', 'off', true);
+
+  -- Team A: één taak die te lang bij de klant ligt.
+  --
+  -- De stempel `wacht_op_klant_sinds` is eigendom van de statustrigger (0047)
+  -- en wordt bij elke update overschreven met de oude waarde; er is dus geen
+  -- gewone weg om er een datum van veertig dagen geleden in te zetten. Zelfde
+  -- aanpak als de backfill van 0047: de trigger even uit, de stempel zetten,
+  -- trigger weer aan.
+  -- Een taak begint altijd op 'open' -- de insert dwingt dat af -- dus de
+  -- wachtstand komt van een statuswijziging, en die zet de stempel op nu.
+  insert into public.task_instances (client_id, title, due_date, due_date_wettelijk,
+      toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant_a, 'S60 wacht lang', current_date + 30, current_date + 30,
+      v_super, 'handmatig_adhoc', false)
+    returning id into v_taak;
+  perform set_config('taskflow.test_uid', v_super_uid::text, true);
+  update public.task_instances set status = 'wacht_op_klant' where id = v_taak;
+  alter table public.task_instances disable trigger trg_task_instances_enforce_transition;
+  update public.task_instances
+     set wacht_op_klant_sinds = now() - interval '40 days'
+   where id = v_taak;
+  alter table public.task_instances enable trigger trg_task_instances_enforce_transition;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  -- Team B: twee taken, waarvan één te laat. Team A hoort die NIET te zien.
+  insert into public.task_instances (client_id, title, due_date, due_date_wettelijk,
+      status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant_b, 'S60 B te laat', current_date - 5, current_date - 5,
+      'open', null, 'handmatig_adhoc', false);
+  insert into public.task_instances (client_id, title, due_date, due_date_wettelijk,
+      status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant_b, 'S60 B op tijd', current_date + 10, current_date + 10,
+      'open', null, 'handmatig_adhoc', false);
+
+  -- ---------------------------------------------------------
+  -- 60.1 De kantoorbeheerder ziet beide teams.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  select count(*) into v_n from public.kantooroverzicht();
+  set local role postgres;
+  if v_n <> 2 then
+    raise exception 'FAIL 60.1: de kantoorbeheerder ziet % team(s) i.p.v. 2', v_n;
+  end if;
+  raise notice 'PASS 60.1: de kantoorbeheerder ziet alle teams';
+
+  -- ---------------------------------------------------------
+  -- 60.2 De getallen kloppen, en het gevaarlijkste getal staat er apart in:
+  --      werk dat te laat is én dat niemand op zich heeft staan.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  select * into v_rij from public.kantooroverzicht() where team_code = 'S60A';
+  set local role postgres;
+  if v_rij.open_totaal <> 2 then
+    raise exception 'FAIL 60.2: team A telt % open taken i.p.v. 2', v_rij.open_totaal;
+  end if;
+  if v_rij.te_laat <> 1 or v_rij.te_laat_wettelijk <> 1 then
+    raise exception 'FAIL 60.2: team A: te_laat=% wettelijk=%, verwacht 1 en 1',
+      v_rij.te_laat, v_rij.te_laat_wettelijk;
+  end if;
+  if v_rij.niemand_op <> 1 or v_rij.niemand_op_te_laat <> 1 then
+    raise exception 'FAIL 60.2: team A: niemand_op=% waarvan te laat=%, verwacht 1 en 1',
+      v_rij.niemand_op, v_rij.niemand_op_te_laat;
+  end if;
+  if v_rij.te_lang_bij_klant <> 1 then
+    raise exception 'FAIL 60.2: team A telt % taken die te lang bij de klant liggen i.p.v. 1',
+      v_rij.te_lang_bij_klant;
+  end if;
+  raise notice 'PASS 60.2: de vier getallen kloppen, inclusief te laat én zonder naam';
+
+  -- ---------------------------------------------------------
+  -- 60.3 OPEN GENOEG: een supervisor mag erbij. Dit was het probleem --
+  --      het oude scherm stond op `kantoorbeheerder` en juist de graden die
+  --      het meeste werk doen, konden er niet in.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.test_uid', v_super_uid::text, true);
+  set local role authenticated;
+  select count(*) into v_n from public.kantooroverzicht();
+  set local role postgres;
+  if v_n = 0 then
+    raise exception 'FAIL 60.3: de supervisor krijgt niets te zien';
+  end if;
+  raise notice 'PASS 60.3: een supervisor kan het overzicht openen';
+
+  -- ---------------------------------------------------------
+  -- 60.4 DICHT GENOEG: en hij ziet alleen zijn eigen team. Zonder deze test
+  --      zou 60.3 ook slagen als het overzicht de muur negeerde.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.test_uid', v_super_uid::text, true);
+  set local role authenticated;
+  select count(*) into v_n from public.kantooroverzicht() where team_code = 'S60B';
+  set local role postgres;
+  if v_n <> 0 then
+    raise exception 'FAIL 60.4: de supervisor ziet het andere team in het overzicht';
+  end if;
+  raise notice 'PASS 60.4: het overzicht lekt niet door de teammuur';
+
+  -- ---------------------------------------------------------
+  -- 60.5 Een junior komt er niet in. Niet omdat het geheim is -- de muur
+  --      staat er sowieso onder -- maar omdat het zijn scherm niet is.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.test_uid', v_junior_uid::text, true);
+  set local role authenticated;
+  begin
+    perform * from public.kantooroverzicht();
+    set local role postgres;
+    raise exception 'FAIL 60.5: een junior kan het kantooroverzicht openen';
+  exception when insufficient_privilege then
+    null;
+  end;
+  set local role postgres;
+  raise notice 'PASS 60.5: het overzicht begint bij supervisor';
+
+  -- ---------------------------------------------------------
+  -- 60.6 Het workload-overzicht volgt dezelfde grens en dezelfde muur.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.test_uid', v_super_uid::text, true);
+  set local role authenticated;
+  select count(*) into v_n from public.workload_per_medewerker();
+  set local role postgres;
+  if v_n = 0 then
+    raise exception 'FAIL 60.6: de supervisor krijgt geen workload te zien';
+  end if;
+
+  -- Het werk van team B mag niet meegeteld worden bij wie het niet mag zien.
+  perform set_config('taskflow.test_uid', v_super_uid::text, true);
+  set local role authenticated;
+  select coalesce(sum(open_totaal), 0) into v_n from public.workload_per_medewerker();
+  set local role postgres;
+  if v_n <> 1 then
+    raise exception 'FAIL 60.6: de supervisor telt % taken i.p.v. 1 (alleen zijn eigen team, en daar staat één taak op naam)', v_n;
+  end if;
+  raise notice 'PASS 60.6: het workload-overzicht volgt dezelfde grens en dezelfde muur';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

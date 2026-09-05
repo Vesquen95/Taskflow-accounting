@@ -14,9 +14,11 @@ import { useKleinScherm } from './hooks/useKleinScherm'
 import { KlantenlijstPage } from './pages/KlantenlijstPage'
 import { KlantDossierPage } from './pages/KlantDossierPage'
 import { WorkloadDashboardPage } from './pages/WorkloadDashboardPage'
+import { OverzichtPage } from './pages/OverzichtPage'
 import { GoedkeuringPage } from './pages/GoedkeuringPage'
 import { WettelijkeKalenderPage } from './pages/WettelijkeKalenderPage'
 import { MedewerkersPage } from './pages/MedewerkersPage'
+import { magOverzichtZien } from './lib/overzicht'
 
 function LoadingScreen() {
   return (
@@ -82,8 +84,14 @@ function AuthenticatedApp({ onDeactivated }: { onDeactivated: () => void }) {
       // plaats van een lijst die je niets kunt aandoen.
       page = employee.mag_goedkeuren ? <GoedkeuringPage /> : naarHoofdscherm()
       break
+    case 'overzicht':
+      // Vanaf supervisor (0056). De databank weigert het ook zelf; dit is de
+      // beleefde variant -- een leeg scherm met een foutmelding is erger dan
+      // teruggestuurd worden naar waar je wél iets kunt doen.
+      page = magOverzichtZien(employee) ? <OverzichtPage navigate={navigate} /> : naarHoofdscherm()
+      break
     case 'workload':
-      page = employee.rol === 'kantoorbeheerder' ? <WorkloadDashboardPage /> : naarHoofdscherm()
+      page = magOverzichtZien(employee) ? <WorkloadDashboardPage /> : naarHoofdscherm()
       break
     case 'wettelijke-kalender':
       page = employee.rol === 'kantoorbeheerder' ? <WettelijkeKalenderPage /> : naarHoofdscherm()

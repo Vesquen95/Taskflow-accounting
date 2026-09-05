@@ -3,6 +3,7 @@ import type { Employee } from '../types'
 import { useAuth } from '../hooks/useAuth'
 import { INGANGEN } from '../lib/werkstromen'
 import { useKleinScherm } from '../hooks/useKleinScherm'
+import { magOverzichtZien } from '../lib/overzicht'
 
 interface NavItem {
   view: string
@@ -12,13 +13,20 @@ interface NavItem {
    *  beheer van de app hangt aan de rol, het goedkeuren van aangiftes aan de
    *  graad (migratie 0042). Een partner die geen kantoorbeheerder is, hoort
    *  wél het goedkeuringsscherm te zien en niet de medewerkerslijst. */
-  vereist?: 'kantoorbeheerder' | 'goedkeuringsrecht'
+  vereist?: 'kantoorbeheerder' | 'goedkeuringsrecht' | 'overzicht'
 }
 
-/** Ziet deze medewerker dit menu-item? */
+/** Ziet deze medewerker dit menu-item?
+ *
+ *  Drie assen, en ze liggen bewust niet op elkaar. Het beheer van de app hangt
+ *  aan de rol; goedkeuren aan de graad vanaf manager (0042); meekijken aan de
+ *  graad vanaf supervisor (0056). Die laatste grens ligt lager dan die van
+ *  goedkeuren: de supervisor en de manager doen het meeste werk en hadden
+ *  daarvóór géén overzichtsscherm -- dat stond op `kantoorbeheerder`. */
 function magZien(item: NavItem, employee: Employee): boolean {
   if (item.vereist === 'kantoorbeheerder') return employee.rol === 'kantoorbeheerder'
   if (item.vereist === 'goedkeuringsrecht') return employee.mag_goedkeuren
+  if (item.vereist === 'overzicht') return magOverzichtZien(employee)
   return true
 }
 
@@ -41,7 +49,10 @@ function navGroepen(kleinScherm: boolean): NavGroep[] {
     id: 'start',
     // Op een telefoon opent dit geen kalender maar een takenlijst (te laat,
     // vandaag, deze week). Het "Kalender" noemen zou beloven wat er niet staat.
-    items: [{ view: 'kalender', label: kleinScherm ? 'Taken' : 'Kalender' }],
+    items: [
+      { view: 'kalender', label: kleinScherm ? 'Taken' : 'Kalender' },
+      { view: 'overzicht', label: 'Overzicht', vereist: 'overzicht' as const },
+    ],
   },
   {
     id: 'werk',
@@ -64,7 +75,7 @@ function navGroepen(kleinScherm: boolean): NavGroep[] {
     titel: 'Beheer',
     items: [
       { view: 'klanten', label: 'Klanten' },
-      { view: 'workload', label: 'Workload', vereist: 'kantoorbeheerder' },
+      { view: 'workload', label: 'Workload', vereist: 'overzicht' },
       { view: 'wettelijke-kalender', label: 'Wettelijke kalender', vereist: 'kantoorbeheerder' },
       { view: 'medewerkers', label: 'Medewerkers', vereist: 'kantoorbeheerder' },
     ],
