@@ -70,6 +70,7 @@ export type VerplichtingSleutel =
   | 'patrimoniumtaks'
   | 'ubo_bevestiging'
   | 'ic_opgave'
+  | 'bedrijfsvoorheffing'
   | 'btw_bijzondere_aangifte'
   | 'aangifte_pb'
   | 'rapportering'
@@ -230,6 +231,16 @@ const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
       'Ja of Nee. De intracommunautaire opgave, voor wie vrijgestelde IC-leveringen doet, aan driehoeksverkeer deelneemt of B2B-diensten in een andere lidstaat verricht. Volgt standaard het btw-ritme van de klant: maandaangever de 20ste, kwartaalaangever de 25ste. Boven 50.000 euro IC-leveringen per kwartaal wordt ze maandelijks — dat zet je per dossier in het klantformulier.',
     synoniemen: ['ic', 'icopgave', 'intracommunautair', 'iclisting', 'icl'],
     breedte: 12,
+  },
+  {
+    sleutel: 'bedrijfsvoorheffing',
+    kop: 'Bedrijfsvoorheffing',
+    vereist: false,
+    verplichting: true,
+    uitleg:
+      'Ja of Nee. De kwartaalaangifte bedrijfsvoorheffing via Finprof, tegen de 15de van de maand na het kwartaal. Alleen de kwartaalvariant: wie boven het grensbedrag van artikel 412 WIB 92 zit, moet maandelijks aangeven, en die kalender kondigt de FOD per jaar aan. Loopt de loonverwerking via een erkend sociaal secretariaat, dan geldt een andere termijn (voorlaatste werkdag van de maand).',
+    synoniemen: ['bv', 'bedrijfsvoorheffing', 'finprof', 'voorheffing'],
+    breedte: 18,
   },
   {
     sleutel: 'btw_bijzondere_aangifte',
@@ -456,6 +467,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     patrimoniumtaks: 'Nee',
     ubo_bevestiging: 'Ja',
     ic_opgave: 'Nee',
+    bedrijfsvoorheffing: 'Ja',
     btw_bijzondere_aangifte: 'Nee',
     rapportering: 'Ja',
     fiche_281_20: 'Ja',
@@ -487,6 +499,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     patrimoniumtaks: 'Ja',
     ubo_bevestiging: 'Ja',
     ic_opgave: 'Nee',
+    bedrijfsvoorheffing: 'Nee',
     btw_bijzondere_aangifte: 'Ja',
     rapportering: '',
     fiche_281_20: 'Nee',

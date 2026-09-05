@@ -515,3 +515,44 @@ describe('ObligationPicker — de intracommunautaire opgave', () => {
     })
   })
 })
+
+describe('ObligationPicker — de aangifte bedrijfsvoorheffing', () => {
+  const types: ObligationType[] = [
+    ...obligationTypes,
+    { id: 'ot-bv', code: 'bedrijfsvoorheffing', naam: 'Aangifte bedrijfsvoorheffing', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: 'kwartaal', werkstroom: 'fiches' },
+  ]
+
+  function toon(klantsoort: 'rechtspersoon' | 'natuurlijk_persoon') {
+    bewaard.selections = legeSelecties(types)
+    function Harnas() {
+      const [sel, setSel] = useState<ObligationSelection[]>(bewaard.selections)
+      return (
+        <ObligationPicker
+          obligationTypes={types}
+          employees={employees}
+          selections={sel}
+          btwRegime="periodieke_aangever"
+          klantsoort={klantsoort}
+          onChange={(next) => {
+            bewaard.selections = next
+            setSel(next)
+          }}
+        />
+      )
+    }
+    render(<Harnas />)
+  }
+
+  it('staat bij een vennootschap', () => {
+    toon('rechtspersoon')
+    expect(screen.getByText(/Aangifte bedrijfsvoorheffing/)).toBeInTheDocument()
+  })
+
+  it('staat ook bij een natuurlijke persoon', () => {
+    // Een eenmanszaak met personeel houdt evengoed bedrijfsvoorheffing in: de
+    // verplichting hangt aan het uitbetalen van loon, niet aan de vorm van het
+    // dossier.
+    toon('natuurlijk_persoon')
+    expect(screen.getByText(/Aangifte bedrijfsvoorheffing/)).toBeInTheDocument()
+  })
+})

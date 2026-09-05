@@ -37,9 +37,15 @@ export const INGANGEN: IngangDefinitie[] = [
   },
   {
     key: 'fiches',
+    // Het pad blijft 'fiches': bestaande bladwijzers en de e2e-tests wijzen
+    // ernaar, en een werkend adres breken voor een naam is de verkeerde ruil.
     pad: 'fiches',
-    label: 'Fiches',
-    omschrijving: 'Fiches 281.20, 281.45 en 281.50 — lopen per inkomstenjaar.',
+    // Sinds de aangifte bedrijfsvoorheffing (0051) zit hier meer dan fiches.
+    // "Personeel" is ook hoe de FOD het zelf indeelt: fiches en
+    // bedrijfsvoorheffing staan daar samen onder personeel en loon.
+    label: 'Personeel',
+    omschrijving:
+      'Fiches 281 per inkomstenjaar, en de kwartaalaangifte bedrijfsvoorheffing.',
   },
   {
     key: 'rapportering',

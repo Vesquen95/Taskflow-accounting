@@ -6736,4 +6736,96 @@ begin
   raise notice 'PASS 54.5: de IC-opgave staat in de btw-werkstroom';
 end $$;
 
+
+-- ============================================================
+-- Sectie 55 (0051): de kwartaalaangifte bedrijfsvoorheffing.
+--
+-- De data komen uit de kalender bedrijfsvoorheffing van de FOD en staan hier
+-- vast ingetypt:
+--
+--   Q4-2025  15.01.2026     Q1-2026  15.04.2026
+--   Q2-2026  15.07.2026     Q3-2026  15.10.2026
+--   Q4-2026  15.01.2027
+--
+-- Alle vijf een werkdag, dus die tabel bewijst niets over het weekendgeval.
+-- 15.01.2028 en 15.04.2028 zijn wél zaterdagen, en die zitten binnen de
+-- horizon. 55.3 gaat daar rechtstreeks op af.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot uuid;
+  v_wet date; v_werk date; v_n int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's55@test.local', now());
+  insert into public.firms (naam) values ('S55 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S55 Beheerder', 's55@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S55 Werkgever', 12, 31, 'geen', true) returning id into v_klant;
+
+  select id into v_ot from public.obligation_types where code = 'bedrijfsvoorheffing';
+  if v_ot is null then
+    raise exception 'FAIL 55.0: het verplichtingstype bedrijfsvoorheffing bestaat niet';
+  end if;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot, true, date '2000-01-01');
+
+  perform public.generate_task_instances(30, 24);
+
+  -- 55.1 De 15de van de maand na het kwartaal, letterlijk zoals de FOD ze
+  -- publiceert.
+  select due_date_wettelijk into v_wet from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot and periode_label = '2026-Q1';
+  if v_wet is distinct from date '2026-04-15' then
+    raise exception 'FAIL 55.1: Q1-2026 staat op % i.p.v. 15/04/2026', v_wet;
+  end if;
+  select due_date_wettelijk into v_wet from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot and periode_label = '2026-Q4';
+  if v_wet is distinct from date '2027-01-15' then
+    raise exception 'FAIL 55.1: Q4-2026 staat op % i.p.v. 15/01/2027', v_wet;
+  end if;
+  raise notice 'PASS 55.1: de kwartaalaangifte valt op de 15de van de maand erna';
+
+  -- 55.2 Vier per jaar, geen dubbele en geen gaten.
+  --
+  -- Wat dit NIET bewijst: de stap van de lus. Zet je de generate_series op
+  -- één maand in plaats van drie, dan blijft de uitkomst identiek -- het
+  -- kwartaallabel botst en `on conflict do nothing` laat de eerste rij staan.
+  -- Die mutatie is dus onzichtbaar aan de buitenkant, en er is geen test die
+  -- ze kan vangen zonder iets te beweren wat de gebruiker niet ziet.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot and periode_label like '2026-Q%';
+  if v_n <> 4 then
+    raise exception 'FAIL 55.2: % taken voor 2026 in plaats van 4', v_n;
+  end if;
+  raise notice 'PASS 55.2: vier aangiftes per jaar';
+
+  -- 55.3 De zaterdag van 15 januari 2028: de werkdatum gaat naar de vrijdag
+  -- ERVOOR, niet naar de maandag erna. De maandkalender van de FOD toont
+  -- diezelfde richting (13.02, 13.03, 14.08, 13.11 in 2026: telkens
+  -- vervroegd), en het kantoor koos die richting al voor de btw.
+  select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot and periode_label = '2027-Q4';
+  if v_wet is null then
+    raise exception 'FAIL 55.3: geen taak voor Q4-2027 binnen de horizon';
+  end if;
+  if v_wet is distinct from date '2028-01-15' then
+    raise exception 'FAIL 55.3: de wettelijke datum van Q4-2027 is % i.p.v. 15/01/2028', v_wet;
+  end if;
+  if v_werk is distinct from date '2028-01-14' then
+    raise exception 'FAIL 55.3: 15/01/2028 is een zaterdag; de werkdatum is % i.p.v. vrijdag 14/01/2028', v_werk;
+  end if;
+  raise notice 'PASS 55.3: een zaterdagdeadline plant op de vrijdag ervoor';
+
+  -- 55.4 Ze staat bij het werk rond loon, waar ook de fiches 281 zitten.
+  if (select werkstroom from public.obligation_types where id = v_ot) <> 'fiches' then
+    raise exception 'FAIL 55.4: de bedrijfsvoorheffing staat niet bij het loonwerk';
+  end if;
+  raise notice 'PASS 55.4: de bedrijfsvoorheffing staat bij het werk rond loon';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

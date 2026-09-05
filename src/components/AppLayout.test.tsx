@@ -77,7 +77,7 @@ describe('AppLayout — de navigatie op een klein scherm', () => {
   it('houdt de navigatie zelf ongewijzigd: dezelfde ingangen als altijd', () => {
     toon()
     const zijbalk = screen.getByRole('complementary')
-    for (const label of ['Kalender', 'Btw', 'Afsluiting', 'Fiches', 'Klanten', 'Medewerkers']) {
+    for (const label of ['Kalender', 'Btw', 'Afsluiting', 'Personeel', 'Klanten', 'Medewerkers']) {
       expect(zijbalk).toHaveTextContent(label)
     }
   })

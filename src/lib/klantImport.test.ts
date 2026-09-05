@@ -39,6 +39,7 @@ const RIJ_PER_KOLOM: Record<string, unknown> = {
   patrimoniumtaks: 'Nee',
   ubo_bevestiging: 'Nee',
   ic_opgave: 'Nee',
+  bedrijfsvoorheffing: 'Nee',
   btw_bijzondere_aangifte: 'Nee',
   rapportering: 'Nee',
   fiche_281_20: '',
@@ -812,5 +813,37 @@ describe('leesKlantRijen — de intracommunautaire opgave', () => {
       blad(metVeld('btw_regime', 'Geen', metVeld('btw_aangifte_frequentie', '', metVeld('ic_opgave', 'Ja'))))
     ).rijen[0]
     expect(rij.fouten.join(' ')).toMatch(/zonder btw-regime/i)
+  })
+})
+
+describe('leesKlantRijen — de aangifte bedrijfsvoorheffing', () => {
+  it('neemt ze mee bij een vennootschap', () => {
+    const rij = leesKlantRijen(blad(metVeld('bedrijfsvoorheffing', 'Ja'))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.verplichtingen.map((v) => v.code)).toContain('bedrijfsvoorheffing')
+  })
+
+  it('laat ze ook toe bij een natuurlijke persoon', () => {
+    // Een eenmanszaak met personeel houdt evengoed bedrijfsvoorheffing in.
+    // De verplichting hangt aan het uitbetalen van loon, niet aan de vorm van
+    // het dossier -- ze hier weigeren zou een reële klant buitensluiten.
+    let rij_in = GOEDE_RIJ
+    for (const [sleutel, waarde] of Object.entries({
+      klantsoort: 'Natuurlijk persoon',
+      rechtsvorm: 'Eenmanszaak',
+      algemene_vergadering: 'Nee',
+      av_datum: '',
+      jaarafsluiting: 'Nee',
+      jaarafsluiting_deadline: '',
+      aangifte_venb_pb: 'Nee',
+      va_venb: 'Nee',
+      aangifte_pb: 'Ja',
+      bedrijfsvoorheffing: 'Ja',
+    })) {
+      rij_in = metVeld(sleutel, waarde, rij_in)
+    }
+    const rij = leesKlantRijen(blad(rij_in)).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.verplichtingen.map((v) => v.code)).toContain('bedrijfsvoorheffing')
   })
 })
