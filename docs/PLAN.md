@@ -910,3 +910,56 @@ medewerker lopend werk heeft op een dossier-id dat je al kent. Echt dichtzetten
 vraagt de `p_employee_id` vast te pinnen op de oproeper, en dat botst met de
 interne oproepers die juist over een **andere** medewerker vragen (0015 kijkt
 of de toegewezen medewerker het dossier mag zien). Aparte beslissing.
+
+## §18 — De wettelijke kalender: de mechaniek klopt, de formules niet (05/09/2026)
+
+Vraag van het kantoor: is het niet goed zoals het nu is, met een lege
+`legal_calendar`? Nagekeken, en het antwoord is genuanceerd.
+
+**De mechaniek is juist.** De motor rekent zelf en een rij in `legal_calendar`
+wint. Precies twee takken raadplegen haar — `aangifte_venb_pb`/`aangifte_rpb`
+(met scope `boekjaar_<maand>`) en `aangifte_pb` — en dat zijn exact de drie
+verplichtingen waarvan de FOD de datum per jaar aankondigt. De overige vijftien
+takken zijn echte formules en horen er niet in. Het overridepad is met tests
+afgedekt (secties 26 en 44 van de testreeks).
+
+**De formules waarop ze terugvalt, zijn dat niet.** De aangekondigde datum is
+de laatste jaren telkens anders geweest:
+
+| aanslagjaar (balansdatum 31/12) | Taskflow rekent | FOD kondigde aan |
+| --- | --- | --- |
+| 2023 | 30/09/2023 | **10/10/2023** |
+| 2024 | 30/09/2024 | **07/10/2024** |
+| 2025 | 30/09/2025 | **10/10/2025** |
+| 2026 | 30/09/2026 | 30/09/2026 ✅ |
+
+Vier jaar, één treffer. Hetzelfde bij de aangifte personenbelasting met
+specifieke inkomsten: aanslagjaar 2025 was **31 oktober**, aanslagjaar 2026 is
+**16 oktober**; Taskflow rekent altijd 16 oktober.
+
+Bronnen: FOD Financiën, *Indieningstermijnen aangiften* (Biztax) en
+*Indieningstermijnen aangiften* onder Experten & Partners, geraadpleegd
+05/09/2026.
+
+Dat het dit jaar klopt is toeval: de FOD is teruggekeerd naar de wettelijke
+regel van artikel 310 WIB 92. De afwijking ging tot nu toe altijd de veilige
+kant op — te vroeg — maar niets garandeert dat. Eén jaar waarin de FOD vróéger
+legt en alle VenB-dossiers staan tegelijk te laat, zonder foutmelding, want de
+formule blijft plausibel.
+
+**De conclusie: `legal_calendar` leeg laten is niet "voorlopig prima", het is
+elk jaar opnieuw gokken dat de FOD niets verzet.**
+
+**Wat er nu voor staat.** Een maandelijkse routine (1e van de maand) die de
+FOD-bronnen tegen de motor houdt en alleen rapporteert wanneer er iets
+verschilt. Het kantoor kan de controle ook op elk moment vragen.
+
+**Het moment dat telt is mei.** De FOD publiceert allebei de data rond de
+opening van Biztax en Tax-on-web, eind april. Eén controle in mei vangt het
+hele jaar; de andere elf zijn er voor de btw-kalender en voor wat er tussendoor
+verandert.
+
+**Voor aanslagjaar 2026 is er niets in te voeren:** de aangekondigde data
+(30/09/2026 en 16/10/2026) zijn gelijk aan wat de motor rekent. De rijen voor
+aanslagjaar 2027 bestaan nog niet — die publiceert de FOD pas in het voorjaar
+van 2027.

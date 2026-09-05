@@ -42,7 +42,11 @@ als iemand de regel tegen de bron houdt.
   concludeert dat iets fout staat. De motor zelf is
   `generate_task_instances_intern`, gepatcht over meerdere migraties heen.
 - **De tabel `legal_calendar`** — voor data die per jaar aangekondigd worden
-  in plaats van uit een formule volgen.
+  in plaats van uit een formule volgen. Ze is vandaag **leeg**, en dat is een
+  bekend risico, geen toeval: de motor valt dan terug op zijn formule. Voor de
+  aangifte VenB/RPB en de aangifte PB is die formule de laatste jaren maar één
+  keer op vier gelijk geweest aan wat de FOD aankondigde (zie PLAN.md §18).
+  Dit is elk jaar opnieuw het eerste wat je nakijkt.
 
 ## Het onderscheid dat hier het meest fout gaat
 
