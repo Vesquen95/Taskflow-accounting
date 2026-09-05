@@ -7220,4 +7220,135 @@ begin
   raise notice 'PASS 57.5: zonder einddatum loopt alles gewoon door';
 end $$;
 
+-- ============================================================
+-- Sectie 58 (0054): in vereffening is niet hetzelfde als vereffend.
+--
+-- Het kantoor: "Een dossier kan in vereffening staan voor meerdere jaren,
+-- maar een vereffening is gedaan." De wet zegt hetzelfde: de vennootschap
+-- blijft na de ontbinding bestaan vóór haar vereffening (art. 2:76 WVV) en de
+-- rechtspersoonlijkheid verdwijnt pas bij de sluiting.
+--
+-- 58.1 is dus even belangrijk als 58.2: een ontbinding mag NIETS veranderen.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot_venb uuid; v_co uuid;
+  v_voor int; v_na int; v_n int; v_aantal int;
+  v_status public.task_status; v_tot date; v_melding text;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's58@test.local', now());
+  insert into public.firms (naam) values ('S58 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S58 Beheerder', 's58@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S58 Klant', 12, 31, 'geen', true) returning id into v_klant;
+  select id into v_ot_venb from public.obligation_types where code = 'aangifte_venb_pb';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot_venb, true, date '2000-01-01') returning id into v_co;
+
+  perform public.generate_task_instances(36, 0);
+  select count(*) into v_voor from public.task_instances
+   where client_id = v_klant and status = 'open';
+  if v_voor = 0 then
+    raise exception 'FAIL 58.0: geen taken om mee te beginnen';
+  end if;
+
+  -- ---------------------------------------------------------
+  -- 58.1 IN VEREFFENING verandert niets aan de taken.
+  --      Een vereffening kan jaren duren; intussen dient de vereffenaar
+  --      gewoon elk jaar de aangifte in (art. 305, derde lid in fine WIB 92).
+  -- ---------------------------------------------------------
+  update public.clients set ontbonden_op = date '2026-04-30' where id = v_klant;
+  perform public.sync_client_tasks(v_klant);
+
+  select count(*) into v_na from public.task_instances
+   where client_id = v_klant and status = 'open';
+  if v_na <> v_voor then
+    raise exception 'FAIL 58.1: een ontbinding veranderde het aantal open taken van % naar %', v_voor, v_na;
+  end if;
+  select geldig_tot into v_tot from public.client_obligations where id = v_co;
+  if v_tot is not null then
+    raise exception 'FAIL 58.1: een ontbinding zette al een einddatum (%)', v_tot;
+  end if;
+  raise notice 'PASS 58.1: in vereffening laat de verplichtingen ongemoeid';
+
+  -- 58.1b En het staat in de historiek van het dossier.
+  select count(*) into v_n from public.client_change_log
+   where client_id = v_klant and veld = 'ontbonden_op';
+  if v_n <> 1 then
+    raise exception 'FAIL 58.1b: de ontbinding staat % keer in de historiek i.p.v. één keer', v_n;
+  end if;
+  raise notice 'PASS 58.1b: de ontbinding staat in de historiek van het dossier';
+
+  -- ---------------------------------------------------------
+  -- 58.2 VEREFFEND zet de einddatum op de verplichtingen.
+  -- ---------------------------------------------------------
+  v_aantal := public.klant_vereffend(v_klant, date '2027-09-30');
+  if v_aantal < 1 then
+    raise exception 'FAIL 58.2: geen enkele verplichting kreeg een einddatum';
+  end if;
+  select geldig_tot into v_tot from public.client_obligations where id = v_co;
+  if v_tot is distinct from date '2027-09-30' then
+    raise exception 'FAIL 58.2: de verplichting loopt tot % i.p.v. 30/09/2027', coalesce(v_tot::text, 'niets');
+  end if;
+
+  -- Niets meer over een boekjaar na de sluiting.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and periode_eind > date '2027-09-30' and status = 'open';
+  if v_n <> 0 then
+    raise exception 'FAIL 58.2: % open taak/taken over een periode na de sluiting', v_n;
+  end if;
+  raise notice 'PASS 58.2: vereffend zet de einddatum en ruimt op wat erna kwam';
+
+  -- ---------------------------------------------------------
+  -- 58.3 Het papierwerk over het LAATSTE boekjaar blijft staan.
+  --      Dit is het verschil met archiveren, dat alles wegveegt (0026): de
+  --      aangifte over boekjaar 2026 wordt pas in september 2027 ingediend en
+  --      moet er dus nog zijn.
+  -- ---------------------------------------------------------
+  select status into v_status from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_venb
+     and periode_eind = date '2026-12-31';
+  if v_status is distinct from 'open' then
+    raise exception 'FAIL 58.3: de aangifte over het laatste boekjaar staat op % i.p.v. open', coalesce(v_status::text, 'niets');
+  end if;
+  raise notice 'PASS 58.3: de aangifte over het laatste boekjaar overleeft de sluiting';
+
+  -- ---------------------------------------------------------
+  -- 58.4 Sluiten kan niet zonder ontbinding: dat is altijd een typfout, en
+  --      een typfout in deze datum haalt de verplichtingen onderuit.
+  -- ---------------------------------------------------------
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S58 Nooit ontbonden', 12, 31, 'geen', true) returning id into v_klant;
+  --
+  --      De check-constraint op de tabel vangt dit sowieso op, maar met een
+  --      onleesbare boodschap. Deze test kijkt daarom naar de TEKST: de
+  --      functie hoort zelf te zeggen wat er scheelt en wat je eraan doet.
+  --      Zonder die eis zou ze vacuüm slagen op de constraint alleen.
+  begin
+    perform public.klant_vereffend(v_klant, date '2027-09-30');
+    raise exception 'FAIL 58.4: een dossier liet zich sluiten zonder ooit ontbonden te zijn';
+  exception when check_violation then
+    get stacked diagnostics v_melding = message_text;
+    if position('niet in vereffening' in v_melding) = 0 then
+      raise exception 'FAIL 58.4: de weigering legt niet uit wat er scheelt (%)', v_melding;
+    end if;
+  end;
+  raise notice 'PASS 58.4: sluiten kan niet zonder ontbinding, met een leesbare reden';
+
+  -- 58.5 En sluiten vóór de ontbinding evenmin.
+  update public.clients set ontbonden_op = date '2027-01-01' where id = v_klant;
+  begin
+    update public.clients set vereffend_op = date '2026-01-01' where id = v_klant;
+    raise exception 'FAIL 58.5: een sluiting vóór de ontbinding werd aanvaard';
+  exception when check_violation then
+    null;
+  end;
+  raise notice 'PASS 58.5: een sluiting kan niet vóór de ontbinding vallen';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

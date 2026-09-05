@@ -98,6 +98,11 @@ export interface Client {
   rechtsvorm: string | null
   boekjaar_einde_maand: number
   boekjaar_einde_dag: number
+  /** Datum van de ontbinding: vanaf hier staat het dossier in vereffening.
+   *  De verplichtingen lopen gewoon door (migratie 0054). */
+  ontbonden_op?: string | null
+  /** Datum van de sluiting van de vereffening: vanaf hier houdt alles op. */
+  vereffend_op?: string | null
   btw_regime: BtwRegime
   btw_aangifte_frequentie: BtwFrequentie | null
   mandataris: boolean

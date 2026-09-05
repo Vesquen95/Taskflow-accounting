@@ -823,3 +823,44 @@ Voor de discussie over een "in vereffening"-markering, met de bronnen erbij:
   niet kent — dat wordt een datum die het kantoor invult, geen berekening.
 - **Bij een ontbinding en vereffening in één akte (turboliquidatie)** is er
   maar één bijzonder belastbaar tijdperk en dus maar één aangifte.
+
+## §16 — In vereffening, en vereffend (05/09/2026)
+
+Het kantoor: *"In vereffening en vereffend is nog iets anders. Een dossier kan
+in vereffening staan voor meerdere jaren, maar een vereffening is gedaan."*
+
+Dat is ook wat de wet zegt, en het is de reden dat dit twee datums zijn en
+geen statusvlag:
+
+| | | wat er met de taken gebeurt |
+| --- | --- | --- |
+| `ontbonden_op` | de ontbinding | **niets** — alles loopt door |
+| `vereffend_op` | de sluiting | alle lopende verplichtingen krijgen deze einddatum |
+
+**Waarom de ontbinding niets verandert.** Een vennootschap wordt na ontbinding
+geacht voort te bestaan vóór haar vereffening (art. 2:76 WVV); de
+rechtspersoonlijkheid verdwijnt pas bij de sluiting. De vereffenaar dient
+intussen elk jaar gewoon de aangifte in (art. 305, derde lid in fine WIB 92) en
+legt elk jaar de jaarrekening neer bij de NBB, ten laatste zeven maanden na het
+boekjaareinde (art. 2:99 WVV). Hoe lang dat duurt, doet er niet toe — er hangt
+geen berekening aan de duur.
+
+**Waarom "vereffend" niet hetzelfde is als "gearchiveerd".** Archiveren
+annuleert alles wat nog openstaat (migratie 0026). Dat is hier fout: de
+aangifte over het laatste boekjaar wordt maanden ná de sluiting ingediend en
+moet blijven staan. Vereffend zetten legt daarom de einddatum van §15 op de
+verplichtingen — de periode telt, niet de deadline. Archiveren kan daarna nog
+altijd, wanneer het dossier echt afgewerkt is.
+
+**Wat bewust NIET gegenereerd wordt: de aangifte speciaal.** De ontbinding
+sluit het boekjaar (art. 2:70, tweede lid WVV); valt ze niet samen met de
+statutaire afsluitdatum, dan ontstaat er een verkort boekjaar met een eigen
+jaarrekening en een aangifte "speciaal". Dezelfde constructie herhaalt zich bij
+de sluiting. Die aangiftes zitten er niet in omdat hun termijn géén formule is:
+art. 310, tweede lid WIB 92 ankert hem op de goedkeuring van de resultaten van
+de vereffening, en die datum kent Taskflow niet. Een gegokte datum is hier
+erger dan geen datum. Het scherm zegt dat met zoveel woorden bij het vereffend
+zetten, met de vraag er een losse taak voor te maken.
+
+Bij een ontbinding en vereffening in één akte (turboliquidatie) is er maar één
+bijzonder belastbaar tijdperk en dus maar één aangifte.

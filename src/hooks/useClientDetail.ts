@@ -154,6 +154,33 @@ export function useClientDetail(clientId: string | null) {
     await load()
   }
 
+  /** De ontbinding. Verandert niets aan de verplichtingen: de vennootschap
+   *  blijft bestaan vóór haar vereffening (art. 2:76 WVV). `null` draait ze
+   *  terug. */
+  async function setOntbondenOp(datum: string | null) {
+    if (!clientId) return
+    const { error: err } = await supabase
+      .from('clients')
+      .update({ ontbonden_op: datum })
+      .eq('id', clientId)
+    if (err) throw err
+    await load()
+  }
+
+  /** De sluiting van de vereffening. Zet de datum op het dossier én als
+   *  einddatum op elke lopende verplichting, in één beweging -- los van elkaar
+   *  zetten zou een dossier opleveren dat "vereffend" zegt en intussen taken
+   *  blijft maken (migratie 0054). `null` draait de sluiting terug. */
+  async function setVereffendOp(datum: string | null) {
+    if (!clientId) return
+    const { error: err } = await supabase.rpc('klant_vereffend', {
+      p_client_id: clientId,
+      p_datum: datum,
+    })
+    if (err) throw err
+    await load()
+  }
+
   async function deactivateObligation(obligationRowId: string) {
     const { error: err } = await supabase
       .from('client_obligations')
@@ -224,6 +251,8 @@ export function useClientDetail(clientId: string | null) {
     addObligation,
     deactivateObligation,
     setObligationEinddatum,
+    setOntbondenOp,
+    setVereffendOp,
     createAdhocTask,
     archiveClient,
     reactivateClient,

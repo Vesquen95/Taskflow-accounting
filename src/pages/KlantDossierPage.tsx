@@ -14,6 +14,8 @@ import { ClientObligationFormModal } from '../components/ClientObligationFormMod
 import { AdhocTaskFormModal } from '../components/AdhocTaskFormModal'
 import { ClientArchiveModal } from '../components/ClientArchiveModal'
 import { BoekjaarWijzigingPaneel } from '../components/BoekjaarWijzigingPaneel'
+import { VereffeningPaneel } from '../components/VereffeningPaneel'
+import { vereffeningStand, VEREFFENING_LABEL } from '../lib/vereffening'
 import { isAfgesloten, telTeAnnulerenTaken } from '../lib/klantArchief'
 import { formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
@@ -50,6 +52,8 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     addObligation,
     deactivateObligation,
     setObligationEinddatum,
+    setOntbondenOp,
+    setVereffendOp,
     createAdhocTask,
     archiveClient,
     reactivateClient,
@@ -203,6 +207,11 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
                 Gearchiveerd
               </span>
             )}
+            {vereffeningStand(client) !== 'geen' && (
+              <span className="rounded-full border border-amber-400 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                {VEREFFENING_LABEL[vereffeningStand(client) as 'in_vereffening' | 'vereffend']}
+              </span>
+            )}
           </h1>
           <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-600 sm:grid-cols-4">
             <div>
@@ -235,6 +244,13 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
               <dd>{employees.find((e) => e.id === client.standaard_verantwoordelijke_id)?.naam ?? '—'}</dd>
             </div>
           </dl>
+
+          <VereffeningPaneel
+            ontbondenOp={client.ontbonden_op ?? null}
+            vereffendOp={client.vereffend_op ?? null}
+            onOntbonden={setOntbondenOp}
+            onVereffend={setVereffendOp}
+          />
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
           <div className="flex gap-2">
