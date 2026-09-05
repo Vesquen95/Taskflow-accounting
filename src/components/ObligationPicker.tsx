@@ -176,6 +176,13 @@ export function ObligationPicker({
           if (type.code === 'patrimoniumtaks' && !sel.gekozen && !kanPatrimoniumtaksHebben(rechtsvorm)) {
             return null
           }
+          // De intracommunautaire opgave hoort bij een btw-nummer. Een
+          // dossier zonder btw-regime kan geen vrijgestelde IC-leveringen
+          // doen, dus bieden we ze daar niet aan. Staat ze al aan, dan blijft
+          // ze staan -- verdwijnen terwijl ze bewaard blijft is erger.
+          if (type.code === 'ic_opgave' && !sel.gekozen && btwRegime === 'geen') {
+            return null
+          }
           // Het UBO-register geldt voor vennootschappen, (i)vzw's en
           // stichtingen. Een eenmanszaak valt erbuiten: er is geen entiteit om
           // achter te kijken. Bij een onbekende vorm blijft ze staan, om
@@ -258,6 +265,31 @@ export function ObligationPicker({
                     />
                   )}
 
+                  {type.code === 'ic_opgave' && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                      <label className="flex items-center gap-2">
+                        Frequentie
+                        <select
+                          aria-label="Frequentie van de IC-opgave"
+                          value={(sel.parameters.frequentie as string) ?? ''}
+                          onChange={(e) => wijzigParameter(type.id, 'frequentie', e.target.value)}
+                          className={veldKlasse()}
+                        >
+                          {/* Leeg is de standaard en het gewone geval: wie
+                              maandelijks btw-aangifte doet, doet maandelijks
+                              opgave. De echte regel is een drempel van 50.000
+                              euro per kwartaal, en die kent Taskflow niet --
+                              vandaar dat het kantoor kan afwijken. */}
+                          <option value="">Volgt de btw-aangifte</option>
+                          <option value="maand">Maand</option>
+                          <option value="kwartaal">Kwartaal</option>
+                        </select>
+                      </label>
+                      <span className="text-slate-500">
+                        Boven 50.000 euro IC-leveringen per kwartaal wordt ze maandelijks.
+                      </span>
+                    </div>
+                  )}
                   {type.code === 'rapportering' && (
                     <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                       <label className="flex items-center gap-2">

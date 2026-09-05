@@ -38,6 +38,7 @@ const RIJ_PER_KOLOM: Record<string, unknown> = {
   aangifte_pb: 'Nee',
   patrimoniumtaks: 'Nee',
   ubo_bevestiging: 'Nee',
+  ic_opgave: 'Nee',
   btw_bijzondere_aangifte: 'Nee',
   rapportering: 'Nee',
   fiche_281_20: '',
@@ -795,5 +796,21 @@ describe('leesKlantRijen — het UBO-register', () => {
     ).rijen[0]
     expect(rij.fouten).toEqual([])
     expect(rij.verplichtingen.map((v) => v.code)).toContain('ubo_bevestiging')
+  })
+})
+
+describe('leesKlantRijen — de intracommunautaire opgave', () => {
+  it('neemt ze mee bij een btw-plichtig dossier', () => {
+    const rij = leesKlantRijen(blad(metVeld('ic_opgave', 'Ja'))).rijen[0]
+    expect(rij.fouten).toEqual([])
+    expect(rij.verplichtingen.map((v) => v.code)).toContain('ic_opgave')
+  })
+
+  it('weigert ze bij een dossier zonder btw-regime', () => {
+    // Zonder btw-nummer kun je geen vrijgestelde IC-leveringen doen.
+    const rij = leesKlantRijen(
+      blad(metVeld('btw_regime', 'Geen', metVeld('btw_aangifte_frequentie', '', metVeld('ic_opgave', 'Ja'))))
+    ).rijen[0]
+    expect(rij.fouten.join(' ')).toMatch(/zonder btw-regime/i)
   })
 })

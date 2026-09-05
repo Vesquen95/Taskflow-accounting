@@ -6624,4 +6624,116 @@ begin
   raise notice 'PASS 53.2: de fiches van eind februari zijn niet meeverschoven';
 end $$;
 
+
+-- ============================================================
+-- Sectie 54 (0050): de intracommunautaire opgave.
+--
+-- De data komen uit de btw-kalender 2026 van de FOD en staan hier vast
+-- ingetypt:
+--
+--   kwartaalopgave  Q1-2026  25.04.2026 (zaterdag, geen uitstel)
+--                   Q3-2026  25.10.2026 (zondag,   geen uitstel)
+--   maandopgave     mei 2026 22.06.2026 (20 juni is een zaterdag, wel uitstel)
+--
+-- Let op het contrast dat deze sectie bewaakt: de kwartaalopgave stond in
+-- diezelfde kalender op 25.04.2026 terwijl de periodieke kwartaalAANGIFTE
+-- 27.04.2026 kreeg. Twee verplichtingen, dezelfde dag, een ander antwoord.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_kw uuid; v_maa uuid; v_ot uuid;
+  v_wet date; v_werk date; v_n int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's54@test.local', now());
+  insert into public.firms (naam) values ('S54 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S54 Beheerder', 's54@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S54 Kwartaalaangever', 12, 31, 'periodieke_aangever', 'kwartaal', true) returning id into v_kw;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S54 Maandaangever', 12, 31, 'periodieke_aangever', 'maand', true) returning id into v_maa;
+
+  select id into v_ot from public.obligation_types where code = 'ic_opgave';
+  if v_ot is null then
+    raise exception 'FAIL 54.0: het verplichtingstype ic_opgave bestaat niet';
+  end if;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf) values
+    (v_kw, v_ot, true, date '2000-01-01'),
+    (v_maa, v_ot, true, date '2000-01-01');
+
+  perform public.generate_task_instances(24, 24);
+
+  -- 54.1 De frequentie volgt standaard het btw-ritme van de klant.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_kw and obligation_type_id = v_ot and periode_label like '%-Q%';
+  if v_n = 0 then
+    raise exception 'FAIL 54.1: de kwartaalaangever kreeg geen kwartaalopgaven';
+  end if;
+  select count(*) into v_n from public.task_instances
+   where client_id = v_maa and obligation_type_id = v_ot and periode_label ~ '^\d{4}-\d{2}$';
+  if v_n = 0 then
+    raise exception 'FAIL 54.1: de maandaangever kreeg geen maandopgaven';
+  end if;
+  raise notice 'PASS 54.1: de opgave volgt het btw-ritme van het dossier';
+
+  -- 54.2 De kwartaalopgave schuift NIET op. Q3-2026 valt op zondag 25 oktober.
+  select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
+   where client_id = v_kw and obligation_type_id = v_ot and periode_label = '2026-Q3';
+  if v_wet is distinct from date '2026-10-25' then
+    raise exception 'FAIL 54.2: de wettelijke datum van de kwartaalopgave Q3-2026 is %', v_wet;
+  end if;
+  if v_werk is distinct from date '2026-10-23' then
+    raise exception 'FAIL 54.2: de kwartaalopgave Q3-2026 staat op % i.p.v. vrijdag 23/10/2026', v_werk;
+  end if;
+
+  -- En ook niet vóór de kanteldatum van de gewone aangifte: de opgave is
+  -- nooit meeverschoven. Q1-2026 viel op zaterdag 25 april, terwijl de
+  -- periodieke kwartaalaangifte die dag 27 april kreeg.
+  select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
+   where client_id = v_kw and obligation_type_id = v_ot and periode_label = '2026-Q1';
+  if v_wet is distinct from date '2026-04-25' then
+    raise exception 'FAIL 54.2: de wettelijke datum van de kwartaalopgave Q1-2026 is %', v_wet;
+  end if;
+  if v_werk is distinct from date '2026-04-24' then
+    raise exception 'FAIL 54.2: de kwartaalopgave Q1-2026 staat op % i.p.v. vrijdag 24/04/2026', v_werk;
+  end if;
+  raise notice 'PASS 54.2: de kwartaalopgave schuift nooit vooruit, ook niet voor de kanteldatum';
+
+  -- 54.3 De maandopgave schuift wél vooruit, net als de maandaangifte.
+  select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
+   where client_id = v_maa and obligation_type_id = v_ot and periode_label = '2026-05';
+  if v_wet is distinct from date '2026-06-20' then
+    raise exception 'FAIL 54.3: de wettelijke datum van de maandopgave mei 2026 is %', v_wet;
+  end if;
+  if v_werk is distinct from date '2026-06-22' then
+    raise exception 'FAIL 54.3: de maandopgave mei 2026 staat op % i.p.v. maandag 22/06/2026', v_werk;
+  end if;
+  raise notice 'PASS 54.3: de maandopgave schuift wel vooruit';
+
+  -- 54.4 Het kantoor kan per dossier afwijken. De echte regel is een drempel
+  -- van 50.000 euro per kwartaal, en die kent Taskflow niet.
+  update public.client_obligations
+     set parameters = jsonb_build_object('frequentie', 'maand')
+   where client_id = v_kw and obligation_type_id = v_ot;
+  perform public.generate_task_instances(24, 24);
+
+  select count(*) into v_n from public.task_instances
+   where client_id = v_kw and obligation_type_id = v_ot and periode_label ~ '^\d{4}-\d{2}$';
+  if v_n = 0 then
+    raise exception 'FAIL 54.4: de kwartaalaangever kreeg na de parameterwijziging geen maandopgaven';
+  end if;
+  raise notice 'PASS 54.4: een dossier boven de drempel kan op maandopgave gezet worden';
+
+  -- 54.5 Ze hoort in de btw-werkstroom, daar wordt ze samen met de aangifte
+  -- afgewerkt.
+  if (select werkstroom from public.obligation_types where id = v_ot) <> 'btw' then
+    raise exception 'FAIL 54.5: de IC-opgave staat niet in de btw-werkstroom';
+  end if;
+  raise notice 'PASS 54.5: de IC-opgave staat in de btw-werkstroom';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

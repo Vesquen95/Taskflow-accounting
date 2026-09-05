@@ -462,3 +462,56 @@ describe('ObligationPicker — het UBO-register', () => {
     expect(screen.getByText(/UBO-bevestiging/)).toBeInTheDocument()
   })
 })
+
+describe('ObligationPicker — de intracommunautaire opgave', () => {
+  const types: ObligationType[] = [
+    ...obligationTypes,
+    { id: 'ot-ic', code: 'ic_opgave', naam: 'Intracommunautaire opgave', categorie: 'wettelijk', deadline_mechanisme: 'formule', standaard_periodiciteit: 'maand_of_kwartaal', werkstroom: 'btw' },
+  ]
+
+  function toon(btwRegime: string, initieel?: ObligationSelection[]) {
+    bewaard.selections = initieel ?? legeSelecties(types)
+    function Harnas() {
+      const [sel, setSel] = useState<ObligationSelection[]>(bewaard.selections)
+      return (
+        <ObligationPicker
+          obligationTypes={types}
+          employees={employees}
+          selections={sel}
+          btwRegime={btwRegime}
+          onChange={(next) => {
+            bewaard.selections = next
+            setSel(next)
+          }}
+        />
+      )
+    }
+    render(<Harnas />)
+  }
+
+  it('biedt ze aan bij een btw-plichtig dossier', () => {
+    toon('periodieke_aangever')
+    expect(screen.getByText(/Intracommunautaire opgave/)).toBeInTheDocument()
+  })
+
+  it('laat ze weg bij een dossier zonder btw-regime', () => {
+    toon('geen')
+    expect(screen.queryByText(/Intracommunautaire opgave/)).toBeNull()
+  })
+
+  it('staat standaard op "volgt de btw-aangifte" en bewaart een afwijking', async () => {
+    // De echte regel is een drempel van 50.000 euro per kwartaal, en die kent
+    // Taskflow niet — vandaar dat het kantoor kan afwijken.
+    const user = userEvent.setup()
+    toon('periodieke_aangever')
+
+    await user.click(screen.getByRole('checkbox', { name: /Intracommunautaire opgave/ }))
+    const keuze = screen.getByLabelText('Frequentie van de IC-opgave') as HTMLSelectElement
+    expect(keuze.value).toBe('')
+
+    await user.selectOptions(keuze, 'maand')
+    expect(bewaard.selections.find((s) => s.obligation_type_id === 'ot-ic')?.parameters).toEqual({
+      frequentie: 'maand',
+    })
+  })
+})

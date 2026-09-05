@@ -66,9 +66,9 @@ Dit is wat je nakijkt. Niet uit je hoofd bevestigen: opzoeken.
 
 | Verplichting | Zoals het systeem het nu rekent |
 | --- | --- |
-| Btw-aangifte | maand: de 20ste van de maand erna; kwartaal: de 25ste |
+| Btw-aangifte | maand: de 20ste, mét verschuiving naar de volgende werkdag; kwartaal: de 25ste, ZONDER verschuiving sinds 01/05/2026 — dan de laatste werkdag ervóór (0048) |
 | Btw-klantenlisting | 31 maart van jaar N+1; ook voor de vrijgestelde kleine onderneming |
-| Bijzondere btw-aangifte | de 25ste van de maand na het kwartaal, enkel voor wie géén periodieke aangifte doet |
+| Bijzondere btw-aangifte | de 25ste, nooit verschoven; enkel voor wie géén periodieke aangifte doet (0048) |
 | Algemene vergadering | statutaire datum; zonder statuten boekjaareinde + 6 maanden |
 | Neerlegging jaarrekening | 30 dagen na de AV — de vroegste van de geplande en de werkelijke AV-datum (0037) |
 | Jaarafsluiting | per dossier: X maanden na het boekjaareinde, of X maanden vóór de AV |
@@ -77,8 +77,9 @@ Dit is wat je nakijkt. Niet uit je hoofd bevestigen: opzoeken.
 | Aangifte personenbelasting | eenvoudig 15 juli, complex 16 oktober |
 | Patrimoniumtaks | 31 maart, verenigingen en stichtingen |
 | Fiches 281.20 / 281.45 | eind februari van jaar N+1 |
-| Fiche 281.50 | 30 juni van jaar N+1 |
+| Fiche 281.50 | 29 juni van jaar N+1 (0049) |
 | UBO-bevestiging | jaarlijks, verankerd op boekjaareinde + 6 maanden |
+| Intracommunautaire opgave | maand: de 20ste mét verschuiving; kwartaal: de 25ste zonder. Frequentie volgt standaard het btw-ritme (0050) |
 
 ## Twee staande afspraken van het kantoor — respecteer ze
 

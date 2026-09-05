@@ -69,6 +69,7 @@ export type VerplichtingSleutel =
   | 'va_venb'
   | 'patrimoniumtaks'
   | 'ubo_bevestiging'
+  | 'ic_opgave'
   | 'btw_bijzondere_aangifte'
   | 'aangifte_pb'
   | 'rapportering'
@@ -219,6 +220,16 @@ const VERPLICHTING_KOLOMMEN: readonly Kolom[] = [
       'Ja of Nee. De jaarlijkse bevestiging in het UBO-register, ook wanneer er niets veranderd is. Geldt voor vennootschappen, (i)vzw\'s en stichtingen; niet voor een eenmanszaak. De taak valt zes maanden na het boekjaareinde, samen met de afsluiting — de wet zelf geeft geen datum, alleen "elk jaar".',
     synoniemen: ['ubo', 'uboregister', 'ubobevestiging', 'begunstigden'],
     breedte: 16,
+  },
+  {
+    sleutel: 'ic_opgave',
+    kop: 'IC-opgave',
+    vereist: false,
+    verplichting: true,
+    uitleg:
+      'Ja of Nee. De intracommunautaire opgave, voor wie vrijgestelde IC-leveringen doet, aan driehoeksverkeer deelneemt of B2B-diensten in een andere lidstaat verricht. Volgt standaard het btw-ritme van de klant: maandaangever de 20ste, kwartaalaangever de 25ste. Boven 50.000 euro IC-leveringen per kwartaal wordt ze maandelijks — dat zet je per dossier in het klantformulier.',
+    synoniemen: ['ic', 'icopgave', 'intracommunautair', 'iclisting', 'icl'],
+    breedte: 12,
   },
   {
     sleutel: 'btw_bijzondere_aangifte',
@@ -444,6 +455,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     va_venb: 'Ja',
     patrimoniumtaks: 'Nee',
     ubo_bevestiging: 'Ja',
+    ic_opgave: 'Nee',
     btw_bijzondere_aangifte: 'Nee',
     rapportering: 'Ja',
     fiche_281_20: 'Ja',
@@ -474,6 +486,7 @@ export const VOORBEELDRIJEN: ReadonlyArray<Record<KolomSleutel, string>> = [
     va_venb: 'Nee',
     patrimoniumtaks: 'Ja',
     ubo_bevestiging: 'Ja',
+    ic_opgave: 'Nee',
     btw_bijzondere_aangifte: 'Ja',
     rapportering: '',
     fiche_281_20: 'Nee',
@@ -1175,6 +1188,12 @@ function leesVerplichtingen(
   if (bij('patrimoniumtaks') && !kanPatrimoniumtaksHebben(ruw.rechtsvorm)) {
     fouten.push(
       `Patrimoniumtaks staat op Ja bij rechtsvorm "${ruw.rechtsvorm.trim()}". Die taks geldt voor vzw's, ivzw's en private stichtingen, niet voor vennootschappen.`
+    )
+  }
+  if (bij('ic_opgave') && ruw.btw_regime !== '' &&
+      REGIME_VAN_TEKST[normaliseerKop(ruw.btw_regime)] === 'geen') {
+    fouten.push(
+      'IC-opgave staat op Ja bij een dossier zonder btw-regime. De intracommunautaire opgave hoort bij een btw-nummer.'
     )
   }
   // Het UBO-register geldt voor vennootschappen, (i)vzw's en stichtingen. Een
