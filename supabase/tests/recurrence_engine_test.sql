@@ -6828,4 +6828,261 @@ begin
   raise notice 'PASS 55.4: de bedrijfsvoorheffing staat bij het werk rond loon';
 end $$;
 
+-- ============================================================
+-- Sectie 56 (0052): een gewijzigd boekjaareinde.
+--
+-- Het gedrag dat deze sectie vastlegt is precies wat er vóór 0052 STIL
+-- misging: de jaartaken bleven op het oude boekjaar staan zonder dat iets
+-- daarop wees. Elke test hieronder is dus even goed een test op de melding
+-- als op het herrekenen.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot_jaar uuid; v_ot_pb uuid;
+  v_w uuid; v_n int; v_aantal int;
+  v_due date; v_eind date; v_status public.task_status;
+  v_taak uuid; v_herzetbaar boolean; v_reden text;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's56@test.local', now());
+  insert into public.firms (naam) values ('S56 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S56 Beheerder', 's56@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S56 Klant', 12, 31, 'geen', true) returning id into v_klant;
+
+  select id into v_ot_jaar from public.obligation_types where code = 'jaarafsluiting';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters)
+    values (v_klant, v_ot_jaar, true, date '2000-01-01', '{"sla_maanden": 3}'::jsonb);
+
+  perform public.generate_task_instances(24, 0);
+
+  -- 56.0 Voorwaarde: er staan taken op het oude boekjaar.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_jaar and status = 'open';
+  if v_n < 2 then
+    raise exception 'FAIL 56.0: verwacht minstens twee open jaarafsluitingen, kreeg %', v_n;
+  end if;
+
+  -- ---------------------------------------------------------
+  -- 56.1 Het boekjaar verzetten meldt, en herrekent NIET.
+  -- ---------------------------------------------------------
+  update public.clients set boekjaar_einde_maand = 6, boekjaar_einde_dag = 30 where id = v_klant;
+
+  select id into v_w from public.boekjaar_wijzigingen where client_id = v_klant and status = 'open';
+  if v_w is null then
+    raise exception 'FAIL 56.1: een gewijzigd boekjaareinde levert geen openstaande melding op';
+  end if;
+
+  select due_date into v_due from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_jaar
+     and periode_label = '2026' and status = 'open';
+  if v_due is distinct from date '2027-03-31' then
+    raise exception 'FAIL 56.1: de taak van 2026 is al herrekend (%) terwijl er nog niemand goedgekeurd heeft', v_due;
+  end if;
+  raise notice 'PASS 56.1: de wijziging wordt gemeld en niets wordt stil herrekend';
+
+  -- ---------------------------------------------------------
+  -- 56.2 De lijst toont wat er op het oude ritme staat.
+  -- ---------------------------------------------------------
+  select count(*) into v_n from public.boekjaar_wijziging_taken(v_w);
+  if v_n < 2 then
+    raise exception 'FAIL 56.2: de lijst toont % taken, verwacht minstens twee', v_n;
+  end if;
+  select count(*) into v_n from public.boekjaar_wijziging_taken(v_w) t where t.herzetbaar;
+  if v_n < 2 then
+    raise exception 'FAIL 56.2: % van die taken is herzetbaar, verwacht minstens twee', v_n;
+  end if;
+  raise notice 'PASS 56.2: de geraakte taken staan in de lijst, met hun herzetbaarheid';
+
+  -- ---------------------------------------------------------
+  -- 56.3 Een handmatig afgesproken deadline blijft staan.
+  --
+  -- Die afspraak is met de klant gemaakt. De motor mag ze niet overschrijven,
+  -- en de lijst moet dat ook zeggen in plaats van de taak stil weg te laten.
+  -- ---------------------------------------------------------
+  select id into v_taak from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_jaar
+     and periode_label = '2027' and status = 'open';
+  perform set_config('taskflow.pipeline_task_id', '', true);
+  update public.task_instances
+  set due_date = date '2028-02-15', due_date_handmatig_op = now()
+  where id = v_taak;
+
+  select t.herzetbaar, t.reden into v_herzetbaar, v_reden
+  from public.boekjaar_wijziging_taken(v_w) t where t.task_id = v_taak;
+  if v_herzetbaar is null then
+    raise exception 'FAIL 56.3: de taak met een handmatige datum staat niet in de lijst';
+  end if;
+  if v_herzetbaar then
+    raise exception 'FAIL 56.3: een handmatig afgesproken deadline wordt als herzetbaar getoond';
+  end if;
+  if v_reden is null or position('handmatig' in v_reden) = 0 then
+    raise exception 'FAIL 56.3: de reden noemt de handmatige afspraak niet (%)', coalesce(v_reden, 'niets');
+  end if;
+  raise notice 'PASS 56.3: een handmatig afgesproken deadline wordt getoond maar niet herzet';
+
+  -- ---------------------------------------------------------
+  -- 56.4 Doorvoeren zet de taken op het nieuwe boekjaar.
+  -- ---------------------------------------------------------
+  v_aantal := public.boekjaar_wijziging_toepassen(v_w);
+  if v_aantal < 1 then
+    raise exception 'FAIL 56.4: er is niets herzet';
+  end if;
+
+  select periode_eind, due_date into v_eind, v_due from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_jaar
+     and periode_label = '2026' and status = 'open';
+  if v_eind is distinct from date '2026-06-30' then
+    raise exception 'FAIL 56.4: de taak van 2026 eindigt op % i.p.v. 30/06/2026', v_eind;
+  end if;
+  if v_due is distinct from date '2026-09-30' then
+    raise exception 'FAIL 56.4: de deadline van 2026 is % i.p.v. 30/09/2026', v_due;
+  end if;
+
+  -- De oude taak is er nog, geannuleerd. Verwijderen zou de geschiedenis van
+  -- het dossier uithollen.
+  select status into v_status from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_jaar
+     and periode_label = '2026' and periode_eind = date '2026-12-31';
+  if v_status is distinct from 'geannuleerd' then
+    raise exception 'FAIL 56.4: de oude taak van 2026 heeft status % i.p.v. geannuleerd', coalesce(v_status::text, 'niets');
+  end if;
+  raise notice 'PASS 56.4: doorvoeren zet de taken op het nieuwe boekjaar en bewaart de oude';
+
+  -- 56.5 De taak met de handmatige afspraak is niet aangeraakt.
+  select due_date, status into v_due, v_status from public.task_instances where id = v_taak;
+  if v_status is distinct from 'open' or v_due is distinct from date '2028-02-15' then
+    raise exception 'FAIL 56.5: de handmatig afgesproken taak is toch gewijzigd (% op %)', v_status, v_due;
+  end if;
+  raise notice 'PASS 56.5: de handmatig afgesproken taak is ongemoeid gelaten';
+
+  -- 56.6 De melding is afgehandeld en kan niet twee keer doorgevoerd worden.
+  select status::text into v_reden from public.boekjaar_wijzigingen where id = v_w;
+  if v_reden <> 'doorgevoerd' then
+    raise exception 'FAIL 56.6: de melding staat op % i.p.v. doorgevoerd', v_reden;
+  end if;
+  begin
+    perform public.boekjaar_wijziging_toepassen(v_w);
+    raise exception 'FAIL 56.6: een afgehandelde melding liet zich opnieuw doorvoeren';
+  exception when check_violation then
+    null;
+  end;
+  raise notice 'PASS 56.6: een melding wordt hoogstens één keer doorgevoerd';
+
+  -- ---------------------------------------------------------
+  -- 56.7 Terug naar het oorspronkelijke boekjaar laat niets te beslissen over.
+  -- ---------------------------------------------------------
+  update public.clients set boekjaar_einde_maand = 3, boekjaar_einde_dag = 31 where id = v_klant;
+  update public.clients set boekjaar_einde_maand = 6, boekjaar_einde_dag = 30 where id = v_klant;
+  select count(*) into v_n from public.boekjaar_wijzigingen
+   where client_id = v_klant and status = 'open';
+  if v_n <> 0 then
+    raise exception 'FAIL 56.7: er blijft een melding open nadat het boekjaar terug op zijn oude waarde staat (%)', v_n;
+  end if;
+  raise notice 'PASS 56.7: heen en terug laat geen melding achter';
+
+  -- ---------------------------------------------------------
+  -- 56.8 De aangifte personenbelasting hangt NIET aan het boekjaar.
+  --
+  -- Dat is de scherpe kant van de vlag: een vaste kalenderdatum voor een
+  -- natuurlijke persoon verandert niet mee met het boekjaar van zijn zaak.
+  -- ---------------------------------------------------------
+  select id into v_ot_pb from public.obligation_types where code = 'aangifte_pb';
+  if (select volgt_boekjaar from public.obligation_types where id = v_ot_pb) then
+    raise exception 'FAIL 56.8: de aangifte personenbelasting staat als boekjaarvolgend gemarkeerd';
+  end if;
+  select count(*) into v_n from public.obligation_types
+   where volgt_boekjaar and code not in (
+     'algemene_vergadering', 'jaarafsluiting', 'ubo_bevestiging', 'va_venb',
+     'aangifte_venb_pb', 'aangifte_rpb', 'neerlegging_jaarrekening');
+  if v_n <> 0 then
+    raise exception 'FAIL 56.8: % verplichting(en) staan onverwacht als boekjaarvolgend gemarkeerd', v_n;
+  end if;
+  raise notice 'PASS 56.8: alleen de verplichtingen die het boekjaareinde gebruiken zijn gemarkeerd';
+end $$;
+
+-- ------------------------------------------------------------
+-- 56.9 De drie functies zijn `security definer` en dus API-aanroepbaar.
+--      Wie het dossier niet mag zien, mag ze ook niet gebruiken -- ook niet
+--      met een geldig meldings-id in de hand.
+-- ------------------------------------------------------------
+do $$
+declare
+  v_firm uuid; v_klant uuid; v_ot uuid; v_w uuid;
+  v_beheerder uuid; v_beheerder_uid uuid := gen_random_uuid();
+  v_vreemde uuid; v_vreemde_uid uuid := gen_random_uuid();
+  v_team_a uuid; v_team_b uuid;
+  v_n int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_beheerder_uid, 's569a@test.local', now()),
+    (v_vreemde_uid, 's569b@test.local', now());
+  insert into public.firms (naam) values ('S56.9 Kantoor') returning id into v_firm;
+  insert into public.teams (firm_id, code, naam, vestiging) values
+    (v_firm, 'S69A', 'S56.9 Team A', 'Aalst') returning id into v_team_a;
+  insert into public.teams (firm_id, code, naam, vestiging) values
+    (v_firm, 'S69B', 'S56.9 Team B', 'Zaventem') returning id into v_team_b;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_beheerder_uid, 'Beheerder', 's569a@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_beheerder;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_vreemde_uid, 'Ander team', 's569b@test.local', 'medewerker', false, true)
+    returning id into v_vreemde;
+  insert into public.employee_teams (employee_id, team_id) values
+    (v_beheerder, v_team_a), (v_vreemde, v_team_b);
+
+  perform set_config('taskflow.test_uid', v_beheerder_uid::text, true);
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S56.9 Klant', 12, 31, 'geen', true, v_team_a) returning id into v_klant;
+  select id into v_ot from public.obligation_types where code = 'jaarafsluiting';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters)
+    values (v_klant, v_ot, true, date '2000-01-01', '{"sla_maanden": 3}'::jsonb);
+  perform public.generate_task_instances(24, 0);
+  update public.clients set boekjaar_einde_maand = 6, boekjaar_einde_dag = 30 where id = v_klant;
+  select id into v_w from public.boekjaar_wijzigingen where client_id = v_klant and status = 'open';
+
+  -- Nu als de medewerker uit het andere team, met het id in de hand.
+  perform set_config('taskflow.test_uid', v_vreemde_uid::text, true);
+  set local role authenticated;
+
+  -- De tabel zelf: de melding hoort niet zichtbaar te zijn.
+  select count(*) into v_n from public.boekjaar_wijzigingen where id = v_w;
+  if v_n <> 0 then
+    raise exception 'FAIL 56.9: de melding is zichtbaar voor een medewerker uit een ander team';
+  end if;
+
+  begin
+    perform * from public.boekjaar_wijziging_taken(v_w);
+    raise exception 'FAIL 56.9: boekjaar_wijziging_taken() gaf de lijst vrij aan een vreemde';
+  exception when insufficient_privilege then
+    null;
+  end;
+
+  -- Deze weigering is dubbel afgeschermd: toepassen() controleert zelf, én
+  -- roept taken() aan dat óók controleert. Het weghalen van de controle in
+  -- toepassen() alleen maakt deze test dus NIET rood -- de binnenste vangt
+  -- het op. Dat is met opzet zo (verdediging in de diepte), en het staat hier
+  -- omdat een lezer anders denkt dat deze regel de buitenste controle bewijst.
+  begin
+    perform public.boekjaar_wijziging_toepassen(v_w);
+    raise exception 'FAIL 56.9: boekjaar_wijziging_toepassen() liet een vreemde herrekenen';
+  exception when insufficient_privilege then
+    null;
+  end;
+
+  begin
+    perform public.boekjaar_wijziging_negeren(v_w);
+    raise exception 'FAIL 56.9: boekjaar_wijziging_negeren() liet een vreemde de melding sluiten';
+  exception when insufficient_privilege then
+    null;
+  end;
+
+  set local role postgres;
+  raise notice 'PASS 56.9: de teammuur geldt ook voor de drie boekjaarfuncties';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

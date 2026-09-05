@@ -686,3 +686,84 @@ datum van toen te geven; het systeem mag niet liegen over het verleden.
 Bij het live zetten zijn 49 kwartaaltaken en 11 bijzondere aangiftes
 herberekend, alleen die van vandaag of later. Wat al gepasseerd is blijft
 staan: de tolerantie bestond toen echt nog.
+
+## §13 — De kwartaalaangifte bedrijfsvoorheffing (05/09/2026)
+
+Tweede leemte uit het fiscale nazicht. Wie loon of bezoldigingen uitbetaalt,
+houdt bedrijfsvoorheffing in en geeft die aan via Finprof. Onder het
+grensbedrag van artikel 412, derde lid WIB 92 mag dat per kwartaal.
+
+**De kwartaalkalender is een formule** en hoort dus in de motor: de 15de van
+de maand na het kwartaal, zonder uitzondering over de jaren heen
+(15.01.2026 · 15.04.2026 · 15.07.2026 · 15.10.2026 · 15.01.2027).
+
+**De MAANDaangifte zit er bewust niet in.** Die is géén formule. Uit dezelfde
+FOD-kalender voor 2026: januari → 13.02, februari → 13.03, maart → 15.04,
+april → **13.05** (terwijl 15 mei een gewone vrijdag is), augustus → 14.08,
+oktober → 13.11. April breekt elke regel die je zou kunnen bedenken. Een gok
+in een deadlinesysteem is een gemiste aangifte, dus de maandkalender hoort in
+`legal_calendar` — als aangekondigde data, niet als formule.
+
+**Valt de 15de in het weekend, dan gaat de werkdatum naar de werkdag ervóór.**
+De maandkalender toont welke kant de FOD op gaat (13.02, 13.03, 14.08, 13.11:
+telkens vervroegd, nooit verlaat), en het is dezelfde richting die het kantoor
+voor de btw koos. Binnen de horizon telt dat: 15.01.2028 en 15.04.2028 zijn
+zaterdagen.
+
+**Openstaande vraag voor het kantoor.** Erkende sociale secretariaten storten
+tegen de *voorlaatste werkdag* van de maand na het kwartaal — een heel andere
+termijn. Loopt de loonverwerking van een dossier via een sociaal secretariaat,
+dan klopt deze taak daar niet.
+
+De werkstroom "Fiches" heet vanaf nu **Personeel**: er zit meer in dan fiches.
+Het pad blijft `fiches`, zodat bestaande links blijven werken.
+
+## §14 — Een gewijzigd boekjaareinde (05/09/2026)
+
+**Wat er misging.** Nagespeeld op een lokale kopie: zet je een dossier van
+31/12 naar 30/06, dan blijven de al gegenereerde jaartaken op de oude datum
+staan. Niet omdat iemand dat zo wou, maar omdat het periodelabel het jaartal
+is: de motor rekent de juiste taak voor 2026 wél uit, botst op het bestaande
+label, en `on conflict do nothing` gooit ze weg. Zonder melding.
+
+| | periode | deadline |
+| --- | --- | --- |
+| jaarafsluiting 2026 | 01/01–31/12/2026 | 31/03/2027 — nog het oude boekjaar |
+| jaarafsluiting 2027 | 01/01–31/12/2027 | 31/03/2028 — nog het oude boekjaar |
+| jaarafsluiting 2028 | 01/07/2027–30/06/2028 | 02/10/2028 — nieuw |
+
+Voor een compliancesysteem is dat de ergste soort fout: het scherm toont een
+deadline, die deadline is verkeerd, en niets wijst erop.
+
+**De keuze van het kantoor: automatisch herrekenen, mét een menselijke
+goedkeuring ertussen.** Een boekjaar verzetten is zeldzaam en zelden
+onschuldig — er hangt meestal een overgangsboekjaar aan vast, of het is een
+typfout in het formulier. Stil herrekenen is in allebei de gevallen fout.
+
+De wijziging wordt daarom gemeld (`boekjaar_wijzigingen`), de geraakte taken
+worden op het klantdossier getoond, en pas een klik voert het door. Herrekenen
+gebeurt door de oude taak te **annuleren** — dat maakt het periodelabel weer
+vrij, want de unieke index en `upsert_generated_task` laten geannuleerde taken
+allebei buiten beschouwing — en de generatie daarna zijn werk te laten doen.
+De oude taak blijft in de geschiedenis staan, met de logregel erbij.
+
+**Wat er niet herrekend wordt**, met de reden zichtbaar in het paneel: een
+taak waaraan al gewerkt wordt, een taak met een handmatig afgesproken deadline
+(die afspraak is met de klant gemaakt, niet door de motor), en een taak
+waarvan de deadline al gepasseerd is.
+
+**Welke verplichtingen het boekjaar volgen** staat als gegeven op
+`obligation_types.volgt_boekjaar`, niet als lijst in code: de AV, de
+jaarafsluiting, de UBO-bevestiging, de voorafbetalingen, de aangifte VenB en
+RPB (zevende-maandregel op het boekjaareinde) en de neerlegging. De aangifte
+personenbelasting staat er bewust níét bij: dat is een vaste kalenderdatum.
+
+**Het echte overgangsboekjaar zit hier niet in.** Een boekjaar dat eenmalig 18
+of 6 maanden duurt kan Taskflow niet uitdrukken: `clients` bewaart alleen een
+maand en een dag, en de motor neemt op vijf plaatsen aan dat een boekjaar
+precies één jaar duurt (`v_bstart := v_be - 1 jaar + 1 dag`). Wie een
+overgangsjaar heeft, ziet zijn taken na deze migratie tenminste op het níéuwe
+ritme staan; het overgangsjaar zelf blijft handwerk via een handmatig
+afgesproken deadline per taak. Dat echt modelleren vraagt een tabel met een
+begin- en einddatum per boekjaar per klant — een eigen beslissing van het
+kantoor, en niet nodig zolang dit uitzonderlijk blijft.

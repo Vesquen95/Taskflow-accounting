@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useClientDetail } from '../hooks/useClientDetail'
+import { useBoekjaarWijziging } from '../hooks/useBoekjaarWijziging'
 import { useEmployees } from '../hooks/useEmployees'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useObligationTypes } from '../hooks/useObligationTypes'
@@ -12,6 +13,7 @@ import { saveClientObligations, loadClientObligations, type ObligationSelection 
 import { ClientObligationFormModal } from '../components/ClientObligationFormModal'
 import { AdhocTaskFormModal } from '../components/AdhocTaskFormModal'
 import { ClientArchiveModal } from '../components/ClientArchiveModal'
+import { BoekjaarWijzigingPaneel } from '../components/BoekjaarWijzigingPaneel'
 import { isAfgesloten, telTeAnnulerenTaken } from '../lib/klantArchief'
 import { formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
@@ -56,6 +58,10 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
   // 0045 alleen een kantoorbeheerder.
   const { employee } = useCurrentEmployee()
   const { obligationTypes } = useObligationTypes()
+  // Staat er nog een gewijzigd boekjaareinde open? Dan staan de jaartaken van
+  // dit dossier op het OUDE ritme, en hoort dat bovenaan te staan -- niet
+  // ergens in het log (migratie 0052).
+  const boekjaar = useBoekjaarWijziging(clientId)
   const [openTask, setOpenTask] = useState<TaskInstanceWithRelations | null>(null)
   const [showEdit, setShowEdit] = useState(false)
   const [bestaandeVerplichtingen, setBestaandeVerplichtingen] = useState<ObligationSelection[]>([])
@@ -88,6 +94,9 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     // aparte knop (docs/PLAN.md §10).
     await saveClientObligations(clientId, values.obligations, codePerTypeId)
     await reload()
+    // Een gewijzigd boekjaareinde meldt zich hier (0052); het paneel bovenaan
+    // hoort dat meteen te tonen in plaats van pas na een verversing.
+    await boekjaar.reload()
   }
 
   /** Heractiveren vraagt geen bevestiging: er gaat niets verloren, en de
@@ -162,6 +171,20 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
       <button type="button" onClick={() => navigate('klanten')} className="mb-3 text-sm text-slate-500 hover:text-slate-800">
         ← Terug naar klantenlijst
       </button>
+
+      {boekjaar.wijziging && (
+        <BoekjaarWijzigingPaneel
+          wijziging={boekjaar.wijziging}
+          taken={boekjaar.taken}
+          bezig={boekjaar.bezig}
+          onDoorvoeren={async () => {
+            const aantal = await boekjaar.doorvoeren()
+            await reload()
+            return aantal
+          }}
+          onNegeren={boekjaar.negeren}
+        />
+      )}
 
       <div className="mb-6 flex items-start justify-between rounded-lg border border-slate-200 bg-white p-4">
         <div>
