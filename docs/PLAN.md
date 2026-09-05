@@ -864,3 +864,49 @@ zetten, met de vraag er een losse taak voor te maken.
 
 Bij een ontbinding en vereffening in één akte (turboliquidatie) is er maar één
 bijzonder belastbaar tijdperk en dus maar één aangifte.
+
+## §17 — `can_view_client()` gaat dicht voor de API (05/09/2026)
+
+Al een tijd gemeld door de Supabase-advisor, en bij het nakijken bleek het meer
+dan een vinkje op een lijstje.
+
+**Wat er lekte.** De handtekening is `can_view_client(p_client_id,
+p_employee_id)`. Die tweede parameter is het probleem: je vult er een
+**willekeurige** medewerker in, niet jezelf. En omdat de functie
+`security definer` is en `authenticated` er EXECUTE op had, hing ze aan
+`/rest/v1/rpc/can_view_client`.
+
+Live nagegaan op productie, als een gewone medewerker die het vertrouwelijke
+dossier niet mag zien:
+
+| vraag | antwoord |
+| --- | --- |
+| `select * from clients where id = <dossier>` | 0 rijen |
+| `can_view_client(<dossier>, <zichzelf>)` | false |
+| `can_view_client(<dossier>, <een collega>)` | **true** |
+| `can_view_client(<onbestaand dossier>, <zichzelf>)` | null |
+
+Hij ziet het dossier zelf niet, maar leert wél dat een welbepaalde collega er
+toegang toe heeft — precies wat de vertrouwelijkheid moest afschermen. En
+omdat een onbestaand dossier `null` geeft en een bestaand `false`, is het
+meteen een bestaan-orakel. Met de medewerkerslijst ernaast, die het scherm
+gewoon toont, is dat de volledige toegangskaart van elk vertrouwelijk dossier
+— één vraag per combinatie.
+
+**Waarom intrekken volstaat.** Nagekeken vóór het intrekken: geen enkele
+RLS-policy roept haar aan, de app nergens, en de drie functies die haar wél
+gebruiken (`can_access_client`, `enforce_task_instance_transition`,
+`enforce_obligation_assignment_access`) zijn alle drie zelf `security definer`
+en draaien dus als de eigenaar.
+
+**Wat hier NIET mee opgelost is: `mag_klant_zien()`.** Zelfde vorm — een vrij
+in te vullen `p_employee_id` — en óók uitvoerbaar door `authenticated`. Die kan
+niet zomaar dicht: de policies `clients_select` en `clients_update` roepen haar
+rechtstreeks aan, en een policy-expressie draait met de rechten van wie de
+query stelt. De grant weghalen sluit de klantentabel voor iedereen. Het lek is
+er ook smaller: je geeft de kenmerken van de klant zélf mee, dus je krijgt
+vooral terug wat je al invulde; wat er wél uit te halen valt is of een
+medewerker lopend werk heeft op een dossier-id dat je al kent. Echt dichtzetten
+vraagt de `p_employee_id` vast te pinnen op de oproeper, en dat botst met de
+interne oproepers die juist over een **andere** medewerker vragen (0015 kijkt
+of de toegewezen medewerker het dossier mag zien). Aparte beslissing.

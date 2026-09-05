@@ -2289,12 +2289,17 @@ begin
   -- dossier een kantoorbeheerdersbeslissing; sectie 21.5 bewaakt de weigering
   -- voor een gewone medewerker. Hier gaat het om het audittrail van de
   -- toegestane route.
-  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
-  set local role authenticated;
-
+  -- De uitgangstoestand nakijken gebeurt BUITEN de rol van de gebruiker:
+  -- can_view_client() is sinds 0055 niet meer door `authenticated` op te
+  -- roepen, precies omdat ze over een willekeurige collega antwoordt. Dat is
+  -- hier geen verlies -- dit is een fixturecontrole, geen gedrag dat de app
+  -- gebruikt.
   if public.can_view_client(v_vertr, v_mw2) then
     raise exception 'FAIL 20.9: de collega zag het vertrouwelijke dossier al voor de toewijzing';
   end if;
+
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
 
   update public.task_instances set toegewezen_medewerker_id = v_mw2 where id = v_taak;
   get diagnostics v_cnt = row_count;
@@ -7349,6 +7354,105 @@ begin
     null;
   end;
   raise notice 'PASS 58.5: een sluiting kan niet vóór de ontbinding vallen';
+end $$;
+
+-- ============================================================
+-- Sectie 59 (0055): can_view_client() is niet meer van buitenaf op te roepen.
+--
+-- De functie beantwoordt "mag medewerker X dossier Y zien?" voor een
+-- WILLEKEURIGE X. Zolang `authenticated` er EXECUTE op had, kon een gewone
+-- medewerker daarmee uitvragen welke collega's toegang hebben tot een
+-- vertrouwelijk dossier dat hij zelf niet mag zien -- en aan het verschil
+-- tussen null en false zien of een dossier-id bestaat.
+--
+-- 59.2 is de belangrijkste: de weigering mag de interne oproepers niet
+-- meenemen. Die zijn zelf security definer en moeten blijven werken, want
+-- can_access_client() zit in de RLS van bijna elke tabel.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_ander uuid; v_ander_uid uuid := gen_random_uuid();
+  v_klant uuid; v_taak uuid;
+  v_n int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's59a@test.local', now()),
+    (v_ander_uid, 's59b@test.local', now());
+  insert into public.firms (naam) values ('S59 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S59 Beheerder', 's59a@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_ander_uid, 'S59 Medewerker', 's59b@test.local', 'medewerker', false, true)
+    returning id into v_ander;
+
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, actief, vertrouwelijk, standaard_verantwoordelijke_id)
+    values (v_firm, 'S59 Vertrouwelijk', 12, 31, 'geen', true, true, v_admin)
+    returning id into v_klant;
+
+  -- ---------------------------------------------------------
+  -- 59.1 Een gewone medewerker kan de functie niet meer aanroepen.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.test_uid', v_ander_uid::text, true);
+  set local role authenticated;
+  begin
+    perform public.can_view_client(v_klant, v_admin);
+    set local role postgres;
+    raise exception 'FAIL 59.1: can_view_client() is nog van buitenaf op te roepen';
+  exception when insufficient_privilege then
+    null;
+  end;
+  set local role postgres;
+  raise notice 'PASS 59.1: can_view_client() is niet meer aanroepbaar door authenticated';
+
+  -- ---------------------------------------------------------
+  -- 59.2 En de interne oproepers werken gewoon door.
+  -- ---------------------------------------------------------
+  -- Eerst zonder werk: het vertrouwelijke dossier hoort onzichtbaar te zijn.
+  -- Zonder deze helft zou 59.2 ook slagen als de RLS iedereen binnenliet.
+  perform set_config('taskflow.test_uid', v_ander_uid::text, true);
+  set local role authenticated;
+  select count(*) into v_n from public.clients where id = v_klant;
+  set local role postgres;
+  if v_n <> 0 then
+    raise exception 'FAIL 59.2: het vertrouwelijke dossier was al zichtbaar zonder toegewezen werk (% rijen)', v_n;
+  end if;
+
+  insert into public.task_instances (
+    client_id, title, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (
+    v_klant, 'S59 lopend werk', current_date + 30, current_date + 30,
+    'open', v_ander, 'handmatig_adhoc', false
+  ) returning id into v_taak;
+
+  perform set_config('taskflow.test_uid', v_ander_uid::text, true);
+  set local role authenticated;
+  select count(*) into v_n from public.clients where id = v_klant;
+  set local role postgres;
+  if v_n <> 1 then
+    raise exception 'FAIL 59.2: de medewerker met een toegewezen taak ziet het dossier niet meer (% rijen)', v_n;
+  end if;
+  raise notice 'PASS 59.2: de interne oproepers werken door -- de RLS staat overeind';
+
+  -- ---------------------------------------------------------
+  -- 59.3 Een kantoorbeheerder krijgt evenmin een uitzondering. Dit is geen
+  --      rolkwestie: de functie hoort helemaal niet aan de API te hangen.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  begin
+    perform public.can_view_client(v_klant, v_ander);
+    set local role postgres;
+    raise exception 'FAIL 59.3: een kantoorbeheerder kan can_view_client() nog aanroepen';
+  exception when insufficient_privilege then
+    null;
+  end;
+  set local role postgres;
+  raise notice 'PASS 59.3: ook een kantoorbeheerder komt er niet meer bij';
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
