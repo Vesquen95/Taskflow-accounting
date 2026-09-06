@@ -634,3 +634,49 @@ describe('TaskTable — hoelang een dossier al op de klant wacht', () => {
     expect(screen.getByTitle(/sinds 10 maart 2026/i)).toBeInTheDocument()
   })
 })
+
+describe('TaskTable — de vier voorafbetalingen uit elkaar houden', () => {
+  function va(nummer: number) {
+    return task({
+      id: `va${nummer}`,
+      periode_label: `VA${nummer}-2026`,
+      due_date: `2026-0${nummer}-10`,
+      obligation_type: {
+        id: 'ot-va',
+        code: 'va_venb',
+        naam: 'Voorafbetaling VenB (VA1-VA4)',
+        categorie: 'wettelijk',
+        werkstroom: 'boekhouding',
+      },
+    })
+  }
+
+  it('zet het nummer in de kolom Verplichting, waar het niet wegvalt', () => {
+    // Vier taken met dezelfde naam en alleen een datum als verschil is
+    // precies wat het kantoor niet kon lezen.
+    render(
+      <TaskTable tasks={[va(1), va(2), va(3), va(4)]} employees={employees} onOpenTask={onOpenTask} />
+    )
+    for (const n of [1, 2, 3, 4]) {
+      expect(screen.getByText(`Voorafbetaling VA${n}`)).toBeInTheDocument()
+    }
+    expect(screen.queryByText('Voorafbetaling VenB (VA1-VA4)')).not.toBeInTheDocument()
+  })
+
+  it('houdt in de kolom Periode het jaartal over', () => {
+    render(<TaskTable tasks={[va(3)]} employees={employees} onOpenTask={onOpenTask} />)
+    const rij = screen.getByText('Voorafbetaling VA3').closest('tr')!
+    expect(within(rij).getByText('2026')).toBeInTheDocument()
+    expect(within(rij).queryByText('VA3-2026')).not.toBeInTheDocument()
+  })
+
+  it('doet hetzelfde op een telefoon', () => {
+    const herstel = stelSchermIn(true)
+    try {
+      render(<TaskTable tasks={[va(2)]} employees={employees} onOpenTask={onOpenTask} />)
+      expect(screen.getByText('Voorafbetaling VA2')).toBeInTheDocument()
+    } finally {
+      herstel()
+    }
+  })
+})

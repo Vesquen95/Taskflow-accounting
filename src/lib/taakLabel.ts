@@ -1,4 +1,5 @@
 import type { TaskInstanceWithRelations } from '../types'
+import { leesVoorafbetaling, vaNaam } from './voorafbetaling'
 
 /**
  * Hoe een taak in tekst benoemd wordt. Eén plaats, zodat een melding en de
@@ -6,10 +7,31 @@ import type { TaskInstanceWithRelations } from '../types'
  */
 
 type TaakVoorLabel = Pick<TaskInstanceWithRelations, 'title' | 'obligation_type' | 'client' | 'periode_label'>
+type TaakVoorLabelMetPeriode = Pick<TaskInstanceWithRelations, 'title' | 'obligation_type' | 'periode_label'>
 
 /** De korte naam zoals ze in de kolom "Verplichting" staat. */
 export function taakNaam(task: Pick<TaakVoorLabel, 'title' | 'obligation_type'>): string {
   return task.obligation_type?.naam ?? task.title ?? 'Ad-hoc taak'
+}
+
+/**
+ * De twee stukken waarmee een taak in een lijst staat: de verplichting en de
+ * periode. Eén plaats, want elke lijst en elke tabel zet ze anders naast
+ * elkaar en ze horen wel hetzelfde te zeggen.
+ *
+ * De vier voorafbetalingen dragen in de databank dezelfde naam, met alleen
+ * "VA1-2026" in het periodelabel als verschil. Dat label valt weg zodra een
+ * lijst de naam afkapt, en dan staan er vier regels die identiek lijken
+ * terwijl VA1 zwaarder weegt dan VA4. Hier krijgt het nummer daarom een
+ * plaats in de naam zelf, en blijft alleen het jaartal als periode over.
+ */
+export function taakRegel(task: TaakVoorLabelMetPeriode): {
+  naam: string
+  periode: string | null
+} {
+  const va = leesVoorafbetaling(task.obligation_type?.code, task.periode_label)
+  if (va) return { naam: vaNaam(va.nummer), periode: va.jaar }
+  return { naam: taakNaam(task), periode: task.periode_label }
 }
 
 /**
@@ -18,7 +40,8 @@ export function taakNaam(task: Pick<TaakVoorLabel, 'title' | 'obligation_type'>)
  * taak bedoeld wordt.
  */
 export function taakOmschrijving(task: TaakVoorLabel): string {
-  const delen = [task.client?.naam, taakNaam(task), task.periode_label ?? undefined]
+  const regel = taakRegel(task)
+  const delen = [task.client?.naam, regel.naam, regel.periode ?? undefined]
   return delen.filter((deel): deel is string => !!deel && deel.length > 0).join(' — ')
 }
 

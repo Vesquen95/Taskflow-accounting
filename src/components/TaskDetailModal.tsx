@@ -11,6 +11,8 @@ import { useTeams } from '../hooks/useTeams'
 import { collegasVoorDossier } from '../lib/teams'
 import type { Employee, TaskInstanceWithRelations, TaskStatus, TaskStatusLog } from '../types'
 import { reportError } from '../lib/errorMessage'
+import { taakRegel } from '../lib/taakLabel'
+import { leesVoorafbetaling, VA_UITLEG, vaWeegtZwaar } from '../lib/voorafbetaling'
 import {
   annulatieActie,
   CHECKLIST_HERINNERING,
@@ -187,8 +189,13 @@ export function TaskDetailModal({
     }
   }
 
+  const regel = taakRegel(task)
+  // De vier voorafbetalingen heten in de databank allemaal hetzelfde. Welke
+  // van de vier het is staat nu in de titel; wat ze waard is, hieronder.
+  const va = leesVoorafbetaling(task.obligation_type?.code, task.periode_label)
+
   return (
-    <Modal title={task.obligation_type?.naam ?? task.title ?? 'Ad-hoc taak'} onClose={onClose}>
+    <Modal title={regel.naam} onClose={onClose}>
       <div className="space-y-4 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={task.status} />
@@ -206,6 +213,19 @@ export function TaskDetailModal({
           )}
         </div>
 
+        {va && (
+          <p
+            className={`rounded-md px-3 py-2 text-sm ${
+              vaWeegtZwaar(va.nummer)
+                ? 'bg-amber-50 text-amber-900'
+                : 'bg-slate-50 text-slate-600'
+            }`}
+          >
+            <span className="font-semibold">{`VA${va.nummer} van 4 — boekjaar ${va.jaar}. `}</span>
+            {VA_UITLEG[va.nummer]}
+          </p>
+        )}
+
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
           <div>
             <dt className="text-xs font-medium uppercase text-slate-400">Klant</dt>
@@ -216,7 +236,7 @@ export function TaskDetailModal({
           </div>
           <div>
             <dt className="text-xs font-medium uppercase text-slate-400">Periode</dt>
-            <dd className="text-slate-800">{task.periode_label ?? '—'}</dd>
+            <dd className="text-slate-800">{regel.periode ?? '—'}</dd>
           </div>
           <div>
             <dt className="text-xs font-medium uppercase text-slate-400">Deadline</dt>

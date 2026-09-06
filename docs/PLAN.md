@@ -1315,3 +1315,27 @@ sessions* (zet op 12 uur, gelijk aan `SESSIE_UREN`) en *inactivity timeout*
 worden; tot dat gebeurt is dit een nette afmelding, geen slot. **Openstaand
 voor het kantoor** — het staat niet in een migratie omdat het projectinstellingen
 zijn, geen databankobjecten.
+
+## §25 — Welke voorafbetaling is dit? (06/09/2026)
+
+**De klacht:** bij de VA's stond alleen de datum en de titel. Die titel is voor
+alle vier dezelfde — `Voorafbetaling VenB (VA1-VA4)` — en het periodelabel
+("VA1-2026") stond achteraan, precies waar een lijst de tekst afkapt. Vier
+regels die identiek lezen, terwijl VA1 en VA2 zwaarder wegen dan VA3 en VA4.
+
+**Wat er verandert:** het nummer verhuist naar de naam zelf. In elke lijst,
+tabel en in het detailvenster staat nu `Voorafbetaling VA1` … `VA4`, met het
+jaartal als periode. Eén plaats regelt dat (`taakRegel()` in
+`src/lib/taakLabel.ts`), zodat een melding en een rij dezelfde taak op dezelfde
+manier benoemen. In het detailvenster staat er één zin bij: welke van de vier
+het is, voor welk boekjaar, en hoe zwaar ze weegt — VA1 en VA2 in het amber,
+VA3 en VA4 grijs.
+
+**Geen percentages.** Ze worden jaarlijks vastgelegd en volgen de
+referentierentevoet; een getal dat hier hardgecodeerd staat is binnen een jaar
+fout, en fout op een scherm is erger dan afwezig. Wat elk jaar wél klopt is de
+volgorde: VA1 zwaarder dan VA2, VA2 zwaarder dan VA3, VA3 zwaarder dan VA4.
+Een test bewaakt dat er geen percentage in de tekst sluipt.
+
+De generatie zelf is niet aangeraakt: het label `VA1-2026` komt al sinds
+migratie 0017 uit `generate_task_instances()`. Dit is alleen weergave.

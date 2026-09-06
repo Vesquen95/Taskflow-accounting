@@ -3,7 +3,7 @@ import { TaskStatusControl } from './TaskStatusControl'
 import { WachtDuurBadge } from './WachtDuurBadge'
 import { UrgencyBadge } from './UrgencyBadge'
 import { formatDate } from '../lib/urgency'
-import { taakNaam } from '../lib/taakLabel'
+import { taakRegel } from '../lib/taakLabel'
 
 interface TaakKaartProps {
   task: TaskInstanceWithRelations
@@ -30,6 +30,7 @@ interface TaakKaartProps {
  * vlak dat groot genoeg is voor een duim.
  */
 export function TaakKaart({ task, onOpen, currentEmployee, onStatusChange, onStatusFout }: TaakKaartProps) {
+  const regel = taakRegel(task)
   return (
     <li className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <button
@@ -54,8 +55,8 @@ export function TaakKaart({ task, onOpen, currentEmployee, onStatusChange, onSta
         </span>
 
         <span className="mt-0.5 block truncate text-sm text-slate-600">
-          {taakNaam(task)}
-          {task.periode_label && <span className="text-slate-400"> · {task.periode_label}</span>}
+          {regel.naam}
+          {regel.periode && <span className="text-slate-400"> · {regel.periode}</span>}
           {task.review_vereist && (
             <span className="ml-2 inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
               review

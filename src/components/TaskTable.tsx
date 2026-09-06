@@ -6,7 +6,7 @@ import { TaskBulkBar } from './TaskBulkBar'
 import { UrgencyBadge } from './UrgencyBadge'
 import { WachtDuurBadge } from './WachtDuurBadge'
 import { formatDate } from '../lib/urgency'
-import { taakNaam } from '../lib/taakLabel'
+import { taakRegel } from '../lib/taakLabel'
 import { EmptyState } from './EmptyState'
 import { TaakKaart } from './TaakKaart'
 import { useKleinScherm } from '../hooks/useKleinScherm'
@@ -166,14 +166,14 @@ export function TaskTable({
                 </td>
               )}
               <td className="max-w-[220px] truncate px-3 py-2 text-slate-700">
-                {taakNaam(task)}
+                {taakRegel(task).naam}
                 {task.review_vereist && (
                   <span className="ml-2 inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
                     review
                   </span>
                 )}
               </td>
-              <td className="px-3 py-2 text-slate-500">{task.periode_label ?? '—'}</td>
+              <td className="px-3 py-2 text-slate-500">{taakRegel(task).periode ?? '—'}</td>
               <td className="whitespace-nowrap px-3 py-2">
                 <div className="flex items-center gap-2">
                   <span className="text-slate-700">{formatDate(task.due_date)}</span>

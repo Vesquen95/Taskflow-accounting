@@ -686,3 +686,73 @@ describe('TaskDetailModal — de bak van het team', () => {
     expect(onReassign).toHaveBeenCalledWith('t1', null)
   })
 })
+
+describe('TaskDetailModal — welke voorafbetaling is dit?', () => {
+  function vaTaak(nummer: number) {
+    return task({
+      periode_label: `VA${nummer}-2026`,
+      obligation_type: {
+        id: 'ot-va',
+        code: 'va_venb',
+        naam: 'Voorafbetaling VenB (VA1-VA4)',
+        categorie: 'wettelijk',
+        werkstroom: 'boekhouding',
+      },
+    })
+  }
+
+  function toonVa(nummer: number) {
+    mockEmployee.mockReturnValue(employee())
+    return render(
+      <TaskDetailModal
+        task={vaTaak(nummer)}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+      />
+    )
+  }
+
+  it('zet het nummer in de titel in plaats van vier keer dezelfde naam', () => {
+    toonVa(1)
+    expect(screen.getByRole('heading', { name: 'Voorafbetaling VA1' })).toBeInTheDocument()
+  })
+
+  it('zegt hoeveel deze voorafbetaling waard is', () => {
+    toonVa(1)
+    expect(screen.getByText(/VA1 van 4 — boekjaar 2026/)).toBeInTheDocument()
+    expect(screen.getByText(/weegt het zwaarst/i)).toBeInTheDocument()
+  })
+
+  it('zegt bij de laatste dat ze het lichtst weegt', () => {
+    toonVa(4)
+    expect(screen.getByRole('heading', { name: 'Voorafbetaling VA4' })).toBeInTheDocument()
+    expect(screen.getByText(/de lichtste/i)).toBeInTheDocument()
+  })
+
+  it('laat het jaartal als periode staan, zonder het nummer te herhalen', () => {
+    toonVa(2)
+    const periode = screen.getByText('Periode').parentElement!
+    expect(periode).toHaveTextContent('2026')
+    expect(periode).not.toHaveTextContent('VA2-2026')
+  })
+
+  it('laat een gewone verplichting ongemoeid', () => {
+    mockEmployee.mockReturnValue(employee())
+    render(
+      <TaskDetailModal
+        task={task()}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+      />
+    )
+    expect(screen.getByRole('heading', { name: 'BTW-aangifte' })).toBeInTheDocument()
+    expect(screen.getByText('Periode').parentElement).toHaveTextContent('2026-Q2')
+    expect(screen.queryByText(/van 4 — boekjaar/)).not.toBeInTheDocument()
+  })
+})

@@ -20,6 +20,7 @@ import { isAfgesloten, telTeAnnulerenTaken } from '../lib/klantArchief'
 import { formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
 import { reportError } from '../lib/errorMessage'
+import { taakRegel } from '../lib/taakLabel'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
 
 /** Leesbare namen voor client_change_log.veld — het log slaat kolomnamen op,
@@ -371,8 +372,8 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
             <tbody className="divide-y divide-slate-100">
               {upcoming.map((t) => (
                 <tr key={t.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpenTask(t)}>
-                  <td className="px-3 py-2 font-medium text-slate-800">{t.obligation_type?.naam ?? t.title}</td>
-                  <td className="px-3 py-2 text-slate-500">{t.periode_label ?? '—'}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{taakRegel(t).naam}</td>
+                  <td className="px-3 py-2 text-slate-500">{taakRegel(t).periode ?? '—'}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
                       {formatDate(t.due_date)}
@@ -405,8 +406,8 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
               <tbody className="divide-y divide-slate-100">
                 {history.map((t) => (
                   <tr key={t.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpenTask(t)}>
-                    <td className="px-3 py-2 text-slate-700">{t.obligation_type?.naam ?? t.title}</td>
-                    <td className="px-3 py-2 text-slate-500">{t.periode_label ?? '—'}</td>
+                    <td className="px-3 py-2 text-slate-700">{taakRegel(t).naam}</td>
+                    <td className="px-3 py-2 text-slate-500">{taakRegel(t).periode ?? '—'}</td>
                     <td className="px-3 py-2 text-slate-500">{formatDate(t.due_date)}</td>
                     <td className="px-3 py-2">
                       <StatusBadge status={t.status} />
