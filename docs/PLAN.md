@@ -1058,3 +1058,90 @@ deadline verdwijnt niet omdat het venster korter werd.
 **Een lege week zegt wat ze is.** "Niets meer deze week" met de uitleg dat dit
 alleen over zeven dagen gaat en waar de rest staat — anders denkt een junior
 dat hij klaar is.
+
+## §21 — Openstaand: waar we op terugkomen (bijgewerkt 06/09/2026)
+
+Eén lijst voor wat besproken is maar niet gebouwd, zodat het niet in een
+chatgeschiedenis blijft hangen. Per punt staat er genoeg om koud op te pikken:
+wat het is, wat er al uitgezocht is, en welke beslissing er nog openstaat.
+
+### 1. Terugkerend servicewerk per week — geparkeerd 06/09/2026
+
+**De vraag van het kantoor:** *"Is er een mogelijkheid om ad-hoc taken
+regelmatig te maken? Bv. iedere week moet een boekhouding van een klant
+bijgewerkt worden."*
+
+**Wat er al is.** Een ad-hoc taak is bewust eenmalig (een titel, geen
+verplichtingstype, geen periode). Terugkerend niet-wettelijk werk loopt via de
+verplichting **"Periodieke rapportering"** (`rapportering`, categorie
+`service`), met een instelbare termijn in dagen na het einde van de periode.
+Op 06/09/2026 gebruiken 48 dossiers ze: 17 maandelijks, 16 per kwartaal, 15
+jaarlijks, samen 733 open taken.
+
+**Wat ontbreekt.** De tak van de motor kent `maand`, `jaar` en anders
+`kwartaal`. Geen `week`.
+
+**Waarom het geen schakelaartje is.** De generatiehorizon is 36 maanden. Een
+maandelijkse rapportering levert daarmee ~36 taken per dossier op; wekelijks
+wordt dat ~156. Tien dossiers op wekelijkse boekhouding zetten betekent ruwweg
+1.560 taken bovenop de 3.588 die er nu staan — ruim 40% meer, voor tien
+dossiers. Erger dan het aantal is wat het met de schermen doet: de kalender en
+de werkstromen lopen vol met "boekhouding bijwerken" en de wettelijke
+deadlines verdwijnen eronder.
+
+**Het voorstel dat nog beslist moet worden.** Wekelijks toevoegen *met een
+eigen, kortere horizon* — drie jaar aan wekelijkse taken vooruit genereren
+heeft geen zin; dat werk plan je twee à drie maanden vooruit. Eén extra grens
+in die tak houdt het volume beheersbaar én de kalender leesbaar.
+
+**En meteen mee te nemen:** een eigen naam per dossier. Vandaag heet elke taak
+van dit type "Periodieke rapportering", of het nu om een maandrapport of om
+wekelijkse boekhouding gaat. Voor een junior die zijn week openslaat is dat
+geen bruikbaar label.
+
+### 2. De maandagmail verzenden
+
+De inhoud is gebouwd en getest (`weekoverzicht_voor`, de vier blokken, de
+HTML-renderer in `src/lib/weekoverzicht.ts`). Er is geen `supabase/functions/`
+— er is dus letterlijk niets dat hem verstuurt. Nodig: een edge function, een
+Resend-sleutel en het RSM-afzenderadres.
+
+Sinds §19 weegt dit zwaarder dan het leek: voor de partner, die zelden en kort
+kijkt, is deze mail het enige realistische aanraakpunt met het systeem.
+
+### 3. `legal_calendar` voor aanslagjaar 2027
+
+Zie §18. Voor aanslagjaar 2026 valt er niets in te voeren — de aangekondigde
+data zijn gelijk aan wat de motor rekent. Die van 2027 bestaan nog niet; de
+FOD publiceert ze rond de opening van Biztax en Tax-on-web, eind april. **De
+maandelijkse routine van 1 mei 2027 is de belangrijkste van het jaar.**
+
+### 4. `mag_klant_zien()` heeft dezelfde vorm als `can_view_client()`
+
+Zie §17. Een vrij in te vullen `p_employee_id`, en uitvoerbaar door
+`authenticated`. Kan niet zomaar dicht: `clients_select` en `clients_update`
+roepen haar rechtstreeks aan en een policy-expressie draait met de rechten van
+wie de query stelt. Dichtzetten vraagt de parameter vast te pinnen op de
+oproeper, en dat botst met de interne oproepers die juist over een *andere*
+medewerker vragen (0015). Aparte beslissing.
+
+### 5. Het echte overgangsboekjaar
+
+Zie §14 en §16. Een boekjaar dat eenmalig 18 of 6 maanden duurt kan Taskflow
+niet uitdrukken: `clients` bewaart alleen een maand en een dag, en de motor
+neemt op vijf plaatsen aan dat een boekjaar precies één jaar duurt. Blijft
+handwerk via een handmatig afgesproken deadline per taak. Echt modelleren
+vraagt een tabel met begin- en einddatum per boekjaar per klant.
+
+### 6. De aangifte speciaal bij een vereffening
+
+Zie §16. Het scherm zegt bij het vereffend zetten dat die aangifte met de hand
+toegevoegd moet worden. Er zou een taak van gemaakt kunnen worden met een
+datum die het kantoor zelf invult — de termijn is géén formule (art. 310,
+tweede lid WIB 92 ankert hem op de goedkeuring van de resultaten van de
+vereffening).
+
+### 7. Leaked-password protection
+
+Staat uit; vereist een Supabase Pro-abonnement. Blijft op de advisorlijst tot
+dat er is.
