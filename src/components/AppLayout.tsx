@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Employee } from '../types'
 import { useAuth } from '../hooks/useAuth'
+import { useSessiebediening } from '../hooks/useSessie'
+import { klokTijd, SESSIE_UREN } from '../lib/sessieduur'
 import { INGANGEN } from '../lib/werkstromen'
 import { useKleinScherm } from '../hooks/useKleinScherm'
 import { magOverzichtZien } from '../lib/overzicht'
@@ -111,6 +113,7 @@ export function AppLayout({
   children: ReactNode
 }) {
   const { signOut } = useAuth()
+  const { langeSessie, zetLangeSessie, eindeSessie } = useSessiebediening()
   // Op een telefoon staat de zijbalk in de weg: 240 van de 390 pixels zijn
   // dan navigatie. Daarom schuift ze daar open en dicht. Vanaf lg (1024px)
   // bestaat deze schakelaar niet: daar staat de balk gewoon vast, zoals ze
@@ -233,10 +236,27 @@ export function AppLayout({
             {employee.rol === 'kantoorbeheerder' ? 'Kantoorbeheerder' : 'Medewerker'}
             {employee.mag_goedkeuren ? ' · mag goedkeuren' : ''}
           </p>
+          {/* Normaal sluit het scherm zichzelf af na een half uur stilte.
+              Wie een dag lang met hetzelfde dossier bezig is, wil daar niet
+              telkens op klikken -- vandaar deze knop. De grens van twaalf uur
+              blijft staan, en de keuze verdwijnt bij het afmelden: ze geldt
+              voor deze aanmelding en niet langer. */}
+          <button
+            type="button"
+            onClick={() => zetLangeSessie(!langeSessie)}
+            aria-pressed={langeSessie}
+            className={`mt-2 block text-xs font-medium focus:outline-none focus-visible:underline ${
+              langeSessie ? 'text-amber-700 hover:text-amber-900' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {langeSessie
+              ? `Blijft open${eindeSessie ? ` tot ${klokTijd(eindeSessie)}` : ''} — zet uit`
+              : `Sessie ${SESSIE_UREN} uur openhouden`}
+          </button>
           <button
             type="button"
             onClick={() => void signOut()}
-            className="mt-2 text-xs font-medium text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:underline"
+            className="mt-2 block text-xs font-medium text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:underline"
           >
             Uitloggen
           </button>

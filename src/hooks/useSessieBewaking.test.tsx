@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { useSessieBewaking } from './useSessieBewaking'
 import { INACTIVITEIT_MINUTEN, SESSIE_UREN } from '../lib/sessieduur'
@@ -7,11 +7,18 @@ const MIN = 60_000
 const UUR = 60 * MIN
 
 function Proef({ uid, signOut }: { uid: string | null; signOut: () => Promise<void> }) {
-  const { stand, secondenResterend } = useSessieBewaking(uid, signOut)
+  const { stand, secondenResterend, langeSessie, zetLangeSessie } = useSessieBewaking(uid, signOut)
   return (
     <div>
       <span data-testid="stand">{stand}</span>
       <span data-testid="resterend">{secondenResterend}</span>
+      <span data-testid="lang">{langeSessie ? 'ja' : 'nee'}</span>
+      <button type="button" onClick={() => zetLangeSessie(true)}>
+        openhouden
+      </button>
+      <button type="button" onClick={() => zetLangeSessie(false)}>
+        weer sluiten
+      </button>
     </div>
   )
 }
@@ -146,5 +153,86 @@ describe('useSessieBewaking', () => {
     await verstrijk(24 * UUR)
     expect(signOut).not.toHaveBeenCalled()
     expect(screen.getByTestId('stand')).toHaveTextContent('actief')
+  })
+})
+
+describe('useSessieBewaking — de sessie twaalf uur openhouden', () => {
+  let signOut: Mock<() => Promise<void>>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-07T09:00:00Z'))
+    window.localStorage.clear()
+    signOut = vi.fn<() => Promise<void>>(async () => {})
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function zet(knop: string) {
+    await act(async () => {
+      screen.getByRole('button', { name: knop }).click()
+    })
+  }
+
+  it('houdt de inactiviteitsgrens tegen', async () => {
+    render(<Proef uid="u-1" signOut={signOut} />)
+    await zet('openhouden')
+
+    await verstrijk(3 * UUR)
+    expect(signOut).not.toHaveBeenCalled()
+    expect(screen.getByTestId('stand')).toHaveTextContent('actief')
+  })
+
+  it('maar niet de twaalf uur', async () => {
+    render(<Proef uid="u-1" signOut={signOut} />)
+    await zet('openhouden')
+
+    await verstrijk((SESSIE_UREN + 1) * UUR)
+    expect(signOut).toHaveBeenCalledTimes(1)
+    expect(window.localStorage.getItem('taskflow.sessie.reden')).toBe('sessieduur')
+  })
+
+  it('geldt in elk tabblad en overleeft een herlaadbeurt', async () => {
+    render(<Proef uid="u-1" signOut={signOut} />)
+    await zet('openhouden')
+
+    cleanup()
+    render(<Proef uid="u-1" signOut={signOut} />)
+    await verstrijk(0)
+    expect(screen.getByTestId('lang')).toHaveTextContent('ja')
+
+    await verstrijk(3 * UUR)
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it('gooit je er niet uit op het moment dat je hem uitzet', async () => {
+    // Twee uur stil met de knop aan, dan uit: zonder verse teller zou je
+    // meteen afgemeld worden, alsof de knop je buiten gooit.
+    render(<Proef uid="u-1" signOut={signOut} />)
+    await zet('openhouden')
+    await verstrijk(2 * UUR)
+
+    await zet('weer sluiten')
+    await verstrijk(0)
+    expect(signOut).not.toHaveBeenCalled()
+    expect(screen.getByTestId('stand')).toHaveTextContent('actief')
+
+    // En daarna geldt de gewone grens weer.
+    await verstrijk((INACTIVITEIT_MINUTEN + 1) * MIN)
+    expect(signOut).toHaveBeenCalledTimes(1)
+    expect(window.localStorage.getItem('taskflow.sessie.reden')).toBe('inactiviteit')
+  })
+
+  it('de keuze van een collega geldt niet voor jou', async () => {
+    window.localStorage.setItem('taskflow.sessie.lang', 'iemand-anders')
+
+    render(<Proef uid="u-1" signOut={signOut} />)
+    await verstrijk(0)
+    expect(screen.getByTestId('lang')).toHaveTextContent('nee')
+
+    await verstrijk((INACTIVITEIT_MINUTEN + 1) * MIN)
+    expect(signOut).toHaveBeenCalledTimes(1)
   })
 })

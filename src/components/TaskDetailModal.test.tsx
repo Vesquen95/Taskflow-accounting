@@ -696,7 +696,7 @@ describe('TaskDetailModal — welke voorafbetaling is dit?', () => {
         code: 'va_venb',
         naam: 'Voorafbetaling VenB (VA1-VA4)',
         categorie: 'wettelijk',
-        werkstroom: 'boekhouding',
+        werkstroom: 'vennootschapsbelasting',
       },
     })
   }

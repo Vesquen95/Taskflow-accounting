@@ -1306,6 +1306,26 @@ aanmeldscherm waaróm, anders leest het als een storing.
 - *Aanmelden wist de stempels.* Anders begint een verse aanmelding met de
   al verlopen stempels van de vorige en vlieg je er meteen weer uit.
 
+**Een knop om open te blijven.** Wie een dag lang met hetzelfde dossier bezig
+is, wil niet om het halfuur op "ik ben er nog" klikken. In de zijbalk staat
+daarom *Sessie 12 uur openhouden*, en dezelfde knop staat in de waarschuwing
+zelf — dat is net het moment waarop je merkt dat je hem nodig hebt. Ze zet de
+inactiviteitsgrens opzij, **niet** de twaalf uur; die blijft staan, want dat is
+wat de knop belooft. Drie dingen die eraan vastzitten:
+
+- *Ze is zichtbaar zolang ze aan staat*: de knop leest dan "Blijft open tot
+  21:04 — zet uit". Onzichtbaar aanstaan is het gevaarlijke geval.
+- *Ze verdwijnt bij het afmelden.* Ze geldt voor deze aanmelding, niet voor de
+  pc. `wisSessiestempels()` wist ze mee, en ze hangt aan het gebruikers-id, dus
+  je collega erft ze niet.
+- *Uitzetten zet de teller terug.* Wie twee uur stil was met de knop aan zou er
+  anders bij het uitzetten meteen uitvliegen, alsof de knop je buitengooit.
+
+De bewaking draait één keer, in een `SessieProvider` met twee contexten: de
+stand (die tikt) en de bediening (die dat niet doet). Twee onderdelen kijken
+ernaar — de waarschuwing en de knop — en met elk hun eigen `useSessieBewaking()`
+liepen er twee tellers naast elkaar die allebei afmelden.
+
 **Wat dit niet doet, en dat hoort erbij.** Afmelden in de browser maakt het
 token niet ongeldig aan de kant van de server. Wie het token uit de opslag van
 de browser haalt kan er nog mee werken tot het verloopt. De echte bovengrens

@@ -5,6 +5,7 @@ import {
   INACTIVITEIT_MINUTEN,
   WAARSCHUWING_MINUTEN,
   SESSIE_UREN,
+  klokTijd,
 } from './sessieduur'
 
 const MIN = 60 * 1000
@@ -68,5 +69,33 @@ describe('telAf', () => {
 
   it('gaat niet onder nul', () => {
     expect(telAf(-5)).toBe('0:00')
+  })
+})
+
+describe('beoordeelSessie met de lange sessie aan', () => {
+  const start = new Date('2026-09-07T08:00:00').getTime()
+
+  it('negeert de stilte', () => {
+    const nu = start + 5 * UUR
+    // Vijf uur niets gedaan: normaal allang afgemeld.
+    expect(beoordeelSessie(start, start, nu).stand).toBe('verlopen')
+    expect(beoordeelSessie(start, start, nu, true).stand).toBe('actief')
+  })
+
+  it('houdt de twaalf uur wel aan, en zegt dat ook', () => {
+    const oordeel = beoordeelSessie(start, start, start + (SESSIE_UREN + 1) * UUR, true)
+    expect(oordeel.stand).toBe('verlopen')
+    expect(oordeel.reden).toBe('sessieduur')
+  })
+
+  it('waarschuwt nog steeds vlak voor het einde', () => {
+    const nu = start + SESSIE_UREN * UUR - 60_000
+    expect(beoordeelSessie(start, start, nu, true).stand).toBe('waarschuwing')
+  })
+})
+
+describe('klokTijd', () => {
+  it('geeft het uur waarop de sessie dichtgaat', () => {
+    expect(klokTijd(new Date('2026-09-07T21:04:00').getTime())).toBe('21:04')
   })
 })

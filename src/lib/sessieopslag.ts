@@ -17,6 +17,7 @@ import type { Verloopreden } from './sessieduur'
 const SLEUTEL_START = 'taskflow.sessie.start'
 const SLEUTEL_ACTIVITEIT = 'taskflow.sessie.activiteit'
 const SLEUTEL_REDEN = 'taskflow.sessie.reden'
+const SLEUTEL_LANG = 'taskflow.sessie.lang'
 
 function lees(sleutel: string): string | null {
   try {
@@ -77,6 +78,22 @@ export function schrijfActiviteit(moment: number): void {
 }
 
 /**
+ * Of deze gebruiker de sessie twaalf uur wil laten openstaan.
+ *
+ * Hangt net als de startstempel aan het gebruikers-id: de keuze van je
+ * collega mag niet die van jou worden. Ze verdwijnt bij het afmelden, dus ze
+ * geldt voor deze aanmelding en niet langer.
+ */
+export function leesLangeSessie(uid: string): boolean {
+  return lees(SLEUTEL_LANG) === uid
+}
+
+export function schrijfLangeSessie(uid: string, aan: boolean): void {
+  if (aan) schrijf(SLEUTEL_LANG, uid)
+  else wis(SLEUTEL_LANG)
+}
+
+/**
  * Weg met de stempels. Hoort bij élke wissel van sessie: bij het afmelden,
  * maar net zo goed bij het aanmelden -- anders begint een verse aanmelding
  * met de stempels van de vorige, die al verlopen kunnen zijn.
@@ -84,6 +101,7 @@ export function schrijfActiviteit(moment: number): void {
 export function wisSessiestempels(): void {
   wis(SLEUTEL_START)
   wis(SLEUTEL_ACTIVITEIT)
+  wis(SLEUTEL_LANG)
 }
 
 /**

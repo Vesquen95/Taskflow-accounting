@@ -1,6 +1,6 @@
 import { useAuth } from '../hooks/useAuth'
-import { useSessieBewaking } from '../hooks/useSessieBewaking'
-import { INACTIVITEIT_MINUTEN, SESSIE_UREN, telAf } from '../lib/sessieduur'
+import { useSessiebediening, useSessiestand } from '../hooks/useSessie'
+import { INACTIVITEIT_MINUTEN, klokTijd, SESSIE_UREN, telAf } from '../lib/sessieduur'
 
 /**
  * De waarschuwing vlak voor het automatisch afmelden.
@@ -10,11 +10,9 @@ import { INACTIVITEIT_MINUTEN, SESSIE_UREN, telAf } from '../lib/sessieduur'
  * tekenen.
  */
 export function SessieBewaker() {
-  const { user, signOut } = useAuth()
-  const { stand, reden, secondenResterend, blijfAangemeld } = useSessieBewaking(
-    user?.id ?? null,
-    signOut
-  )
+  const { signOut } = useAuth()
+  const { stand, reden, secondenResterend } = useSessiestand()
+  const { blijfAangemeld, langeSessie, zetLangeSessie, eindeSessie } = useSessiebediening()
 
   if (stand !== 'waarschuwing') return null
 
@@ -35,7 +33,7 @@ export function SessieBewaker() {
           ? `Er gebeurde ${INACTIVITEIT_MINUTEN} minuten niets. Een scherm dat open blijft staan toont de dossiers van het kantoor aan wie er langsloopt.`
           : `Een aanmelding gaat ${SESSIE_UREN} uur mee. Meld je straks opnieuw aan om verder te werken; je werk is bewaard.`}
       </p>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {doorInactiviteit && (
           <button
             type="button"
@@ -43,6 +41,18 @@ export function SessieBewaker() {
             className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
           >
             Ik ben er nog
+          </button>
+        )}
+        {/* Dit is net het moment waarop je merkt dat je de hele dag met dit
+            scherm bezig bent. De knop staat ook in de zijbalk, maar hier
+            scheelt het een zoektocht. */}
+        {doorInactiviteit && !langeSessie && (
+          <button
+            type="button"
+            onClick={() => zetLangeSessie(true)}
+            className="rounded-md border border-brand-300 px-3 py-1.5 text-sm font-medium text-brand-700 transition hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+          >
+            {eindeSessie ? `Open houden tot ${klokTijd(eindeSessie)}` : `Open houden (${SESSIE_UREN} u)`}
           </button>
         )}
         <button

@@ -646,7 +646,7 @@ describe('TaskTable — de vier voorafbetalingen uit elkaar houden', () => {
         code: 'va_venb',
         naam: 'Voorafbetaling VenB (VA1-VA4)',
         categorie: 'wettelijk',
-        werkstroom: 'boekhouding',
+        werkstroom: 'vennootschapsbelasting',
       },
     })
   }

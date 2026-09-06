@@ -55,9 +55,14 @@ const UUR = 60 * MIN
 export function beoordeelSessie(
   aangemeldOp: number,
   laatsteActiviteit: number,
-  nu: number
+  nu: number,
+  langeSessie = false
 ): Sessieoordeel {
-  const totInactief = laatsteActiviteit + INACTIVITEIT_MINUTEN * MIN - nu
+  // Wie de lange sessie aanzet, zet de inactiviteitsgrens opzij -- niet de
+  // absolute. De twaalf uur blijft staan; dat is nu net wat de knop belooft.
+  const totInactief = langeSessie
+    ? Number.POSITIVE_INFINITY
+    : laatsteActiviteit + INACTIVITEIT_MINUTEN * MIN - nu
   const totMax = aangemeldOp + SESSIE_UREN * UUR - nu
 
   // De strengste van de twee wint: wie de hele dag doorwerkt loopt tegen de
@@ -85,4 +90,14 @@ export function telAf(seconden: number): string {
 export const VERLOOP_UITLEG: Record<Verloopreden, string> = {
   inactiviteit: `Je bent afgemeld omdat er ${INACTIVITEIT_MINUTEN} minuten niets gebeurde. Dat is met opzet: op een onbeheerd scherm staan de dossiers van het kantoor open.`,
   sessieduur: `Je bent afgemeld omdat een aanmelding ${SESSIE_UREN} uur meegaat. Meld je opnieuw aan om verder te werken.`,
+}
+
+/** Wanneer deze aanmelding hoe dan ook afloopt. */
+export function eindeVanDeSessie(aangemeldOp: number): number {
+  return aangemeldOp + SESSIE_UREN * UUR
+}
+
+/** "21:04" — het uur waarop de sessie dichtgaat, voor op de knop. */
+export function klokTijd(moment: number): string {
+  return new Date(moment).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })
 }

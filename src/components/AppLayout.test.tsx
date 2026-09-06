@@ -9,6 +9,18 @@ vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({ signOut: vi.fn() }),
 }))
 
+const zetLangeSessie = vi.fn()
+let langeSessie = false
+vi.mock('../hooks/useSessie', () => ({
+  useSessiebediening: () => ({
+    blijfAangemeld: vi.fn(),
+    langeSessie,
+    zetLangeSessie,
+    // 07/09/2026 om 21:04.
+    eindeSessie: new Date('2026-09-07T21:04:00').getTime(),
+  }),
+}))
+
 const employee: Employee = {
   id: 'e1',
   firm_id: 'f1',
@@ -143,5 +155,31 @@ describe('AppLayout — het hoofdscherm heet op een telefoon anders', () => {
     cleanup()
     toon()
     expect(screen.getByRole('complementary')).toHaveTextContent('Kalender')
+  })
+})
+
+
+describe('AppLayout — de sessie openhouden', () => {
+  afterEach(() => {
+    langeSessie = false
+    zetLangeSessie.mockClear()
+  })
+
+  it('biedt aan om de sessie een werkdag lang open te houden', async () => {
+    toon()
+    await userEvent.click(screen.getByRole('button', { name: 'Sessie 12 uur openhouden' }))
+    expect(zetLangeSessie).toHaveBeenCalledWith(true)
+  })
+
+  it('zegt tot wanneer het open blijft, en laat je terugdraaien', async () => {
+    // Onzichtbaar aanstaan is het gevaarlijke geval: dan weet niemand nog
+    // dat dit scherm zichzelf niet meer afsluit.
+    langeSessie = true
+    toon()
+    const knop = screen.getByRole('button', { name: 'Blijft open tot 21:04 — zet uit' })
+    expect(knop).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.click(knop)
+    expect(zetLangeSessie).toHaveBeenCalledWith(false)
   })
 })

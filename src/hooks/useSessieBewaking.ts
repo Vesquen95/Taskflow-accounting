@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   beoordeelSessie,
+  eindeVanDeSessie,
   type Sessiestand,
   type Verloopreden,
 } from '../lib/sessieduur'
 import {
   bewaarVerloopreden,
   leesActiviteit,
+  leesLangeSessie,
   leesStart,
+  schrijfLangeSessie,
   schrijfActiviteit,
   schrijfStart,
   wisSessiestempels,
@@ -31,6 +34,11 @@ export interface Sessiebewaking {
   secondenResterend: number
   /** Zet de teller terug. Werkt niet tegen de absolute grens; zie hieronder. */
   blijfAangemeld: () => void
+  /** Staat de inactiviteitsgrens opzij voor deze aanmelding. */
+  langeSessie: boolean
+  zetLangeSessie: (aan: boolean) => void
+  /** Het moment waarop deze aanmelding hoe dan ook afloopt; null zonder sessie. */
+  eindeSessie: number | null
 }
 
 /**
@@ -54,10 +62,12 @@ export function useSessieBewaking(
   // toevallig hetzelfde was, en bleef een sessie die bij het opstarten al
   // verlopen was nog een tik lang gewoon open staan. Een nieuw object per
   // peiling kan dat niet overkomen.
+  const langRef = useRef(false)
   const [peiling, setPeiling] = useState(() => ({
     start: null as number | null,
     activiteit: Date.now(),
     nu: Date.now(),
+    lang: false,
   }))
 
   const meet = useCallback(() => {
@@ -70,6 +80,7 @@ export function useSessieBewaking(
       start: startRef.current,
       activiteit: activiteitRef.current,
       nu: Date.now(),
+      lang: langRef.current,
     })
   }, [])
 
@@ -91,6 +102,7 @@ export function useSessieBewaking(
     const bewaardeActiviteit = leesActiviteit()
     activiteitRef.current = bewaardeActiviteit ?? nuMs
     if (bewaardeActiviteit === null) schrijfActiviteit(nuMs)
+    langRef.current = leesLangeSessie(uid)
     meet()
   }, [uid, meet])
 
@@ -98,7 +110,7 @@ export function useSessieBewaking(
     if (!uid || peiling.start === null) {
       return { stand: 'actief' as Sessiestand, secondenResterend: 0 }
     }
-    return beoordeelSessie(peiling.start, peiling.activiteit, peiling.nu)
+    return beoordeelSessie(peiling.start, peiling.activiteit, peiling.nu, peiling.lang)
   }, [uid, peiling])
 
   const standRef = useRef<Sessiestand>(oordeel.stand)
@@ -154,10 +166,29 @@ export function useSessieBewaking(
     meet()
   }, [meet])
 
+  const zetLangeSessie = useCallback(
+    (aan: boolean) => {
+      if (!uid) return
+      langRef.current = aan
+      schrijfLangeSessie(uid, aan)
+      // Ook bij het UITzetten de teller terugzetten. Wie een uur lang niets
+      // deed met de lange sessie aan, zou anders bij het uitzetten meteen
+      // afgemeld worden -- alsof de knop je buiten gooit.
+      const moment = Date.now()
+      activiteitRef.current = moment
+      schrijfActiviteit(moment)
+      meet()
+    },
+    [uid, meet]
+  )
+
   return {
     stand: oordeel.stand,
     reden: oordeel.reden,
     secondenResterend: oordeel.secondenResterend,
     blijfAangemeld,
+    langeSessie: peiling.lang,
+    zetLangeSessie,
+    eindeSessie: peiling.start === null ? null : eindeVanDeSessie(peiling.start),
   }
 }
