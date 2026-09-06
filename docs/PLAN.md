@@ -1022,9 +1022,39 @@ staan.
 
 ### Wat hier nog NIET in zit
 
-- **Junior en senior openen nog altijd op alles.** Het plan is: standaard "mijn
-  werk", met de teambak (412 taken zonder naam) als tweede tab. Nog te doen.
+- ~~Junior en senior openen nog altijd op alles.~~ Gedaan, zie hieronder.
 - **De partner heeft hier weinig aan.** Wie zelden en kort kijkt, opent de app
   niet. Voor die rol is de maandagmail geen extraatje maar het enige
   realistische aanraakpunt — dat maakt het afwerken van de verzender
   belangrijker dan het eerst leek.
+
+## §20 — Junior en senior beginnen bij hun week (06/09/2026)
+
+Het kantoor: *"Junior en senior moeten hun taken van de week zien."*
+
+De kalender opende voor iedereen op alles wat je mag zien, vanaf vandaag,
+zonder bovengrens. Voor wie aanstuurt is dat juist; voor wie uitvoert betekende
+het elke ochtend eerst zichzelf wegfilteren uit een lijst van meer dan
+duizend taken.
+
+**Wat er verandert.** Wie junior of senior is, komt binnen op zijn eigen werk
+met een bovengrens van zeven dagen. De graden daarboven komen binnen zoals
+voorheen: kantoorbreed, zonder weekgrens.
+
+**"Deze week" is vandaag + 6 dagen**, en dat is geen willekeurig getal: het is
+exact wat `weekoverzicht_voor()` in de maandagmail gebruikt (migratie 0043).
+Zouden die uit elkaar lopen, dan leest een junior in de mail dat er drie dingen
+zijn en ziet hij er vijf op het scherm — en dan gelooft hij geen van beide nog.
+
+**Het is een standaard, geen muur.** De keuzelijsten blijven volledig: de
+periode staat als "Deze week / Alles" in de filterbalk, en de bak van zijn team
+("Nog niemand", 412 taken) blijft één keuze ver. Wat verandert is alleen waar
+hij binnenkomt. En wie zelf iets anders kiest, ziet dat niet terugspringen.
+
+**De achterstand blijft zichtbaar.** De rode balk met het aantal te late taken
+staat er los van het weekvenster, zoals ze er altijd stond. Een gemiste
+deadline verdwijnt niet omdat het venster korter werd.
+
+**Een lege week zegt wat ze is.** "Niets meer deze week" met de uitleg dat dit
+alleen over zeven dagen gaat en waar de rest staat — anders denkt een junior
+dat hij klaar is.

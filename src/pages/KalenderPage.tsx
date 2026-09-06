@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { TEAMBAK, useTaskInstances } from '../hooks/useTaskInstances'
 import { useEmployees } from '../hooks/useEmployees'
+import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useTeams } from '../hooks/useTeams'
 import { teamLabel } from '../lib/teams'
 import { TaskDetailModal } from '../components/TaskDetailModal'
@@ -11,6 +12,7 @@ import { EmptyState } from '../components/EmptyState'
 import { Paginering } from '../components/Paginering'
 import { formatDate } from '../lib/urgency'
 import { isoDatum } from '../lib/werkstromen'
+import { eindeVanDeWeek, startfiltersVoor } from '../lib/startvenster'
 import type { TaskInstanceWithRelations } from '../types'
 
 /** Eén schijf van de kalender. Bij ~100 dossiers loopt de horizon van 36
@@ -51,6 +53,7 @@ function taakWoord(aantal: number): string {
  */
 export function KalenderPage() {
   const { employees } = useEmployees()
+  const { employee } = useCurrentEmployee()
   const { teams } = useTeams()
   // Eén keer per mount: de kalender hoort niet van datum te wisselen terwijl
   // je erin bladert.
@@ -77,6 +80,26 @@ export function KalenderPage() {
     dueVanaf: vandaag,
   })
   const [openTask, setOpenTask] = useState<TaskInstanceWithRelations | null>(null)
+  // Eén keer, zodra bekend is wie er kijkt. Daarna niet meer, en die vlag is
+  // niet cosmetisch: `useCurrentEmployee` bouwt zijn resultaat elke render
+  // opnieuw op, dus `employee` heeft telkens een nieuwe identiteit. Zonder de
+  // vlag vuurt dit effect eindeloos -- het zet de filters, die render opnieuw,
+  // en het effect ziet weer een "nieuwe" medewerker. De test die dat bewaakt
+  // laat de hook met opzet ook een nieuw object teruggeven.
+  const [startToegepast, setStartToegepast] = useState(false)
+
+  useEffect(() => {
+    if (startToegepast || !employee) return
+    const start = startfiltersVoor(employee, vandaag)
+    setStartToegepast(true)
+    if (start.toegewezenAan === 'alle' && start.dueTot === undefined) return
+    setFilters((f) => ({
+      ...f,
+      toegewezenAan: start.toegewezenAan,
+      dueTot: start.dueTot,
+      pagina: 1,
+    }))
+  }, [employee, vandaag, startToegepast, setFilters])
 
   const pagina = filters.pagina ?? 1
   // Geen tweede stukje state naast de filters: de ondergrens in de query ís de
@@ -87,6 +110,15 @@ export function KalenderPage() {
 
   function zetPagina(nieuwe: number) {
     setFilters((f) => ({ ...f, pagina: nieuwe }))
+  }
+
+  const weekEinde = eindeVanDeWeek(vandaag)
+  // De stand van de keuzelijst ís de bovengrens in de query -- geen tweede
+  // stukje state dat iets anders kan beweren dan wat er opgehaald werd.
+  const periode = filters.dueTot === weekEinde ? 'week' : 'alles'
+
+  function zetPeriode(nieuwe: 'week' | 'alles') {
+    setFilters((f) => ({ ...f, dueTot: nieuwe === 'week' ? weekEinde : undefined, pagina: 1 }))
   }
 
   function zetAchterstandVerborgen(verbergen: boolean) {
@@ -127,7 +159,11 @@ export function KalenderPage() {
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Kalender</h1>
-          <p className="text-sm text-slate-500">Deadline-dichtheid per maand, kantoorbreed of per medewerker.</p>
+          <p className="text-sm text-slate-500">
+            {periode === 'week'
+              ? 'Wat er deze week vervalt.'
+              : 'Deadline-dichtheid per maand, kantoorbreed of per medewerker.'}
+          </p>
           {achterstand > 0 && (
             <p className="mt-1 text-sm font-semibold text-red-700">
               {achterstand} {taakWoord(achterstand)} te laat
@@ -144,6 +180,15 @@ export function KalenderPage() {
             />
             Te late taken uit het verleden verbergen
           </label>
+          <select
+            aria-label="Periode"
+            value={periode}
+            onChange={(e) => zetPeriode(e.target.value as 'week' | 'alles')}
+            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          >
+            <option value="week">Deze week</option>
+            <option value="alles">Alles</option>
+          </select>
           <select
             aria-label="Team"
             value={filters.team ?? 'alle'}
@@ -210,13 +255,22 @@ export function KalenderPage() {
         // dan wél staat.
         <EmptyState
           title={
-            achterstandVerborgen
-              ? 'Geen openstaande taken vanaf vandaag.'
-              : filters.toegewezenAan && filters.toegewezenAan !== 'alle'
-                ? 'Geen openstaande taken voor deze medewerker.'
-                : 'Geen openstaande taken.'
+            periode === 'week'
+              ? 'Niets meer deze week.'
+              : achterstandVerborgen
+                ? 'Geen openstaande taken vanaf vandaag.'
+                : filters.toegewezenAan && filters.toegewezenAan !== 'alle'
+                  ? 'Geen openstaande taken voor deze medewerker.'
+                  : 'Geen openstaande taken.'
           }
-          description="Afgewerkte en geannuleerde taken staan niet in de kalender; die vind je in het klantdossier."
+          // Een lege lijst door een filter is iets anders dan een lege lijst
+          // omdat er niets is. Zeg welke van de twee het is, en waar de uitweg
+          // zit -- anders denkt een junior dat hij klaar is.
+          description={
+            periode === 'week'
+              ? 'Dit is alleen wat er binnen zeven dagen vervalt. Zet de periode op "Alles" om verder te kijken, of neem werk op uit de bak van je team ("Nog niemand").'
+              : 'Afgewerkte en geannuleerde taken staan niet in de kalender; die vind je in het klantdossier.'
+          }
         />
       ) : (
         <>
