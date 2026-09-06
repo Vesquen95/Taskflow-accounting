@@ -7938,9 +7938,9 @@ declare
   v_oud uuid; v_oud_uid uuid := gen_random_uuid();
   v_nieuw uuid; v_nieuw_uid uuid := gen_random_uuid();
   v_derde uuid; v_derde_uid uuid := gen_random_uuid();
-  v_klant uuid; v_ot uuid; v_co uuid;
+  v_klant uuid; v_ot uuid; v_ot_neer uuid; v_co uuid;
   v_taak uuid; v_derde_taak uuid; v_goedkeuring uuid; v_afgerond uuid;
-  v_n int; v_wie uuid; v_veld text;
+  v_n int; v_geteld int; v_wie uuid; v_melding text; v_eerder uuid[];
 begin
   insert into auth.users (id, email, email_confirmed_at) values
     (v_admin_uid, 's63a@test.local', now()), (v_oud_uid, 's63b@test.local', now()),
@@ -8114,7 +8114,7 @@ begin
   perform set_config('taskflow.test_uid', v_admin_uid::text, true);
   set local role authenticated;
   begin
-    perform public.taken_volgen_verantwoordelijke(v_co, v_derde, v_oud);
+    perform public.taken_volgen_verantwoordelijke(v_klant, v_co, v_derde, v_oud);
     set local role postgres;
     raise exception 'FAIL 63.8: de functie was rechtstreeks aan te roepen';
   exception when insufficient_privilege then
@@ -8122,6 +8122,104 @@ begin
     null;
   end;
   raise notice 'PASS 63.8: de verplaatsing loopt alleen via de triggers';
+
+  -- ---------------------------------------------------------
+  -- 63.9 (0060) Een taak ZONDER naam volgt mee, ook al stond de vorige
+  --      standaard op iemand anders. Dit is het geval dat zich op een echt
+  --      dossier voordeed: taken gegenereerd vóór er een verantwoordelijke
+  --      was, dus naamloos, en daarna elke wissel voorbij zien gaan.
+  --
+  --      De prijs staat er bewust in: deze taak is hier BEWUST teruggelegd in
+  --      de bak, en krijgt toch weer een naam. Zie de kop van 0060.
+  -- ---------------------------------------------------------
+  select id into v_taak from public.task_instances
+   where client_obligation_id = v_co and status = 'open'
+   order by due_date limit 1;
+  update public.task_instances set toegewezen_medewerker_id = null where id = v_taak;
+
+  update public.clients set standaard_verantwoordelijke_id = v_nieuw where id = v_klant;
+
+  select toegewezen_medewerker_id into v_wie from public.task_instances where id = v_taak;
+  if v_wie is distinct from v_nieuw then
+    raise exception 'FAIL 63.9: een taak zonder naam bleef in de bak liggen';
+  end if;
+  raise notice 'PASS 63.9: taken zonder naam volgen de nieuwe verantwoordelijke';
+
+  -- ---------------------------------------------------------
+  -- 63.10 Andersom niet: wie de verantwoordelijke leegmaakt, geeft het werk
+  --       terug aan het team. De bak blijft dan de bak -- en telt ook niet
+  --       mee als "verplaatst". Zonder die grens beweert de historiek dat er
+  --       taken van eigenaar wisselden die al lang zonder naam lagen.
+  -- ---------------------------------------------------------
+  select id into v_derde_taak from public.task_instances
+   where client_id = v_klant and status = 'open' and toegewezen_medewerker_id = v_nieuw
+   order by due_date limit 1;
+  update public.task_instances set toegewezen_medewerker_id = null where id = v_derde_taak;
+
+  -- Zoveel taken staan er écht op naam en wisselen dus echt van eigenaar.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and toegewezen_medewerker_id = v_nieuw
+     and status in ('open', 'in_uitvoering', 'wacht_op_klant');
+  if v_n = 0 then
+    raise exception 'FAIL 63.10: geen taken op naam om mee te meten';
+  end if;
+
+  -- Het hele blok is één transactie, dus elke logregel draagt dezelfde
+  -- created_at: "de nieuwste" bestaat hier niet. Onthouden wat er al stond is
+  -- de enige manier om de regel van déze update terug te vinden.
+  select coalesce(array_agg(id), '{}'::uuid[]) into v_eerder
+  from public.client_change_log
+  where client_id = v_klant and veld = 'taken_volgen_verantwoordelijke';
+
+  update public.clients set standaard_verantwoordelijke_id = null where id = v_klant;
+
+  select count(*) into v_geteld from public.task_instances
+   where client_id = v_klant and toegewezen_medewerker_id = v_nieuw
+     and status in ('open', 'in_uitvoering', 'wacht_op_klant');
+  if v_geteld <> 0 then
+    raise exception 'FAIL 63.10: % taken bleven op naam staan na het leegmaken', v_geteld;
+  end if;
+
+  select oude_waarde into v_melding from public.client_change_log
+   where client_id = v_klant and veld = 'taken_volgen_verantwoordelijke'
+     and client_obligation_id is null
+     and not (id = any(v_eerder));
+  if split_part(v_melding, ' ', 1) <> v_n::text then
+    raise exception 'FAIL 63.10: de historiek meldt "%" terwijl er % taken van naam wisselden',
+      v_melding, v_n;
+  end if;
+  raise notice 'PASS 63.10: leegmaken geeft het werk terug aan het team, en telt alleen wat echt wisselde';
+
+  -- ---------------------------------------------------------
+  -- 63.11 (0061) Een taak die aan GEEN verplichting hangt volgt ook mee.
+  --       Het levende voorbeeld is de neerlegging van de jaarrekening: die
+  --       hangt aan de algemene vergadering, niet aan een eigen verplichting,
+  --       en draagt dus geen client_obligation_id. Ze viel buiten elke lus en
+  --       bleef als enige taak van het dossier naamloos achter -- met een
+  --       deadline waar een boete aan hangt.
+  -- ---------------------------------------------------------
+  -- Dezelfde vorm als de echte: een gegenereerde taak mét verplichtingstype
+  -- maar ZONDER client_obligation_id, want ze hangt aan haar voorloper.
+  select id into v_ot_neer from public.obligation_types where code = 'neerlegging_jaarrekening';
+  perform set_config('taskflow.generating', 'on', true);
+  insert into public.task_instances (
+    client_id, obligation_type_id, client_obligation_id, periode_label,
+    due_date, due_date_wettelijk, status, toegewezen_medewerker_id,
+    bron_type, vereist_goedkeuring
+  ) values (
+    v_klant, v_ot_neer, null, 'S63-neerlegging',
+    current_date + 200, current_date + 200, 'open', null,
+    'automatisch_gegenereerd', true
+  ) returning id into v_taak;
+  perform set_config('taskflow.generating', 'off', true);
+
+  update public.clients set standaard_verantwoordelijke_id = v_nieuw where id = v_klant;
+
+  select toegewezen_medewerker_id into v_wie from public.task_instances where id = v_taak;
+  if v_wie is distinct from v_nieuw then
+    raise exception 'FAIL 63.11: een taak zonder verplichting bleef achter';
+  end if;
+  raise notice 'PASS 63.11: ook de taken zonder verplichting volgen mee';
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

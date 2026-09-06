@@ -1407,3 +1407,45 @@ niet.
 **Bewust niet meegenomen:** het team van de klant. Een dossier dat naar een
 ander team verhuist, sleept de namen niet mee — daar gaat 0040 over, en de bak
 van het team vangt dat op.
+
+
+## §27 — Waarom de wissel van verantwoordelijke tóch niet werkte (06/09/2026)
+
+Het kantoor meldde dat de wissel niet werkte. Dat klopte, en het lag aan twee
+gaten in de regel van §26. Beide zijn gevonden door naar het echte dossier te
+kijken, niet naar de tests.
+
+**Gat 1 — de taken zonder naam** (migratie 0060). De tijdlijn van dat dossier:
+
+| tijd | wat er gebeurde |
+|---|---|
+| 13:58 | dossier aangemaakt **zonder** verantwoordelijke → 18 taken zonder naam, in de bak van het team (0040, en dat hoort zo) |
+| 14:00 | verantwoordelijke gezet: niemand → A. 0059 bestond nog niet, dus de taken bleven naamloos |
+| 17:47 | gewisseld A → B. 0059 zocht taken **op naam van A**, vond er nul |
+
+Voor wie het scherm bedient: een knop die niets doet. De regel is daarom
+breder: een taak zónder naam volgt de nieuwe verantwoordelijke, ongeacht wie de
+vorige standaard was. De grond is dezelfde als in §26 — we ontzien menselijke
+beslissingen, en een taak zonder naam is er geen. De prijs, eerlijk benoemd:
+wie een taak bewust terugléégt in de bak ziet die bij de volgende wissel weer
+een naam krijgen. Eén klik om te herstellen, tegenover werk dat na een
+dossieroverdracht onzichtbaar blijft liggen.
+
+**Gat 2 — de neerlegging van de jaarrekening** (migratie 0061). Na de reparatie
+bleef er precies één taak achter. Die hangt aan de algemene vergadering en niet
+aan een eigen verplichting, dus ze draagt geen `client_obligation_id` en viel
+buiten elke lus. Geen randgeval: elke vennootschap met een jaarrekening heeft er
+een, en er hangt een boete aan de deadline. De verplaatsing kent nu twee vormen
+— "de taken van deze verplichting" en "de taken van dit dossier die aan geen
+verplichting hangen". Losse, met de hand gemaakte taken vallen in die tweede
+groep en volgen dezelfde regel.
+
+**Twee tests die niets bewezen.** 63.10 sloeg aan op iets anders dan de
+bewaking die ze moest testen; ze kijkt nu naar de télling in de historiek,
+want dat is wat de grens beschermt. En ze las de verkeerde logregel: het hele
+testblok is één transactie, dus elke logregel draagt dezelfde `created_at` en
+"de nieuwste" bestaat daar niet — ze onthoudt nu welke regels er al stonden.
+
+**Live nagegaan.** De 18 taken van het dossier stonden na de reparatie op naam.
+Daarna wisselde het kantoor zelf terug in het scherm: 17 taken verhuisden mee,
+met de regel erover in de historiek.
