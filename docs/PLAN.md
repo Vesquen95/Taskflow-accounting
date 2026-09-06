@@ -1268,3 +1268,50 @@ weer opgeruimd.
 Niet voor losse taken: "deze periode" bestaat niet voor een ad-hoc taak, die
 annuleer je. En niet voor wat al afgesloten is — dat zou een ingediende aangifte
 achteraf wegpoetsen.
+
+## §24 — De sessie loopt af (06/09/2026)
+
+**De klacht:** "ik merk op dat ik aangelogd blijf." Dat klopte. `supabase.ts`
+staat op `persistSession: true` en `autoRefreshToken: true`: het token werd
+eindeloos vernieuwd en de bewaarde sessie klapte de volgende ochtend gewoon
+weer open. Voor een kantoor waar de dossiers van honderd klanten achter dat
+scherm zitten is een pc die 's avonds open blijft staan een reëel probleem.
+
+**Twee grenzen**, want ze vangen verschillend gedrag op (`src/lib/sessieduur.ts`):
+
+| grens | waarde | vangt op |
+|---|---|---|
+| inactiviteit | 30 min | je loopt weg van je bureau |
+| sessieduur | 12 uur | wie de hele dag doorwerkt, meldt zich één keer per dag aan |
+
+Twee minuten vóór het afmelden verschijnt een waarschuwing met een aftelling
+(`src/components/SessieBewaker.tsx`). Bij inactiviteit staat er een knop *Ik
+ben er nog*; tegen de absolute grens niet, want daar helpt hij niet — een knop
+die niets doet is erger dan geen knop. Wie afgemeld werd leest op het
+aanmeldscherm waaróm, anders leest het als een storing.
+
+**Details die niet vanzelf spreken:**
+
+- *Tijdens de waarschuwing telt alleen de knop.* Zou een muisklik ergens op het
+  scherm de teller resetten, dan stelt het wegklikken van de waarschuwing de
+  afmelding stilzwijgend uit: dan vraag je iets en beslis je het zelf.
+- *Geen `mousemove` in de lijst.* Een muis die tegen een boekenkast leunt houdt
+  de sessie anders eeuwig open — precies wat we willen vermijden.
+- *De stempels staan in localStorage*, gedeeld over tabbladen: wie in het ene
+  tabblad typt is niet inactief in het andere. Elke bewerking staat in een
+  try/catch; zonder opslag (privévenster, geblokkeerde site-opslag) werkt de
+  afmelding nog steeds, alleen niet meer gedeeld.
+- *De startstempel hangt aan het gebruikers-id.* Op een gedeelde pc zou de
+  collega die na jou aanmeldt anders jouw twaalf uur erven.
+- *Aanmelden wist de stempels.* Anders begint een verse aanmelding met de
+  al verlopen stempels van de vorige en vlieg je er meteen weer uit.
+
+**Wat dit niet doet, en dat hoort erbij.** Afmelden in de browser maakt het
+token niet ongeldig aan de kant van de server. Wie het token uit de opslag van
+de browser haalt kan er nog mee werken tot het verloopt. De echte bovengrens
+daarvoor staat in Supabase → Authentication → Sessions: *time-box user
+sessions* (zet op 12 uur, gelijk aan `SESSIE_UREN`) en *inactivity timeout*
+(30 minuten, gelijk aan `INACTIVITEIT_MINUTEN`). Die twee horen samen gezet te
+worden; tot dat gebeurt is dit een nette afmelding, geen slot. **Openstaand
+voor het kantoor** — het staat niet in een migratie omdat het projectinstellingen
+zijn, geen databankobjecten.

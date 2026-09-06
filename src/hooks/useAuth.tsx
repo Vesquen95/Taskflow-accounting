@@ -8,6 +8,7 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { reportError } from '../lib/errorMessage'
+import { wisSessiestempels } from '../lib/sessieopslag'
 
 interface AuthContextValue {
   session: Session | null
@@ -45,6 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function signIn(email: string, password: string) {
+    // Eerst opruimen: een verse aanmelding mag niet beginnen met de
+    // tijdstempels van de vorige. Die zijn doorgaans al verlopen, en dan
+    // vliegt wie net aanmeldt er meteen weer uit (zie useSessieBewaking).
+    wisSessiestempels()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     return { error: error ? reportError(error, 'Inloggen is mislukt') : null }
   }
@@ -55,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
+    wisSessiestempels()
     await supabase.auth.signOut()
   }
 

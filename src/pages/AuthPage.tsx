@@ -1,5 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { VERLOOP_UITLEG } from '../lib/sessieduur'
+import { leesVerloopreden, wisVerloopreden } from '../lib/sessieopslag'
 
 export function AuthPage() {
   const { signIn, signUp } = useAuth()
@@ -9,6 +11,12 @@ export function AuthPage() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // Wie automatisch afgemeld werd, staat hier zonder te weten waarom. Zonder
+  // uitleg leest dat als een storing.
+  const [verloopreden] = useState(() => leesVerloopreden())
+  useEffect(() => {
+    wisVerloopreden()
+  }, [])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -43,6 +51,12 @@ export function AuthPage() {
           <h1 className="mt-3 text-lg font-semibold text-slate-900">Taskflow</h1>
           <p className="text-sm text-slate-500">Opvolging van termijnen en verplichtingen.</p>
         </div>
+
+        {verloopreden && (
+          <p role="status" className="mb-6 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {VERLOOP_UITLEG[verloopreden]}
+          </p>
+        )}
 
         <div className="mb-6 flex rounded-md bg-slate-100 p-1 text-sm">
           <button

@@ -11,6 +11,7 @@ vi.mock('../hooks/useAuth', () => ({
 }))
 
 beforeEach(() => {
+  window.localStorage.clear()
   signIn.mockReset()
   signUp.mockReset()
   signIn.mockResolvedValue({ error: null })
@@ -145,5 +146,26 @@ describe('AuthPage: sign up', () => {
 
     await user.click(screen.getByRole('button', { name: 'Registreren' }))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+
+describe('AuthPage: uitleg na een automatische afmelding', () => {
+  it('zegt waarom je afgemeld werd en laat dat niet blijven staan', () => {
+    window.localStorage.setItem('taskflow.sessie.reden', 'inactiviteit')
+    const { unmount } = render(<AuthPage />)
+
+    expect(screen.getByRole('status')).toHaveTextContent('30 minuten niets gebeurde')
+    // Eén keer tonen: bij de volgende keer aanmelden is die reden oud nieuws.
+    expect(window.localStorage.getItem('taskflow.sessie.reden')).toBeNull()
+
+    unmount()
+    render(<AuthPage />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('zegt niets als je gewoon zelf uitlogde', () => {
+    render(<AuthPage />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

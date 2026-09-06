@@ -6,6 +6,7 @@ import { AuthPage } from './pages/AuthPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { AppLayout } from './components/AppLayout'
 import { AccountDeactivatedScreen } from './components/AccountDeactivatedScreen'
+import { SessieBewaker } from './components/SessieBewaker'
 import { WerkstroomPage } from './pages/WerkstroomPage'
 import { ingangVoorPad } from './lib/werkstromen'
 import { KalenderPage } from './pages/KalenderPage'
@@ -131,9 +132,14 @@ function AppShell() {
   if (!session) return <AuthPage />
 
   return (
-    <CurrentEmployeeProvider>
-      <AuthenticatedApp onDeactivated={() => setDeactivated(true)} />
-    </CurrentEmployeeProvider>
+    <>
+      {/* Buiten de rest van de app: de bewaking tikt per seconde zodra ze
+          waarschuwt, en dat hoort het scherm eronder niet te merken. */}
+      <SessieBewaker />
+      <CurrentEmployeeProvider>
+        <AuthenticatedApp onDeactivated={() => setDeactivated(true)} />
+      </CurrentEmployeeProvider>
+    </>
   )
 }
 
