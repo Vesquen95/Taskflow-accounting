@@ -21,23 +21,9 @@ import { formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
 import { reportError } from '../lib/errorMessage'
 import { taakRegel } from '../lib/taakLabel'
+import { logWaarde, veldLabel } from '../lib/wijzigingslog'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
 
-/** Leesbare namen voor client_change_log.veld — het log slaat kolomnamen op,
- *  het kantoor leest liever Nederlands. */
-const CHANGE_FIELD_LABEL: Record<string, string> = {
-  vertrouwelijk: 'Vertrouwelijk',
-  standaard_verantwoordelijke_id: 'Standaard verantwoordelijke',
-  toegang_vertrouwelijk_verleend: 'Toegang tot dit vertrouwelijke dossier verleend',
-  boekjaar_einde_maand: 'Boekjaareinde (maand)',
-  boekjaar_einde_dag: 'Boekjaareinde (dag)',
-  btw_regime: 'Btw-regime',
-  btw_aangifte_frequentie: 'Btw-aangiftefrequentie',
-  actief: 'Actief',
-  // Geschreven door de archiveringstrigger (migratie 0026): hoeveel taken het
-  // archiveren van dit dossier gekost heeft.
-  taken_geannuleerd_bij_archivering: 'Taken geannuleerd bij het archiveren',
-}
 
 /** Klantdossier (§4 point 3): alle verplichtingen, status/historiek,
  * komende deadlines, verantwoordelijke, notities per klant. */
@@ -430,10 +416,10 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           <ul className="space-y-1.5 text-sm text-slate-600">
             {changeLog.map((entry) => (
               <li key={entry.id} className="border-b border-slate-100 pb-1.5 last:border-0">
-                <span className="font-medium text-slate-700">{CHANGE_FIELD_LABEL[entry.veld] ?? entry.veld}</span>
+                <span className="font-medium text-slate-700">{veldLabel(entry.veld)}</span>
                 <span>
                   {': '}
-                  {entry.oude_waarde ?? '—'} → {entry.nieuwe_waarde ?? '—'}
+                  {logWaarde(entry.oude_waarde, employees)} → {logWaarde(entry.nieuwe_waarde, employees)}
                 </span>
                 <span className="ml-1 text-slate-400">
                   ({entry.actor?.naam ?? 'onbekende medewerker'}, {formatDateTime(entry.created_at)})

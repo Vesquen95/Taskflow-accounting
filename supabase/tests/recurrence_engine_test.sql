@@ -7923,4 +7923,205 @@ begin
   raise notice 'PASS 62.6: wat al afgesloten is, blijft zoals het is';
 end $$;
 
+-- ============================================================
+-- Sectie 63 (0059): de standaardverantwoordelijke doorzetten naar de taken
+-- die er al staan.
+--
+-- 63.3 en 63.4 zijn de belangrijkste. Doorzetten is makkelijk; NIET doorzetten
+-- waar iemand al iets beslist heeft is het echte werk. Een taak die bewust aan
+-- een derde gegeven werd, en werk dat al op goedkeuring wacht, horen te
+-- blijven staan waar ze staan.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_oud uuid; v_oud_uid uuid := gen_random_uuid();
+  v_nieuw uuid; v_nieuw_uid uuid := gen_random_uuid();
+  v_derde uuid; v_derde_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot uuid; v_co uuid;
+  v_taak uuid; v_derde_taak uuid; v_goedkeuring uuid; v_afgerond uuid;
+  v_n int; v_wie uuid; v_veld text;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's63a@test.local', now()), (v_oud_uid, 's63b@test.local', now()),
+    (v_nieuw_uid, 's63c@test.local', now()), (v_derde_uid, 's63d@test.local', now());
+  insert into public.firms (naam) values ('S63 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S63 Beheerder', 's63a@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_oud_uid, 'S63 Vorige', 's63b@test.local', 'medewerker', false, true)
+    returning id into v_oud;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_nieuw_uid, 'S63 Opvolger', 's63c@test.local', 'medewerker', false, true)
+    returning id into v_nieuw;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_derde_uid, 'S63 Derde', 's63d@test.local', 'medewerker', false, true)
+    returning id into v_derde;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief,
+                              standaard_verantwoordelijke_id)
+    values (v_firm, 'S63 Klant', 12, 31, 'periodieke_aangever', 'kwartaal', true, v_oud)
+    returning id into v_klant;
+  select id into v_ot from public.obligation_types where code = 'btw_aangifte';
+  perform public.generate_task_instances(public.horizon_maanden(), 0);
+
+  select id into v_co from public.client_obligations
+   where client_id = v_klant and obligation_type_id = v_ot limit 1;
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and toegewezen_medewerker_id = v_oud;
+  if v_n = 0 then
+    raise exception 'FAIL 63.0: geen taken op naam van de vorige verantwoordelijke';
+  end if;
+
+  -- ---------------------------------------------------------
+  -- 63.1 De verantwoordelijke van het DOSSIER wijzigt: de openstaande taken
+  --      volgen mee. Dit is de melding van het kantoor.
+  -- ---------------------------------------------------------
+  update public.clients set standaard_verantwoordelijke_id = v_nieuw where id = v_klant;
+
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and toegewezen_medewerker_id = v_oud
+     and status in ('open', 'in_uitvoering', 'wacht_op_klant');
+  if v_n <> 0 then
+    raise exception 'FAIL 63.1: % openstaande taken staan nog op de vorige', v_n;
+  end if;
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and toegewezen_medewerker_id = v_nieuw;
+  if v_n = 0 then
+    raise exception 'FAIL 63.1: geen enkele taak volgde mee';
+  end if;
+  raise notice 'PASS 63.1: % taken volgden de nieuwe verantwoordelijke', v_n;
+
+  -- ---------------------------------------------------------
+  -- 63.2 Het staat in de historiek van het dossier. Veertig taken die stil
+  --      van naam wisselen is precies wat je later wilt kunnen terugvinden.
+  -- ---------------------------------------------------------
+  select count(*) into v_n from public.client_change_log
+   where client_id = v_klant and veld = 'taken_volgen_verantwoordelijke';
+  if v_n <> 1 then
+    raise exception 'FAIL 63.2: % logregels i.p.v. één', v_n;
+  end if;
+  raise notice 'PASS 63.2: de verplaatsing staat in de historiek van het dossier';
+
+  -- ---------------------------------------------------------
+  -- 63.3 Een taak die iemand bewust aan een derde gaf, blijft van die derde.
+  --      Anders wist een wijziging van de standaard stilzwijgend een
+  --      menselijke beslissing uit.
+  -- ---------------------------------------------------------
+  select id into v_derde_taak from public.task_instances
+   where client_id = v_klant and status = 'open' order by due_date limit 1;
+  update public.task_instances set toegewezen_medewerker_id = v_derde where id = v_derde_taak;
+
+  update public.clients set standaard_verantwoordelijke_id = v_oud where id = v_klant;
+
+  select toegewezen_medewerker_id into v_wie from public.task_instances where id = v_derde_taak;
+  if v_wie is distinct from v_derde then
+    raise exception 'FAIL 63.3: de taak van de derde werd overschreven';
+  end if;
+  raise notice 'PASS 63.3: een bewuste toewijzing blijft staan';
+
+  -- ---------------------------------------------------------
+  -- 63.4 Werk dat op goedkeuring wacht, verhuist niet. Dat is gedaan werk;
+  --      het op naam van een opvolger zetten maakt hem auteur van iets wat
+  --      hij niet deed.
+  -- ---------------------------------------------------------
+  select id into v_goedkeuring from public.task_instances
+   where client_id = v_klant and status = 'open' and toegewezen_medewerker_id = v_oud
+   order by due_date offset 1 limit 1;
+  perform set_config('taskflow.test_uid', v_oud_uid::text, true);
+  update public.task_instances set status = 'wacht_op_goedkeuring' where id = v_goedkeuring;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  update public.clients set standaard_verantwoordelijke_id = v_nieuw where id = v_klant;
+
+  select toegewezen_medewerker_id into v_wie from public.task_instances where id = v_goedkeuring;
+  if v_wie is distinct from v_oud then
+    raise exception 'FAIL 63.4: werk dat op goedkeuring wacht verhuisde mee';
+  end if;
+  raise notice 'PASS 63.4: wat op goedkeuring wacht blijft van wie het deed';
+
+  -- ---------------------------------------------------------
+  -- 63.5 Afgesloten taken blijven afgesloten en blijven op naam staan. De
+  --      historiek van een dossier mag niet meeschuiven met wie het vandaag
+  --      doet.
+  -- ---------------------------------------------------------
+  select id into v_afgerond from public.task_instances
+   where client_id = v_klant and status = 'open' and toegewezen_medewerker_id = v_nieuw
+   order by due_date limit 1;
+  perform set_config('taskflow.test_uid', v_nieuw_uid::text, true);
+  update public.task_instances set status = 'wacht_op_goedkeuring' where id = v_afgerond;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_afgerond;
+
+  update public.clients set standaard_verantwoordelijke_id = v_derde where id = v_klant;
+
+  select toegewezen_medewerker_id into v_wie from public.task_instances where id = v_afgerond;
+  if v_wie is distinct from v_nieuw then
+    raise exception 'FAIL 63.5: een afgesloten taak wisselde van naam';
+  end if;
+  raise notice 'PASS 63.5: de historiek schuift niet mee';
+
+  -- ---------------------------------------------------------
+  -- 63.6 De verantwoordelijke van ÉÉN verplichting gaat voor op die van het
+  --      dossier -- ook hier. Zet je hem op de verplichting, dan volgen
+  --      alleen de taken van díe verplichting.
+  -- ---------------------------------------------------------
+  update public.client_obligations
+     set standaard_toegewezen_medewerker_id = v_oud where id = v_co;
+
+  select count(*) into v_n from public.task_instances
+   where client_obligation_id = v_co and toegewezen_medewerker_id = v_oud
+     and status in ('open', 'in_uitvoering', 'wacht_op_klant');
+  if v_n = 0 then
+    raise exception 'FAIL 63.6: de verplichting kreeg haar taken niet mee';
+  end if;
+  select count(*) into v_n from public.client_change_log
+   where client_obligation_id = v_co and veld = 'taken_volgen_verantwoordelijke';
+  if v_n <> 1 then
+    raise exception 'FAIL 63.6: % logregels op de verplichting i.p.v. één', v_n;
+  end if;
+  raise notice 'PASS 63.6: de verplichting neemt haar eigen taken mee';
+
+  -- ---------------------------------------------------------
+  -- 63.7 En als de verplichting haar eigen naam weer loslaat, valt ze terug
+  --      op het dossier -- niet op niemand. Zonder die terugval zou het
+  --      leegmaken van één veld veertig taken in de bak van het team gooien.
+  -- ---------------------------------------------------------
+  update public.client_obligations
+     set standaard_toegewezen_medewerker_id = null where id = v_co;
+
+  select count(*) into v_n from public.task_instances
+   where client_obligation_id = v_co and toegewezen_medewerker_id is null;
+  if v_n <> 0 then
+    raise exception 'FAIL 63.7: % taken kwamen zonder naam te staan', v_n;
+  end if;
+  select count(*) into v_n from public.task_instances
+   where client_obligation_id = v_co and toegewezen_medewerker_id = v_derde
+     and status in ('open', 'in_uitvoering', 'wacht_op_klant');
+  if v_n = 0 then
+    raise exception 'FAIL 63.7: de taken vielen niet terug op de verantwoordelijke van het dossier';
+  end if;
+  raise notice 'PASS 63.7: leegmaken valt terug op het dossier, niet op niemand';
+
+  -- ---------------------------------------------------------
+  -- 63.8 De verplaatsing is niet los aan te roepen. Ze gaat langs RLS heen;
+  --      buiten de triggers om zou ze de taken van een ander kantoor kunnen
+  --      verzetten.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  set local role authenticated;
+  begin
+    perform public.taken_volgen_verantwoordelijke(v_co, v_derde, v_oud);
+    set local role postgres;
+    raise exception 'FAIL 63.8: de functie was rechtstreeks aan te roepen';
+  exception when insufficient_privilege then
+    set local role postgres;
+    null;
+  end;
+  raise notice 'PASS 63.8: de verplaatsing loopt alleen via de triggers';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

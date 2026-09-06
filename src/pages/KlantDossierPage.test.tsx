@@ -188,3 +188,44 @@ describe('KlantDossierPage — een gearchiveerd dossier', () => {
     expect(mock.rpc).toHaveBeenCalledWith('sync_client_tasks', { p_client_id: 'c1' })
   })
 })
+
+describe('KlantDossierPage — de wijzigingshistoriek leesbaar', () => {
+  function metLog() {
+    const h = handlers()
+    h.employees = () => ({
+      data: [
+        { id: 'e1', naam: 'Jan' },
+        { id: '8f3c1a2b-0000-4000-8000-000000000002', naam: 'Els Peeters' },
+        { id: '8f3c1a2b-0000-4000-8000-000000000003', naam: 'Rik Claes' },
+      ],
+      error: null,
+    })
+    h.client_change_log = () => ({
+      data: [
+        {
+          id: 'l1',
+          client_id: 'c1',
+          veld: 'taken_volgen_verantwoordelijke',
+          oude_waarde: '6 openstaande taken stonden op 8f3c1a2b-0000-4000-8000-000000000002',
+          nieuwe_waarde: '8f3c1a2b-0000-4000-8000-000000000003',
+          actor_employee_id: 'e1',
+          created_at: '2026-09-06T10:00:00Z',
+          actor: { id: 'e1', naam: 'Jan' },
+        },
+      ],
+      error: null,
+    })
+    return h
+  }
+
+  it('zegt in gewone taal wat er gebeurde, met namen in plaats van uuids', async () => {
+    install(metLog())
+    render(<KlantDossierPage clientId="c1" navigate={vi.fn()} />)
+
+    const regel = await screen.findByText(/Openstaande taken mee verplaatst/)
+    const li = regel.closest('li')!
+    expect(li).toHaveTextContent('6 openstaande taken stonden op Els Peeters')
+    expect(li).toHaveTextContent('Rik Claes')
+    expect(li.textContent).not.toMatch(/8f3c1a2b/)
+  })
+})

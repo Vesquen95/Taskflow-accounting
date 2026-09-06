@@ -1359,3 +1359,51 @@ Een test bewaakt dat er geen percentage in de tekst sluipt.
 
 De generatie zelf is niet aangeraakt: het label `VA1-2026` komt al sinds
 migratie 0017 uit `generate_task_instances()`. Dit is alleen weergave.
+
+## §26 — De verantwoordelijke doorzetten naar taken die er al staan (06/09/2026)
+
+**De melding van het kantoor:** wie de standaardverantwoordelijke aanpast,
+verandert alleen wat de taakgeneratie hierná aanmaakt. Alles wat er al stond
+bleef op naam van de vorige collega. Bij een dossier dat overgaat is dat geen
+detail: de nieuwe verantwoordelijke ziet het werk niet in zijn lijst, en de
+vorige blijft taken zien van een klant die niet meer van hem is.
+
+**Wat er nu gebeurt** (migratie 0059): de openstaande taken volgen mee, met
+drie grenzen — blind alles verzetten maakt het erger dan het was.
+
+1. *Alleen taken die nog op de vorige standaardverantwoordelijke staan.* Wie
+   een taak bewust aan een derde gaf, nam een beslissing; die overschrijven we
+   niet. Staat een taak in de bak van het team (geen naam, 0040) en komt er een
+   verantwoordelijke bij, dan krijgt ze wél die naam — dezelfde regel,
+   gespiegeld.
+2. *Alleen `open`, `in_uitvoering` en `wacht_op_klant`.* Afgerond en
+   geannuleerd is geschiedenis. En `wacht_op_goedkeuring` blijft staan: dat werk
+   is gedáán, alleen nog niet nagekeken, en het op naam van een opvolger zetten
+   maakt hem auteur van iets wat hij niet deed.
+3. *Alleen met een ingelogde medewerker.* Zonder actor weigert de
+   statustrigger een herverdeling sowieso; dan doet de trigger niets in plaats
+   van de hele update te laten stranden.
+
+Twee triggers, één op `client_obligations` en één op `clients`, want de
+verantwoordelijke van één verplichting gaat voor op die van het dossier. Maak
+je het veld op de verplichting leeg, dan valt ze terug op het dossier — niet op
+niemand.
+
+**Wat de tests aan het licht brachten.** Op een vertrouwelijk dossier schrijft
+0014 bij elke herverdeling een `toegang_vertrouwelijk_verleend` in de
+dossierhistoriek. Mijn eerste versie leverde dus veertig van die regels op voor
+één beslissing die 0015 al vastlegt — de historiek onleesbaar gemaakt door iets
+wat als opruimen bedoeld was. Sectie 23.3 ving dat. 0059 patcht die ene
+logregel weg tijdens een verplaatsing; de kantoorgrens, de
+kantoorbeheerder-eis en de `toewijzing_gewijzigd` per taak blijven allemaal
+staan. Er verdwijnt geen controle en geen spoor, alleen een echo.
+
+**Meegenomen:** de wijzigingshistoriek toonde ruwe uuid's ("8f3c… → a91b…").
+`src/lib/wijzigingslog.ts` zet elk uuid in de tekst om naar de naam van die
+medewerker — ook midden in een zin, want zo schrijft 0059 haar regel. Een uuid
+dat bij niemand hoort blijft staan: een verwijderde medewerker verzinnen we
+niet.
+
+**Bewust niet meegenomen:** het team van de klant. Een dossier dat naar een
+ander team verhuist, sleept de namen niet mee — daar gaat 0040 over, en de bak
+van het team vangt dat op.
