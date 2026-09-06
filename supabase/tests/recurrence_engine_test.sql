@@ -3926,7 +3926,11 @@ declare
   v_firm uuid; v_admin uuid; v_klant uuid;
   v_log uuid; v_n int; v_ok boolean;
   v_taken int; v_feestdagen int; v_fout text; v_eind timestamptz;
-  v_dekking int; v_horizon int := extract(year from (current_date + interval '36 months'))::int;
+  -- 0057: het horizonjaar volgt de horizon zelf, niet meer een vast getal.
+  -- Stond hier eerst hardgecodeerd op 36 maanden; toen die op 15 ging, deleteten
+  -- 33.4 en 33.2 een jaar dat het onderhoud niet meer aanraakt en sloeg de test
+  -- vacuüm aan.
+  v_dekking int; v_horizon int := extract(year from (current_date + (public.horizon_maanden() || ' months')::interval))::int;
 begin
   insert into auth.users (id, email, email_confirmed_at) values
     (v_uid, 's33-admin@test.local', now()),
@@ -7648,6 +7652,114 @@ begin
     raise exception 'FAIL 60.6: de supervisor telt % taken i.p.v. 1 (alleen zijn eigen team, en daar staat één taak op naam)', v_n;
   end if;
   raise notice 'PASS 60.6: het workload-overzicht volgt dezelfde grens en dezelfde muur';
+end $$;
+
+-- ============================================================
+-- Sectie 61 (0057): de horizon van 15 maanden.
+--
+-- Twee kanten die tegen elkaar in werken, en allebei moeten kloppen: de lijst
+-- moet KORTER worden (61.2 en 61.3), maar de lopende cyclus mag niet
+-- afgekapt worden (61.4). Dat laatste is de reden dat het 15 is en geen 12.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot_btw uuid; v_ot_venb uuid; v_ot_av uuid;
+  v_n int; v_gesnoeid int; v_ver date; v_status public.task_status;
+begin
+  -- 61.1 De horizon staat op één plek, en die zegt 15.
+  if public.horizon_maanden() <> 15 then
+    raise exception 'FAIL 61.1: horizon_maanden() geeft % i.p.v. 15', public.horizon_maanden();
+  end if;
+  raise notice 'PASS 61.1: de horizon staat op 15 maanden';
+
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's61@test.local', now());
+  insert into public.firms (naam) values ('S61 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S61 Beheerder', 's61@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S61 Klant', 12, 31, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_klant;
+  select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot_av, true, date '2000-01-01');
+  select id into v_ot_venb from public.obligation_types where code = 'aangifte_venb_pb';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot_venb, true, date '2000-01-01');
+
+  -- ---------------------------------------------------------
+  -- 61.2 Genereren met de nieuwe horizon maakt niets verder dan 15 maanden.
+  -- ---------------------------------------------------------
+  perform public.generate_task_instances(public.horizon_maanden(), 0);
+  select count(*) into v_n from public.task_instances ti
+   where ti.client_id = v_klant
+     and ti.due_date > (current_date + interval '15 months')::date;
+  if v_n <> 0 then
+    raise exception 'FAIL 61.2: % taak/taken voorbij de horizon aangemaakt', v_n;
+  end if;
+  select count(*) into v_n from public.task_instances where client_id = v_klant;
+  if v_n = 0 then
+    raise exception 'FAIL 61.2: er is helemaal niets aangemaakt -- de test bewijst niets';
+  end if;
+  raise notice 'PASS 61.2: de generatie stopt bij de horizon';
+
+  -- ---------------------------------------------------------
+  -- 61.3 Wat er al voorbij de horizon stond, wordt gesnoeid -- en alleen wat
+  --      nog open staat. Werk waar iemand mee bezig is blijft.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.generating', 'on', true);
+  select id into v_ot_btw from public.obligation_types where code = 'btw_aangifte';
+  insert into public.task_instances (client_id, obligation_type_id, periode_label,
+      periode_start, periode_eind, due_date, due_date_wettelijk, status,
+      toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant, v_ot_btw, 'S61-ver-open', date '2029-01-01', date '2029-03-31',
+      current_date + 800, current_date + 800, 'open', v_admin, 'automatisch_gegenereerd', true);
+  insert into public.task_instances (client_id, obligation_type_id, periode_label,
+      periode_start, periode_eind, due_date, due_date_wettelijk, status,
+      toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant, v_ot_btw, 'S61-ver-bezig', date '2029-04-01', date '2029-06-30',
+      current_date + 801, current_date + 801, 'open', v_admin, 'automatisch_gegenereerd', true);
+  perform set_config('taskflow.generating', 'off', true);
+  update public.task_instances set status = 'in_uitvoering' where periode_label = 'S61-ver-bezig';
+
+  v_gesnoeid := public.snoei_taken_buiten_horizon();
+  if v_gesnoeid < 1 then
+    raise exception 'FAIL 61.3: er is niets gesnoeid';
+  end if;
+
+  select status into v_status from public.task_instances where periode_label = 'S61-ver-open';
+  if v_status is distinct from 'geannuleerd' then
+    raise exception 'FAIL 61.3: de open taak voorbij de horizon staat op % i.p.v. geannuleerd',
+      coalesce(v_status::text, 'niets');
+  end if;
+  select status into v_status from public.task_instances where periode_label = 'S61-ver-bezig';
+  if v_status is distinct from 'in_uitvoering' then
+    raise exception 'FAIL 61.3: werk waar iemand mee bezig is werd toch gesnoeid (%)',
+      coalesce(v_status::text, 'niets');
+  end if;
+  raise notice 'PASS 61.3: buiten de horizon wordt gesnoeid, lopend werk blijft';
+
+  -- ---------------------------------------------------------
+  -- 61.4 En de lopende cyclus blijft staan. Dit is waarom het 15 is en geen
+  --      12: de aangifte VenB over het boekjaar dat eind dit jaar sluit, valt
+  --      pas bijna dertien maanden vooruit (winteruitzondering, 0033). Bij een
+  --      horizon van twaalf maanden zou net die uit beeld vallen.
+  -- ---------------------------------------------------------
+  select max(due_date) into v_ver from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_venb and status <> 'geannuleerd';
+  if v_ver is null then
+    raise exception 'FAIL 61.4: er staat geen aangifte VenB meer -- de horizon kapt de cyclus af';
+  end if;
+  if v_ver <= (current_date + interval '12 months')::date then
+    raise exception
+      'FAIL 61.4: de verste aangifte VenB valt op % en dus binnen 12 maanden; deze test bewijst niet dat 15 nodig is',
+      v_ver;
+  end if;
+  raise notice 'PASS 61.4: de aangifte VenB van de lopende cyclus valt voorbij 12 maanden en blijft staan';
 end $$;
 
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

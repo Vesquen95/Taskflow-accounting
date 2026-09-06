@@ -205,7 +205,7 @@ describe('useLegalCalendar — generateTaskInstances (recurrence-engine trigger)
     await expect(result.current.generateTaskInstances()).rejects.toThrow('permission denied for function')
   })
 
-  it('defaults to a 3-month horizon and 6-month backfill when called with no args', async () => {
+  it('valt terug op de horizon van 15 maanden en 6 maanden backfill', async () => {
     let calledArgs: unknown
     install(baseHandlers, (_fn, args) => {
       calledArgs = args
@@ -219,6 +219,6 @@ describe('useLegalCalendar — generateTaskInstances (recurrence-engine trigger)
       await result.current.generateTaskInstances()
     })
 
-    expect(calledArgs).toEqual({ p_horizon_months: 3, p_backfill_months: 6 })
+    expect(calledArgs).toEqual({ p_horizon_months: 15, p_backfill_months: 6 })
   })
 })

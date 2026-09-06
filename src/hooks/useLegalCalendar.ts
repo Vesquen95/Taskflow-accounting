@@ -105,7 +105,15 @@ export function useLegalCalendar() {
     await load()
   }
 
-  async function generateTaskInstances(horizonMonths = 3, backfillMonths = 6): Promise<number> {
+  /**
+   * De horizon van de taakgeneratie: 15 maanden.
+   *
+   * De databank is de bron (`horizon_maanden()`, migratie 0057); dit is de
+   * standaard voor de knop op dit scherm. Hij stond hier op 3 terwijl het
+   * opslaan van één klant er 36 genereerde -- een verschil van een factor
+   * twaalf tussen twee wegen naar dezelfde motor.
+   */
+  async function generateTaskInstances(horizonMonths = 15, backfillMonths = 6): Promise<number> {
     const { data, error: err } = await supabase.rpc('generate_task_instances', {
       p_horizon_months: horizonMonths,
       p_backfill_months: backfillMonths,

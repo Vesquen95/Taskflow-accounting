@@ -1145,3 +1145,77 @@ vereffening).
 
 Staat uit; vereist een Supabase Pro-abonnement. Blijft op de advisorlijst tot
 dat er is.
+
+## §22 — De horizon van 36 naar 15 maanden (06/09/2026)
+
+Het kantoor: *"Een dossier bekijken we niet 3 jaren vanaf vandaag, meestal is
+een jaar ruim voldoende."* De takenlijst was te lang geworden om nog overzicht
+te geven.
+
+**Gemeten, met een volledig gevulde horizon van 36 maanden: 5.050 openstaande
+taken.** Daarvan lag 45% verder dan achttien maanden weg.
+
+### Het voorstel van het kantoor, en waarom het niet doorgaat
+
+Het idee was om de volgende periode pas aan te maken zodra de vorige afgesloten
+wordt (btw Q1-2026 dicht → Q1-2027 erbij). Aantrekkelijk, maar het ruilt de
+belangrijkste eigenschap van de motor weg.
+
+Vandaag geldt: **wat er hoort te bestaan, is een zuivere functie van de
+dossiers, hun verplichtingen, de regels en de horizon.** Draai de generatie
+opnieuw en alles klopt weer. Daarop steunt elke correctie die we al gedaan
+hebben — 0017, 0033, 0048 en 0049 zetten een verkeerde regel recht dóór opnieuw
+te genereren — en 0052 is er volledig op gebouwd: annuleren en laten
+hergenereren.
+
+Met een ketting hangt de toekomst aan de geschiedenis. **Een taak die nooit
+afgesloten wordt, breekt hem.** Er stonden op dat moment 649 taken te laat: dat
+zouden 649 stilgevallen kettingen zijn, waarbij de slechtst opgevolgde dossiers
+de mínste toekomstige taken krijgen. Precies omgekeerd, en niets dat het merkt.
+
+Het motief hield ook geen stand: **een volledige herberekening over 103
+dossiers duurt 793 ms.**
+
+### Waarom 15 en niet 12
+
+Twaalf kapt de lopende cyclus af. Van alle taken over een periode die uiterlijk
+eind 2026 sluit, reiken deze het verst vooruit:
+
+| | deadline | vooruit |
+| --- | --- | --- |
+| aangifte personenbelasting | 18/10/2027 | 13,4 maanden |
+| aangifte VenB / RPB | 30/09/2027 | 12,8 maanden |
+| neerlegging jaarrekening | 30/07/2027 | 10,8 maanden |
+
+Bij twaalf maanden vallen de twee aangiftes van het lopende boekjaar weg — net
+de taken waarop het kantoor plant.
+
+### Wat er gebeurd is
+
+- De horizon staat op één plek: `horizon_maanden()`. Hij stond eerder op 36 in
+  het maandelijkse onderhoud, op 36 in `sync_client_tasks` en op **3** als
+  standaard van de knop op het scherm — een verschil van een factor twaalf
+  tussen twee wegen naar dezelfde motor.
+- `snoei_taken_buiten_horizon()` annuleert wat erbuiten valt, en draait mee in
+  het maandelijkse onderhoud. **Live: 2.429 taken gesnoeid, 5.050 → 2.621.**
+- Uitgezonderd: werk waar al aan begonnen is, taken die met de hand gemaakt
+  zijn, en **vervolgtaken**. Dat laatste ving sectie 33 van de testreeks: de
+  neerlegging hangt aan de algemene vergadering en kan net voorbij de horizon
+  vallen terwijl de AV er nog binnen zit. Snoeide je haar toch weg, dan maakte
+  de volgende ronde haar meteen opnieuw aan en jaagde het onderhoud zichzelf
+  achterna. Na het snoeien bleven precies 173 taken voorbij de horizon staan:
+  172 vervolgtaken en één handmatige — geen enkele onverklaarde.
+- Het snoeien neemt de identiteit aan van de kantoorbeheerder van dat kantoor.
+  Elke statuswijziging vereist een echte medewerker (0011); "systeem" bestaat
+  hier niet, ook niet voor een cron-job.
+
+**Het doorschuiven was al geautomatiseerd** — `onderhoud_taken()` uit 0025, met
+een cron-job (`taskflow-horizon-onderhoud`, elke 1e van de maand om 03:00, laatst
+gelopen op 01/09/2026). Een kortere horizon valt dus niet stil.
+
+### Nog open: de 649 taken die te laat zijn
+
+Het kantoor: *"Die zouden opgelost moeten worden voor het volgende kan
+aangevat worden — je kan geen afsluiting doen als de vorige niet werd gedaan.
+Als een taak te laat is zullen we deze hoogstwaarschijnlijk als afgerond
+opnemen."* Zie §21.
