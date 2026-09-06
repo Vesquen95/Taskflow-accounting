@@ -70,6 +70,7 @@ export function TelefoonPage() {
     setFilters,
     reload,
     updateStatus,
+    markeerNietVanToepassing,
     updateDueDate,
     reassign,
     markReviewHandled,
@@ -356,6 +357,7 @@ export function TelefoonPage() {
           employees={employees}
           onClose={() => setOpenTask(null)}
           onStatusChange={updateStatus}
+          onNietVanToepassing={markeerNietVanToepassing}
           onReassign={reassign}
           onMarkReviewHandled={markReviewHandled}
           onDueDateChange={updateDueDate}

@@ -55,6 +55,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
     setFilters,
     reload,
     updateStatus,
+    markeerNietVanToepassing,
     updateDueDate,
     reassign,
     bulkReassign,
@@ -210,6 +211,7 @@ export function WerkstroomPage({ ingang }: { ingang: IngangDefinitie }) {
           employees={employees}
           onClose={() => setOpenTask(null)}
           onStatusChange={updateStatus}
+          onNietVanToepassing={markeerNietVanToepassing}
           onReassign={reassign}
           onMarkReviewHandled={markReviewHandled}
           onDueDateChange={updateDueDate}

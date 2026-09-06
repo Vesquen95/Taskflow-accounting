@@ -68,6 +68,7 @@ export function KalenderPage() {
     setFilters,
     reload,
     updateStatus,
+    markeerNietVanToepassing,
     updateDueDate,
     reassign,
     markReviewHandled,
@@ -320,6 +321,7 @@ export function KalenderPage() {
           employees={employees}
           onClose={() => setOpenTask(null)}
           onStatusChange={updateStatus}
+          onNietVanToepassing={markeerNietVanToepassing}
           onReassign={reassign}
           onMarkReviewHandled={markReviewHandled}
           onDueDateChange={updateDueDate}

@@ -181,6 +181,10 @@ export interface TaskInstance {
   /** Sinds wanneer deze taak op de klant wacht; leeg als ze dat niet doet.
    *  Gezet en gewist door de statusmachine (migratie 0047). */
   wacht_op_klant_sinds: string | null
+  /** Deze periode was er niets aan te geven. De taak staat op geannuleerd,
+   *  maar de generatie maakt haar niet opnieuw aan (migratie 0058). */
+  niet_van_toepassing?: boolean
+  niet_van_toepassing_reden?: string | null
   created_at: string
   updated_at: string
 }

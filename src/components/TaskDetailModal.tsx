@@ -5,6 +5,7 @@ import { WachtDuurBadge } from './WachtDuurBadge'
 import { UrgencyBadge } from './UrgencyBadge'
 import { dagenVerschil, formatDate, formatDateTime } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
+import { isAfgesloten } from '../lib/klantArchief'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useTeams } from '../hooks/useTeams'
 import { collegasVoorDossier } from '../lib/teams'
@@ -35,6 +36,9 @@ interface TaskDetailModalProps {
   /** Optioneel: schermen die een deadline laten verzetten geven dit mee.
    *  Zonder handler blijft de deadline een leesbaar gegeven. */
   onDueDateChange?: (taskId: string, dueDate: string) => Promise<void>
+  /** Optioneel: "niet van toepassing voor deze periode" (migratie 0058).
+   *  Zonder handler blijft de knop weg. */
+  onNietVanToepassing?: (taskId: string, reden: string) => Promise<void>
 }
 
 const EVENT_LABEL: Record<string, string> = {
@@ -79,6 +83,7 @@ export function TaskDetailModal({
   onReassign,
   onMarkReviewHandled,
   onDueDateChange,
+  onNietVanToepassing,
 }: TaskDetailModalProps) {
   const { employee } = useCurrentEmployee()
   const { leden } = useTeams()
@@ -398,16 +403,26 @@ export function TaskDetailModal({
         {/* Annuleren is geen vervolgstap maar het afbreken van de taak: aparte
             plaats, rustiger vormgeving, en het blijft beschikbaar ook wanneer
             er verder niets te doen valt (zoals wachten op een goedkeurder). */}
-        {annuleren && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => handleStatusActie(annuleren)}
-            className="text-xs font-medium text-slate-400 underline underline-offset-2 hover:text-red-600 disabled:opacity-50"
-          >
-            {annuleren.label}
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-4">
+          {annuleren && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleStatusActie(annuleren)}
+              className="text-xs font-medium text-slate-400 underline underline-offset-2 hover:text-red-600 disabled:opacity-50"
+            >
+              {annuleren.label}
+            </button>
+          )}
+          {/* Alleen bij een terugkerende verplichting: "deze periode" bestaat
+              niet voor een losse taak. Dezelfde grens als de databank trekt. */}
+          {onNietVanToepassing && task.obligation_type_id && task.periode_label && !isAfgesloten(task.status) && (
+            <NietVanToepassing
+              busy={busy}
+              onBevestig={(reden) => onNietVanToepassing(task.id, reden)}
+            />
+          )}
+        </div>
 
         <div>
           <h3 className="mb-1.5 text-xs font-medium uppercase text-slate-400">Historiek</h3>
@@ -436,5 +451,100 @@ export function TaskDetailModal({
         </div>
       </div>
     </Modal>
+  )
+}
+
+/**
+ * "Niet van toepassing voor deze periode."
+ *
+ * Het gat tussen afronden en annuleren: de verplichting loopt, de taak was
+ * terecht aangemaakt, maar er viel deze maand of dit kwartaal niets aan te
+ * geven. Afvinken zou beweren dat er iets ingediend is; open laten staan
+ * vervuilt de achterstand.
+ *
+ * De reden is verplicht, en dat is geen formaliteit: een wettelijke taak die
+ * verdwijnt zonder waarom is precies het stille gat waar dit systeem tegen
+ * gebouwd is. De databank weigert het ook zonder.
+ */
+function NietVanToepassing({
+  busy,
+  onBevestig,
+}: {
+  busy: boolean
+  onBevestig: (reden: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [reden, setReden] = useState('')
+  const [fout, setFout] = useState<string | null>(null)
+  const [bezig, setBezig] = useState(false)
+
+  async function bevestig() {
+    setFout(null)
+    setBezig(true)
+    try {
+      await onBevestig(reden)
+      setOpen(false)
+      setReden('')
+    } catch (err) {
+      setFout(reportError(err, 'Het markeren is niet gelukt.'))
+    } finally {
+      setBezig(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setOpen(true)}
+        className="text-xs font-medium text-slate-400 underline underline-offset-2 hover:text-slate-700 disabled:opacity-50"
+      >
+        Niet van toepassing voor deze periode…
+      </button>
+    )
+  }
+
+  return (
+    <div className="w-full space-y-1.5 rounded-md border border-slate-200 bg-slate-50 p-3">
+      <label className="block text-xs font-medium text-slate-600" htmlFor="nvt-reden">
+        Waarom was er deze periode niets aan te geven?
+      </label>
+      <input
+        id="nvt-reden"
+        type="text"
+        value={reden}
+        autoFocus
+        placeholder="bv. geen omzet dit kwartaal"
+        onChange={(e) => setReden(e.target.value)}
+        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+      />
+      <p className="text-[11px] text-slate-500">
+        De taak wordt afgesloten zonder te beweren dat er iets ingediend is, en de generatie maakt
+        deze periode niet opnieuw aan. De reden komt in de historiek van het dossier.
+      </p>
+      {fout && <p className="text-[11px] text-red-700">{fout}</p>}
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          disabled={bezig || reden.trim().length < 3}
+          onClick={() => void bevestig()}
+          className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+        >
+          {bezig ? 'Bezig…' : 'Markeren'}
+        </button>
+        <button
+          type="button"
+          disabled={bezig}
+          onClick={() => {
+            setOpen(false)
+            setFout(null)
+          }}
+          className="text-xs text-slate-500 hover:text-slate-800"
+        >
+          Annuleren
+        </button>
+      </div>
+    </div>
   )
 }

@@ -49,6 +49,7 @@ export function GoedkeuringPage() {
     setFilters,
     reload,
     updateStatus,
+    markeerNietVanToepassing,
     updateDueDate,
     reassign,
     bulkReassign,
@@ -188,6 +189,7 @@ export function GoedkeuringPage() {
           employees={employees}
           onClose={() => setOpenTask(null)}
           onStatusChange={updateStatus}
+          onNietVanToepassing={markeerNietVanToepassing}
           onReassign={reassign}
           onMarkReviewHandled={markReviewHandled}
           onDueDateChange={updateDueDate}

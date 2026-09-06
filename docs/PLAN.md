@@ -1219,3 +1219,52 @@ Het kantoor: *"Die zouden opgelost moeten worden voor het volgende kan
 aangevat worden — je kan geen afsluiting doen als de vorige niet werd gedaan.
 Als een taak te laat is zullen we deze hoogstwaarschijnlijk als afgerond
 opnemen."* Zie §21.
+
+## §23 — "Niet van toepassing voor deze periode" (06/09/2026)
+
+Het kantoor: *"Maak iets zoals annuleren om verder te kunnen, of een knop niet
+van toepassing voor deze maand of kwartaal."*
+
+Het gat zat tussen twee bestaande uitkomsten:
+
+| | |
+| --- | --- |
+| ingediend/afgerond | het werk is gedaan en ingediend — bij een wettelijke taak via de vier-ogenstap |
+| geannuleerd | de taak had niet mogen bestaan: verplichting gestopt, klant gearchiveerd, boekjaar verzet, buiten de horizon |
+
+Wat ontbrak is het gewone geval: de verplichting loopt, de taak was terecht
+aangemaakt, maar er viel **deze** periode niets aan te geven. Geen omzet dit
+kwartaal, geen lonen dit jaar. Dat is geen afgeronde aangifte — die is er niet
+— en het is ook geen fout in de planning. Tot nu moest zo'n taak open blijven
+staan (wat de achterstand vervuilt) of oneerlijk afgevinkt worden (wat een
+historiek schrijft die zegt dat er iets ingediend en goedgekeurd is).
+
+**Geen nieuwe status.** De statusreeks raakt de filters, de badges, NOT_FINAL,
+het weekoverzicht, de tellingen van het overzicht en de RLS; een zevende waarde
+betekent al die plekken nalopen met de kans dat er één vergeten wordt. Daarom
+blijft de status `geannuleerd` en komt er een **reden** naast.
+
+**Het echte werk zat in de motor.** Een geannuleerde taak bezet haar periodeslot
+niet — met opzet, want §14 en §15 steunen erop om taken te kunnen hérmaken.
+Zonder extra controle zou de volgende generatieronde de taak dus gewoon opnieuw
+aanmaken, en was de knop een knop die niets doet. De controle staat op dezelfde
+plek als de einddatum van §15: in `upsert_generated_task`, één plek voor alle
+achttien takken.
+
+**Een reden is verplicht**, in de functie én als check-constraint. Een
+wettelijke taak die verdwijnt zonder waarom is precies het stille gat waar dit
+systeem tegen gebouwd is. De reden komt met de naam van wie ze gaf in de
+historiek van het dossier.
+
+**De markering is niet rechtstreeks te zetten.** Zonder die bewaking kon wie het
+dossier mag bewerken de vlag via een gewone PATCH zetten, en dan verdween een
+wettelijke taak voorgoed uit de generatie zonder logregel en zonder reden.
+Zelfde patroon als de andere kolommen die de statustrigger bevriest.
+
+Live nagegaan: gemarkeerd, hergenereerd, en de periode bleef weg — met de reden
+in de historiek en **zonder** afrondingsstempel. De proefmarkering is daarna
+weer opgeruimd.
+
+Niet voor losse taken: "deze periode" bestaat niet voor een ad-hoc taak, die
+annuleer je. En niet voor wat al afgesloten is — dat zou een ingediende aangifte
+achteraf wegpoetsen.

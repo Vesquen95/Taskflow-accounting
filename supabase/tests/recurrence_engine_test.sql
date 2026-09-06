@@ -7762,4 +7762,165 @@ begin
   raise notice 'PASS 61.4: de aangifte VenB van de lopende cyclus valt voorbij 12 maanden en blijft staan';
 end $$;
 
+-- ============================================================
+-- Sectie 62 (0058): "niet van toepassing voor deze periode".
+--
+-- 62.3 is de test die ertoe doet. Een geannuleerde taak bezet haar
+-- periodeslot niet -- met opzet, 0052 en 0053 steunen erop -- dus zonder de
+-- controle in de motor zou de knop een knop zijn die niets doet: de volgende
+-- generatieronde maakt de taak gewoon opnieuw aan.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_mw uuid; v_mw_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot uuid; v_taak uuid; v_adhoc uuid;
+  v_n int; v_status public.task_status; v_nvt boolean; v_reden text;
+  v_afgerond timestamptz; v_melding text;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's62a@test.local', now()), (v_mw_uid, 's62b@test.local', now());
+  insert into public.firms (naam) values ('S62 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S62 Beheerder', 's62a@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_mw_uid, 'S62 Medewerker', 's62b@test.local', 'medewerker', false, true)
+    returning id into v_mw;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag,
+                              btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S62 Klant', 12, 31, 'periodieke_aangever', 'kwartaal', true)
+    returning id into v_klant;
+  select id into v_ot from public.obligation_types where code = 'btw_aangifte';
+  perform public.generate_task_instances(public.horizon_maanden(), 0);
+
+  select id into v_taak from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot and status = 'open'
+   order by due_date limit 1;
+  if v_taak is null then
+    raise exception 'FAIL 62.0: geen btw-taak om mee te werken';
+  end if;
+
+  -- ---------------------------------------------------------
+  -- 62.1 Zonder reden gaat het niet door. Een wettelijke taak die verdwijnt
+  --      zonder waarom is precies het gat waar dit systeem tegen gebouwd is.
+  -- ---------------------------------------------------------
+  -- Op de TEKST van de weigering, niet alleen op de foutklasse: de
+  -- check-constraint op de tabel vangt een lege reden óók op, met een
+  -- onleesbare boodschap. Zonder deze eis zou de test vacuüm slagen en zou
+  -- niemand merken dat de functie zelf niets meer controleert.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  begin
+    perform public.taak_niet_van_toepassing(v_taak, '  ');
+    raise exception 'FAIL 62.1: een lege reden werd aanvaard';
+  exception when check_violation then
+    get stacked diagnostics v_melding = message_text;
+    if position('waarom' in v_melding) = 0 then
+      raise exception 'FAIL 62.1: de weigering legt niet uit wat er ontbreekt (%)', v_melding;
+    end if;
+  end;
+  select status into v_status from public.task_instances where id = v_taak;
+  if v_status is distinct from 'open' then
+    raise exception 'FAIL 62.1: de taak werd toch afgesloten (%)', v_status;
+  end if;
+  raise notice 'PASS 62.1: zonder reden gebeurt er niets';
+
+  -- ---------------------------------------------------------
+  -- 62.2 Met een reden sluit de taak af -- en beweert niets over indienen.
+  -- ---------------------------------------------------------
+  perform public.taak_niet_van_toepassing(v_taak, 'Geen omzet dit kwartaal');
+  select status, niet_van_toepassing, niet_van_toepassing_reden, afgerond_op
+    into v_status, v_nvt, v_reden, v_afgerond
+  from public.task_instances where id = v_taak;
+  -- Geen afrondingsstempel: dit is geen ingediende aangifte, en de historiek
+  -- mag dat ook niet suggereren.
+  if v_afgerond is not null then
+    raise exception 'FAIL 62.2: er staat een afrondingsstempel op (%)', v_afgerond;
+  end if;
+  if v_status is distinct from 'geannuleerd' or not v_nvt then
+    raise exception 'FAIL 62.2: status=% nvt=%, verwacht geannuleerd en waar', v_status, v_nvt;
+  end if;
+  if v_reden is distinct from 'Geen omzet dit kwartaal' then
+    raise exception 'FAIL 62.2: de reden is niet bewaard (%)', coalesce(v_reden, 'niets');
+  end if;
+  select count(*) into v_n from public.task_status_log
+   where task_instance_id = v_taak and notitie like 'Niet van toepassing%';
+  if v_n <> 1 then
+    raise exception 'FAIL 62.2: de reden staat % keer in de historiek i.p.v. één keer', v_n;
+  end if;
+  raise notice 'PASS 62.2: de taak sluit af met de reden in de historiek';
+
+  -- ---------------------------------------------------------
+  -- 62.3 En ze komt NIET terug bij de volgende generatieronde. Dit is de kern:
+  --      zonder deze controle bezet de geannuleerde rij haar slot niet en
+  --      maakt de motor de taak gewoon opnieuw aan.
+  -- ---------------------------------------------------------
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  perform public.generate_task_instances(public.horizon_maanden(), 0);
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot
+     and periode_label = (select periode_label from public.task_instances where id = v_taak)
+     and status <> 'geannuleerd';
+  if v_n <> 0 then
+    raise exception 'FAIL 62.3: de periode is opnieuw aangemaakt (% taak/taken)', v_n;
+  end if;
+  raise notice 'PASS 62.3: de generatie laat deze periode voortaan met rust';
+
+  -- ---------------------------------------------------------
+  -- 62.4 De markering is niet rechtstreeks te zetten. Anders verdwijnt een
+  --      wettelijke taak voorgoed uit de generatie zonder reden en zonder
+  --      spoor -- via een gewone PATCH op de tabel.
+  -- ---------------------------------------------------------
+  select id into v_taak from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot and status = 'open'
+   order by due_date limit 1;
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  -- Mét een reden, anders weigert de check-constraint het al en bewijst de
+  -- test niets over de bewaking in de trigger.
+  set local role authenticated;
+  update public.task_instances
+     set niet_van_toepassing = true, niet_van_toepassing_reden = 'Langs de achterdeur'
+   where id = v_taak;
+  set local role postgres;
+  select niet_van_toepassing into v_nvt from public.task_instances where id = v_taak;
+  if v_nvt then
+    raise exception 'FAIL 62.4: de markering was rechtstreeks te zetten';
+  end if;
+  raise notice 'PASS 62.4: de markering is alleen via de functie te zetten';
+
+  -- ---------------------------------------------------------
+  -- 62.5 Een losse taak zonder periode hoort hier niet: die annuleer je.
+  -- ---------------------------------------------------------
+  insert into public.task_instances (client_id, title, due_date, due_date_wettelijk,
+      status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant, 'S62 los klusje', current_date + 10, current_date + 10,
+      'open', v_mw, 'handmatig_adhoc', false)
+    returning id into v_adhoc;
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  begin
+    perform public.taak_niet_van_toepassing(v_adhoc, 'Niets te doen');
+    raise exception 'FAIL 62.5: een losse taak liet zich op niet-van-toepassing zetten';
+  exception when check_violation then
+    null;
+  end;
+  raise notice 'PASS 62.5: een losse taak hoort bij geen periode';
+
+  -- ---------------------------------------------------------
+  -- 62.6 Een al afgesloten taak kan niet alsnog "niet van toepassing" worden.
+  --      Dat zou een ingediende aangifte achteraf wegpoetsen.
+  -- ---------------------------------------------------------
+  select id into v_taak from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot and status = 'geannuleerd'
+   limit 1;
+  begin
+    perform public.taak_niet_van_toepassing(v_taak, 'Alsnog niets aan te geven');
+    raise exception 'FAIL 62.6: een afgesloten taak liet zich alsnog markeren';
+  exception when check_violation then
+    null;
+  end;
+  raise notice 'PASS 62.6: wat al afgesloten is, blijft zoals het is';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

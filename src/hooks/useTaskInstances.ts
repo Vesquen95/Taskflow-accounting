@@ -192,6 +192,23 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
     load()
   }, [load])
 
+  /**
+   * "Niet van toepassing voor deze periode" (migratie 0058).
+   *
+   * Geen gewone statuswijziging: de databank zet de taak op geannuleerd én
+   * markeert haar, zodat de volgende generatieronde haar niet opnieuw
+   * aanmaakt. Zonder die markering zou de knop niets uithalen -- een
+   * geannuleerde rij bezet haar periodeslot niet.
+   */
+  async function markeerNietVanToepassing(taskId: string, reden: string) {
+    const { error: err } = await supabase.rpc('taak_niet_van_toepassing', {
+      p_task_id: taskId,
+      p_reden: reden,
+    })
+    if (err) throw err
+    await load()
+  }
+
   async function updateStatus(taskId: string, status: TaskStatus) {
     const { error: err } = await supabase.from('task_instances').update({ status }).eq('id', taskId)
     if (err) throw err
@@ -282,6 +299,7 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
     setFilters,
     reload: load,
     updateStatus,
+    markeerNietVanToepassing,
     updateDueDate,
     reassign,
     bulkReassign,
