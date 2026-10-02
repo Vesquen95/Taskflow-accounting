@@ -40,6 +40,20 @@ begin
 end;
 $$;
 
+-- Valt een wettelijke datum nog binnen het inhaalvenster van 24 maanden? Verder
+-- terug maakt de motor niets meer aan (0016). Een test die de gepubliceerde
+-- FOD-kalender van één bepaald jaar vastpint, kan dat jaar daarna niet meer
+-- toetsen. Ze zegt dat dan uitdrukkelijk (SKIP) in plaats van te falen -- wat
+-- ze tot 02/10/2026 deed, zonder dat er iets stuk was -- of stil te slagen.
+-- De regel zelf blijft gedekt door een eigenschapstest die op elke datum werkt.
+create or replace function pg_temp.in_inhaalvenster(p_datum date)
+returns boolean
+language sql
+stable
+as $$
+  select p_datum >= (current_date - interval '24 months')::date
+$$;
+
 -- ============================================================
 -- Fixtures: one firm + one active kantoorbeheerder to act as, plus a
 -- second firm (for the firm-scoping regression test).
@@ -288,6 +302,17 @@ declare
   v_log_count int;
 begin
   select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
+
+  -- De generatie van sectie 4 kijkt 6 maanden terug en 3 vooruit: negen
+  -- maanden. Klant B sluit op 31/12, dus zijn AV valt eind juni -- en tussen
+  -- half juli en begin april bevat zo'n venster geen enkele 30 juni. Dan
+  -- bestond de AV niet en faalde deze sectie, afhankelijk van de dag waarop
+  -- je de harnas draaide (gevonden op 02/10/2026, met een verschoven klok).
+  -- Een eigen ronde voor klant B met de echte horizon bevat altijd een AV, en
+  -- raakt de tellingen van sectie 4 niet.
+  perform public.generate_task_instances_intern(
+    (select firm_id from public.clients where id = v_client_b),
+    public.horizon_maanden(), 6, v_client_b);
 
   select ti.id, ti.due_date_wettelijk into v_av_id, v_av_due_wettelijk
   from public.task_instances ti
@@ -2046,7 +2071,7 @@ declare
   v_client uuid; v_vertr uuid;
   v_ot_av uuid; v_ot_neer uuid; v_ot_btw uuid;
   v_av uuid; v_av2 uuid; v_neer uuid; v_taak uuid;
-  v_cnt int; v_err text; v_state text;
+  v_cnt int; v_err text; v_state text; v_label text;
   v_voorlopig boolean; v_wettelijk date; v_due date; v_handmatig timestamptz; v_av_gepland date;
 begin
   select id into v_ot_av from public.obligation_types where code = 'algemene_vergadering';
@@ -2126,7 +2151,10 @@ begin
   set local role postgres;
   perform set_config('taskflow.test_uid', v_admin_uid::text, true);
   set local role authenticated;
-  perform public.generate_task_instances(3, 6);
+  -- De echte horizon en niet 3: met een venster van negen maanden valt de AV
+  -- van een boekjaar per 31/12 er tussen half juli en begin april buiten, en
+  -- dan faalt 20.4 afhankelijk van de datum.
+  perform public.generate_task_instances(public.horizon_maanden(), 6);
 
   select count(*) into v_cnt from public.task_instances
   where client_id = v_client and bron_type = 'automatisch_gegenereerd';
@@ -2136,10 +2164,15 @@ begin
   raise notice 'PASS 20.3: de engine maakt nog steeds engine-output (% rijen)', v_cnt;
 
   -- ---------- H-2 ----------
-  select id into v_av from public.task_instances
-  where client_id = v_client and obligation_type_id = v_ot_av and status = 'open' limit 1;
+  -- Een vast paar: de vroegste open AV en de neerlegging die aan precies díe
+  -- AV hangt. Met een venster van meer dan een jaar staan er meerdere van
+  -- elk, en twee losse `limit 1`'s leverden dan soms een AV en een
+  -- neerlegging van verschillende boekjaren op.
+  select id, periode_label into v_av, v_label from public.task_instances
+  where client_id = v_client and obligation_type_id = v_ot_av and status = 'open'
+  order by due_date limit 1;
   select id into v_neer from public.task_instances
-  where client_id = v_client and obligation_type_id = v_ot_neer limit 1;
+  where client_id = v_client and obligation_type_id = v_ot_neer and voorloper_taak_id = v_av;
 
   if v_av is null or v_neer is null then
     raise exception 'FAIL 20.4: AV/neerlegging-fixture ontbreekt (av=%, neerlegging=%)', v_av, v_neer;
@@ -2149,10 +2182,12 @@ begin
   -- niet aan de geannuleerde AV blijven hangen, anders vuurt de
   -- +30-dagenberekening nooit meer.
   update public.task_instances set status = 'geannuleerd' where id = v_av;
-  perform public.generate_task_instances(3, 6);
+  perform public.generate_task_instances(public.horizon_maanden(), 6);
 
+  -- De nieuwe AV over hetzelfde boekjaar, niet zomaar een open AV.
   select id into v_av2 from public.task_instances
-  where client_id = v_client and obligation_type_id = v_ot_av and status = 'open' limit 1;
+  where client_id = v_client and obligation_type_id = v_ot_av and status = 'open'
+    and periode_label = v_label;
   if v_av2 is null or v_av2 = v_av then
     raise exception 'FAIL 20.4: de engine maakte geen nieuwe AV aan na annulering';
   end if;
@@ -2664,8 +2699,12 @@ begin
   where id = v_taak;
   set local role postgres;
 
+  -- `jaar` is het jaar waarin het boekjaar afsluit -- hier 2039 -- en niet het
+  -- jaar van de deadline. Tot 0064 stond hier 2040, en dat werkte alleen
+  -- dankzij een OR in de trigger die ook de aangifte over het boekjaar ervoor
+  -- verzette. Zie sectie 66.
   insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, aangemaakt_door, gewijzigd_door)
-  values (v_ot, 2040, null, date '2040-10-15', true, v_admin, v_admin);
+  values (v_ot, 2039, null, date '2040-10-15', true, v_admin, v_admin);
 
   select review_reden into v_reden from public.task_instances where id = v_taak;
   if v_reden like 'false%' then
@@ -2700,8 +2739,9 @@ begin
   update public.task_instances set due_date = date '2042-11-28' where id = v_taak;
   set local role postgres;
 
+  -- Boekjaar 2041, zoals hierboven (0064).
   insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, aangemaakt_door, gewijzigd_door)
-  values (v_ot, 2042, null, date '2042-10-15', true, v_admin, v_admin);
+  values (v_ot, 2041, null, date '2042-10-15', true, v_admin, v_admin);
 
   select review_reden, review_vereist into v_reden, v_review from public.task_instances where id = v_taak;
   if not v_review then
@@ -2984,6 +3024,10 @@ declare
   v_firm uuid; v_admin uuid; v_uid uuid := gen_random_uuid();
   v_kw uuid; v_mnd uuid; v_dec uuid; v_maa uuid; v_ot_va uuid;
   v_due date; v_cnt int;
+  -- Volgend jaar, en niet een vast jaartal: de generatie kijkt hier 24
+  -- maanden terug, en vanaf juli 2027 viel 10/07/2025 daar achter. De test
+  -- gaat over de formule, niet over één bepaald jaar.
+  v_j int := extract(year from current_date)::int + 1;
 begin
   insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's25@test.local', now());
   insert into public.firms (naam) values ('Sectie 25 kantoor') returning id into v_firm;
@@ -3046,48 +3090,48 @@ begin
 
   -- 25.3 Voorafbetalingen bij een afsluiting per 31/12.
   select due_date_wettelijk into v_due from public.task_instances
-  where client_id = v_dec and periode_label = 'VA1-2026';
-  if v_due is distinct from date '2026-04-10' then
-    raise exception 'FAIL 25.3: VA1-2026 staat op % i.p.v. 10/04/2026', v_due;
+  where client_id = v_dec and periode_label = 'VA1-' || v_j;
+  if v_due is distinct from make_date(v_j, 4, 10) then
+    raise exception 'FAIL 25.3: VA1-% staat op % i.p.v. %', v_j, v_due, make_date(v_j, 4, 10);
   end if;
   select due_date_wettelijk into v_due from public.task_instances
-  where client_id = v_dec and periode_label = 'VA2-2026';
-  if v_due is distinct from date '2026-07-10' then
-    raise exception 'FAIL 25.3: VA2-2026 staat op % i.p.v. 10/07/2026', v_due;
+  where client_id = v_dec and periode_label = 'VA2-' || v_j;
+  if v_due is distinct from make_date(v_j, 7, 10) then
+    raise exception 'FAIL 25.3: VA2-% staat op % i.p.v. %', v_j, v_due, make_date(v_j, 7, 10);
   end if;
   select due_date_wettelijk into v_due from public.task_instances
-  where client_id = v_dec and periode_label = 'VA3-2026';
-  if v_due is distinct from date '2026-10-10' then
-    raise exception 'FAIL 25.3: VA3-2026 staat op % i.p.v. 10/10/2026', v_due;
+  where client_id = v_dec and periode_label = 'VA3-' || v_j;
+  if v_due is distinct from make_date(v_j, 10, 10) then
+    raise exception 'FAIL 25.3: VA3-% staat op % i.p.v. %', v_j, v_due, make_date(v_j, 10, 10);
   end if;
   select due_date_wettelijk into v_due from public.task_instances
-  where client_id = v_dec and periode_label = 'VA4-2026';
-  if v_due is distinct from date '2026-12-20' then
-    raise exception 'FAIL 25.3: VA4-2026 staat op % i.p.v. 20/12/2026', v_due;
+  where client_id = v_dec and periode_label = 'VA4-' || v_j;
+  if v_due is distinct from make_date(v_j, 12, 20) then
+    raise exception 'FAIL 25.3: VA4-% staat op % i.p.v. %', v_j, v_due, make_date(v_j, 12, 20);
   end if;
   raise notice 'PASS 25.3: bij 31/12 staan de VA op 10/4, 10/7, 10/10 en 20/12';
 
   -- 25.4 En bij een boekjaar dat op 31/03 eindigt schuift het schema mee:
   -- de vierde valt op de 20ste van de laatste maand van het boekjaar.
   select due_date_wettelijk into v_due from public.task_instances
-  where client_id = v_maa and periode_label = 'VA1-2026';
-  if v_due is distinct from date '2025-07-10' then
-    raise exception 'FAIL 25.4: VA1 bij boekjaar 31/03/2026 staat op % i.p.v. 10/07/2025', v_due;
+  where client_id = v_maa and periode_label = 'VA1-' || v_j;
+  if v_due is distinct from make_date(v_j - 1, 7, 10) then
+    raise exception 'FAIL 25.4: VA1 bij boekjaar 31/03/% staat op % i.p.v. %', v_j, v_due, make_date(v_j - 1, 7, 10);
   end if;
   select due_date_wettelijk into v_due from public.task_instances
-  where client_id = v_maa and periode_label = 'VA2-2026';
-  if v_due is distinct from date '2025-10-10' then
-    raise exception 'FAIL 25.4: VA2 bij boekjaar 31/03/2026 staat op % i.p.v. 10/10/2025', v_due;
+  where client_id = v_maa and periode_label = 'VA2-' || v_j;
+  if v_due is distinct from make_date(v_j - 1, 10, 10) then
+    raise exception 'FAIL 25.4: VA2 bij boekjaar 31/03/% staat op % i.p.v. %', v_j, v_due, make_date(v_j - 1, 10, 10);
   end if;
   select due_date_wettelijk into v_due from public.task_instances
-  where client_id = v_maa and periode_label = 'VA3-2026';
-  if v_due is distinct from date '2026-01-10' then
-    raise exception 'FAIL 25.4: VA3 bij boekjaar 31/03/2026 staat op % i.p.v. 10/01/2026', v_due;
+  where client_id = v_maa and periode_label = 'VA3-' || v_j;
+  if v_due is distinct from make_date(v_j, 1, 10) then
+    raise exception 'FAIL 25.4: VA3 bij boekjaar 31/03/% staat op % i.p.v. %', v_j, v_due, make_date(v_j, 1, 10);
   end if;
   select due_date_wettelijk into v_due from public.task_instances
-  where client_id = v_maa and periode_label = 'VA4-2026';
-  if v_due is distinct from date '2026-03-20' then
-    raise exception 'FAIL 25.4: VA4 bij boekjaar 31/03/2026 staat op % i.p.v. 20/03/2026', v_due;
+  where client_id = v_maa and periode_label = 'VA4-' || v_j;
+  if v_due is distinct from make_date(v_j, 3, 20) then
+    raise exception 'FAIL 25.4: VA4 bij boekjaar 31/03/% staat op % i.p.v. %', v_j, v_due, make_date(v_j, 3, 20);
   end if;
   raise notice 'PASS 25.4: bij boekjaar 31/03 schuift het VA-schema correct mee';
 
@@ -3095,19 +3139,23 @@ begin
   -- werkdag geldt voor ALLE btw-aangiften, ook de kwartaalaangifte. 25/04/2026
   -- is een zaterdag, dus de effectieve datum moet maandag 27/04 zijn terwijl
   -- de wettelijke datum op 25/04 blijft staan.
-  select due_date into v_due from public.task_instances ti
-  join public.obligation_types ot on ot.id = ti.obligation_type_id
-  where ti.client_id = v_kw and ot.code = 'btw_aangifte' and ti.periode_label = '2026-Q1';
-  if v_due is distinct from date '2026-04-27' then
-    raise exception 'FAIL 25.5: de kwartaaldeadline van 2026-Q1 schoof naar % i.p.v. 27/04/2026', v_due;
+  if pg_temp.in_inhaalvenster(date '2026-04-25') then
+    select due_date into v_due from public.task_instances ti
+    join public.obligation_types ot on ot.id = ti.obligation_type_id
+    where ti.client_id = v_kw and ot.code = 'btw_aangifte' and ti.periode_label = '2026-Q1';
+    if v_due is distinct from date '2026-04-27' then
+      raise exception 'FAIL 25.5: de kwartaaldeadline van 2026-Q1 schoof naar % i.p.v. 27/04/2026', v_due;
+    end if;
+    select due_date_wettelijk into v_due from public.task_instances ti
+    join public.obligation_types ot on ot.id = ti.obligation_type_id
+    where ti.client_id = v_kw and ot.code = 'btw_aangifte' and ti.periode_label = '2026-Q1';
+    if v_due is distinct from date '2026-04-25' then
+      raise exception 'FAIL 25.5: de wettelijke datum van 2026-Q1 werd meeverschoven (%)', v_due;
+    end if;
+    raise notice 'PASS 25.5: de werkdagverschuiving geldt ook voor de kwartaalaangifte';
+  else
+    raise notice 'SKIP 25.5: 2026-Q1 ligt buiten het inhaalvenster; de regel van vóór de kanteldatum (0048) is niet meer te toetsen';
   end if;
-  select due_date_wettelijk into v_due from public.task_instances ti
-  join public.obligation_types ot on ot.id = ti.obligation_type_id
-  where ti.client_id = v_kw and ot.code = 'btw_aangifte' and ti.periode_label = '2026-Q1';
-  if v_due is distinct from date '2026-04-25' then
-    raise exception 'FAIL 25.5: de wettelijke datum van 2026-Q1 werd meeverschoven (%)', v_due;
-  end if;
-  raise notice 'PASS 25.5: de werkdagverschuiving geldt ook voor de kwartaalaangifte';
 end $$;
 
 -- ============================================================
@@ -3235,6 +3283,10 @@ declare
   v_maand int; v_verwacht date;
   v_gevallen int[][] := array[[12,31],[6,30],[9,30],[3,31]];
   v_i int;
+  -- Dit jaar, en niet 2026. Maand en dag blijven voluit (zie 27.2); alleen
+  -- het jaar schuift mee, anders viel het cohort 31/03 vanaf eind 2028
+  -- buiten het inhaalvenster en faalde deze sectie zonder reden.
+  v_j int := extract(year from current_date)::int;
 begin
   insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's27@test.local', now());
   insert into public.firms (naam) values ('Sectie 27 kantoor') returning id into v_firm;
@@ -3260,12 +3312,12 @@ begin
     raise exception 'FAIL 27.1: de motor maakte geen enkele aangiftetaak aan';
   end if;
   -- Bewijzen dat de datums van 2026 uit de formule komen en niet uit een
-  -- kalenderrij. Andere secties zetten rijen voor andere jaren; alleen 2026
-  -- telt hier.
+  -- kalenderrij. Andere secties zetten rijen voor andere jaren; alleen dit
+  -- jaar telt hier.
   select count(*) into v_n from public.legal_calendar
-  where obligation_type_id = v_ot_aang and jaar = 2026;
+  where obligation_type_id = v_ot_aang and jaar = v_j;
   if v_n <> 0 then
-    raise exception 'FAIL 27.1: er stond al een kalenderrij voor 2026; de test bewijst dan niets';
+    raise exception 'FAIL 27.1: er stond al een kalenderrij voor %; de test bewijst dan niets', v_j;
   end if;
   raise notice 'PASS 27.1: aangiftetaken worden aangemaakt zonder kalenderrij';
 
@@ -3280,13 +3332,13 @@ begin
     v_maand := v_gevallen[v_i][1];
     select ti.due_date_wettelijk into v_due
     from public.task_instances ti join public.clients c on c.id = ti.client_id
-    where ti.obligation_type_id = v_ot_aang and ti.periode_label = '2026'
+    where ti.obligation_type_id = v_ot_aang and ti.periode_label = v_j::text
       and c.boekjaar_einde_maand = v_maand;
     v_verwacht := case v_maand
-      when 12 then date '2027-09-30'  -- winterafsluiting: 30 september
-      when 6  then date '2027-01-31'
-      when 9  then date '2027-04-30'
-      when 3  then date '2026-10-31'
+      when 12 then make_date(v_j + 1, 9, 30)  -- winterafsluiting: 30 september
+      when 6  then make_date(v_j + 1, 1, 31)
+      when 9  then make_date(v_j + 1, 4, 30)
+      when 3  then make_date(v_j,     10, 31)
     end;
     if v_due is distinct from v_verwacht then
       raise exception 'FAIL 27.2: boekjaareinde maand % gaf % i.p.v. %', v_maand, v_due, v_verwacht;
@@ -3296,23 +3348,23 @@ begin
 
   -- 27.3 Een aangekondigde campagnedatum wint, ook van een taak die al bestaat.
   -- Bewust een datum die de formule NIET geeft: sinds 0033 rekent die voor een
-  -- 31/12-dossier zelf al 30/09/2027 uit, en dan zou deze test niet meer
+  -- 31/12-dossier zelf al 30/09 van het jaar erna uit, en dan zou deze test niet meer
   -- kunnen zien of de override iets deed.
   insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, aangemaakt_door, gewijzigd_door)
-  values (v_ot_aang, 2026, 'boekjaar_12', date '2027-10-15', true, v_admin, v_admin);
+  values (v_ot_aang, v_j, 'boekjaar_12', make_date(v_j + 1, 10, 15), true, v_admin, v_admin);
 
   select ti.due_date_wettelijk into v_due
   from public.task_instances ti join public.clients c on c.id = ti.client_id
-  where ti.obligation_type_id = v_ot_aang and ti.periode_label = '2026' and c.boekjaar_einde_maand = 12;
-  if v_due is distinct from date '2027-10-15' then
-    raise exception 'FAIL 27.3: de override verzette de bestaande taak niet (% i.p.v. 15/10/2027)', v_due;
+  where ti.obligation_type_id = v_ot_aang and ti.periode_label = v_j::text and c.boekjaar_einde_maand = 12;
+  if v_due is distinct from make_date(v_j + 1, 10, 15) then
+    raise exception 'FAIL 27.3: de override verzette de bestaande taak niet (% i.p.v. %)', v_due, make_date(v_j + 1, 10, 15);
   end if;
 
   -- en raakt alleen het cohort dat ze noemt.
   select ti.due_date_wettelijk into v_due
   from public.task_instances ti join public.clients c on c.id = ti.client_id
-  where ti.obligation_type_id = v_ot_aang and ti.periode_label = '2026' and c.boekjaar_einde_maand = 6;
-  if v_due is distinct from date '2027-01-31' then
+  where ti.obligation_type_id = v_ot_aang and ti.periode_label = v_j::text and c.boekjaar_einde_maand = 6;
+  if v_due is distinct from make_date(v_j + 1, 1, 31) then
     raise exception 'FAIL 27.3: de override van het 31/12-cohort raakte ook het 30/06-cohort (%)', v_due;
   end if;
   raise notice 'PASS 27.3: de override verzet bestaande taken, en enkel het genoemde cohort';
@@ -3332,6 +3384,16 @@ declare
   v_klant uuid; v_c06 uuid; v_co uuid;
   v_ot_av uuid; v_ot_neer uuid;
   v_av date; v_neer date; v_cnt int; v_ok boolean;
+  -- Het boekjaar van dit jaar: de AV valt dan altijd nog in de toekomst. Met
+  -- 2026 lag de AV van 5/04/2027 na die datum in het verleden, en een
+  -- statutenwijziging verschuift terecht alleen wat nog moet komen -- dus
+  -- faalde 28.4 vanaf april 2027. De verwachte datums laat ik av_datum()
+  -- uitrekenen: dat is niet circulair, want 28.1 pint die functie al vast
+  -- met de hand nagerekende datums; 28.3 en 28.4 toetsen of de MOTOR ze
+  -- gebruikt.
+  v_j int := extract(year from current_date)::int;
+  v_april jsonb := '{"av_vorm":"nde_weekdag","av_maand":4,"av_rang":"eerste","av_weekdag":"maandag"}';
+  v_juni  jsonb := '{"av_vorm":"nde_weekdag","av_maand":6,"av_rang":"derde","av_weekdag":"vrijdag"}';
 begin
   insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's28@test.local', now());
   insert into public.firms (naam) values ('Sectie 28 kantoor') returning id into v_firm;
@@ -3398,14 +3460,14 @@ begin
   perform public.generate_task_instances(36, 24);
 
   select due_date_wettelijk into v_av from public.task_instances
-   where client_id = v_klant and obligation_type_id = v_ot_av and periode_label = '2026';
-  if v_av is distinct from date '2027-04-05' then
-    raise exception 'FAIL 28.3: de AV staat op % i.p.v. de statutaire 05/04/2027', v_av;
+   where client_id = v_klant and obligation_type_id = v_ot_av and periode_label = v_j::text;
+  if v_av is distinct from public.av_datum(make_date(v_j, 12, 31), v_april) then
+    raise exception 'FAIL 28.3: de AV staat op % i.p.v. de statutaire %', v_av, public.av_datum(make_date(v_j, 12, 31), v_april);
   end if;
   select due_date_wettelijk into v_neer from public.task_instances
-   where client_id = v_klant and obligation_type_id = v_ot_neer and periode_label = '2026';
-  if v_neer is distinct from date '2027-05-05' then
-    raise exception 'FAIL 28.3: de neerlegging staat op % i.p.v. AV + 30 dagen (05/05/2027)', v_neer;
+   where client_id = v_klant and obligation_type_id = v_ot_neer and periode_label = v_j::text;
+  if v_neer is distinct from public.av_datum(make_date(v_j, 12, 31), v_april) + 30 then
+    raise exception 'FAIL 28.3: de neerlegging staat op % i.p.v. AV + 30 dagen (%)', v_neer, public.av_datum(make_date(v_j, 12, 31), v_april) + 30;
   end if;
   raise notice 'PASS 28.3: de motor gebruikt de statutaire datum en de neerlegging volgt';
 
@@ -3415,14 +3477,14 @@ begin
   where id = v_co;
 
   select due_date_wettelijk into v_av from public.task_instances
-   where client_id = v_klant and obligation_type_id = v_ot_av and periode_label = '2026';
-  if v_av is distinct from date '2027-06-18' then
-    raise exception 'FAIL 28.4: de AV schoof niet mee (% i.p.v. 18/06/2027)', v_av;
+   where client_id = v_klant and obligation_type_id = v_ot_av and periode_label = v_j::text;
+  if v_av is distinct from public.av_datum(make_date(v_j, 12, 31), v_juni) then
+    raise exception 'FAIL 28.4: de AV schoof niet mee (% i.p.v. %)', v_av, public.av_datum(make_date(v_j, 12, 31), v_juni);
   end if;
   select due_date_wettelijk into v_neer from public.task_instances
-   where client_id = v_klant and obligation_type_id = v_ot_neer and periode_label = '2026';
-  if v_neer is distinct from date '2027-07-18' then
-    raise exception 'FAIL 28.4: de neerlegging schoof niet mee (% i.p.v. 18/07/2027)', v_neer;
+   where client_id = v_klant and obligation_type_id = v_ot_neer and periode_label = v_j::text;
+  if v_neer is distinct from public.av_datum(make_date(v_j, 12, 31), v_juni) + 30 then
+    raise exception 'FAIL 28.4: de neerlegging schoof niet mee (% i.p.v. %)', v_neer, public.av_datum(make_date(v_j, 12, 31), v_juni) + 30;
   end if;
 
   select count(*) into v_cnt from public.task_status_log l
@@ -3445,9 +3507,9 @@ begin
     values (v_klant, v_ot_av, true, date '2000-01-01', v_admin);
   perform public.generate_task_instances(36, 24);
   select due_date_wettelijk into v_av from public.task_instances
-   where client_id = v_klant and obligation_type_id = v_ot_av and periode_label = '2026';
-  if v_av is distinct from date '2027-06-30' then
-    raise exception 'FAIL 28.5: zonder statuten hoort de wettelijke uiterste datum te gelden (% i.p.v. 30/06/2027)', v_av;
+   where client_id = v_klant and obligation_type_id = v_ot_av and periode_label = v_j::text;
+  if v_av is distinct from make_date(v_j + 1, 6, 30) then
+    raise exception 'FAIL 28.5: zonder statuten hoort de wettelijke uiterste datum te gelden (% i.p.v. %)', v_av, make_date(v_j + 1, 6, 30);
   end if;
   raise notice 'PASS 28.5: zonder ingevulde statuten geldt de wettelijke uiterste datum';
 end $$;
@@ -6490,7 +6552,7 @@ declare
   v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
   v_kwartaal uuid; v_maand uuid; v_bijz uuid;
   v_ot_btw uuid; v_ot_bijz uuid;
-  v_wettelijk date; v_werk date;
+  v_wettelijk date; v_werk date; v_n int; v_fout int;
 begin
   insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's52@test.local', now());
   insert into public.firms (naam) values ('S52 Kantoor') returning id into v_firm;
@@ -6520,52 +6582,73 @@ begin
   perform public.generate_task_instances(24, 24);
 
   -- 52.1 Q3-2026 valt op zondag 25 oktober en schuift NIET meer vooruit.
-  select due_date_wettelijk, due_date into v_wettelijk, v_werk
-    from public.task_instances
-   where client_id = v_kwartaal and obligation_type_id = v_ot_btw and periode_label = '2026-Q3';
-  if v_wettelijk is distinct from date '2026-10-25' then
-    raise exception 'FAIL 52.1: de wettelijke datum van Q3-2026 is % i.p.v. 25/10/2026', v_wettelijk;
+  if pg_temp.in_inhaalvenster(date '2026-10-25') then
+    select due_date_wettelijk, due_date into v_wettelijk, v_werk
+      from public.task_instances
+     where client_id = v_kwartaal and obligation_type_id = v_ot_btw and periode_label = '2026-Q3';
+    if v_wettelijk is distinct from date '2026-10-25' then
+      raise exception 'FAIL 52.1: de wettelijke datum van Q3-2026 is % i.p.v. 25/10/2026', v_wettelijk;
+    end if;
+    if v_werk is distinct from date '2026-10-23' then
+      raise exception 'FAIL 52.1: de werkdatum van Q3-2026 is % i.p.v. vrijdag 23/10/2026', v_werk;
+    end if;
+    raise notice 'PASS 52.1: een zondagdeadline plant op de vrijdag ervoor, met de wet ernaast';
+  else
+    raise notice 'SKIP 52.1: 2026-Q3 ligt buiten het inhaalvenster; de FOD-kalender 2026 is niet meer te toetsen (52.6 dekt de regel)';
   end if;
-  if v_werk is distinct from date '2026-10-23' then
-    raise exception 'FAIL 52.1: de werkdatum van Q3-2026 is % i.p.v. vrijdag 23/10/2026', v_werk;
-  end if;
-  raise notice 'PASS 52.1: een zondagdeadline plant op de vrijdag ervoor, met de wet ernaast';
 
   -- 52.2 Q1-2026 schoof nog wél vooruit. De regel is pas daarna veranderd, en
   -- het systeem mag niet liegen over het verleden.
-  select due_date into v_werk from public.task_instances
-   where client_id = v_kwartaal and obligation_type_id = v_ot_btw and periode_label = '2026-Q1';
-  if v_werk is distinct from date '2026-04-27' then
-    raise exception 'FAIL 52.2: Q1-2026 staat op % i.p.v. maandag 27/04/2026', v_werk;
+  if pg_temp.in_inhaalvenster(date '2026-04-25') then
+    select due_date into v_werk from public.task_instances
+     where client_id = v_kwartaal and obligation_type_id = v_ot_btw and periode_label = '2026-Q1';
+    if v_werk is distinct from date '2026-04-27' then
+      raise exception 'FAIL 52.2: Q1-2026 staat op % i.p.v. maandag 27/04/2026', v_werk;
+    end if;
+    raise notice 'PASS 52.2: de kanteldatum wordt gerespecteerd, oudere kwartalen schuiven nog vooruit';
+  else
+    raise notice 'SKIP 52.2: 2026-Q1 ligt buiten het inhaalvenster; de regel van vóór de kanteldatum is niet meer te toetsen';
   end if;
-  raise notice 'PASS 52.2: de kanteldatum wordt gerespecteerd, oudere kwartalen schuiven nog vooruit';
 
   -- 52.3 De maandaangever schuift wél nog vooruit. Dat is geen inconsistentie
   -- van ons: zo publiceert de FOD het.
-  select due_date_wettelijk, due_date into v_wettelijk, v_werk
-    from public.task_instances
-   where client_id = v_maand and obligation_type_id = v_ot_btw and periode_label = '2026-05';
-  if v_wettelijk is distinct from date '2026-06-20' then
-    raise exception 'FAIL 52.3: de wettelijke datum van mei 2026 is % i.p.v. 20/06/2026', v_wettelijk;
+  if pg_temp.in_inhaalvenster(date '2026-06-20') then
+    select due_date_wettelijk, due_date into v_wettelijk, v_werk
+      from public.task_instances
+     where client_id = v_maand and obligation_type_id = v_ot_btw and periode_label = '2026-05';
+    if v_wettelijk is distinct from date '2026-06-20' then
+      raise exception 'FAIL 52.3: de wettelijke datum van mei 2026 is % i.p.v. 20/06/2026', v_wettelijk;
+    end if;
+    if v_werk is distinct from date '2026-06-22' then
+      raise exception 'FAIL 52.3: de maandaangifte van mei 2026 staat op % i.p.v. maandag 22/06/2026', v_werk;
+    end if;
+    raise notice 'PASS 52.3: de maandaangifte schuift onveranderd vooruit';
+  else
+    raise notice 'SKIP 52.3: mei 2026 ligt buiten het inhaalvenster; de FOD-kalender 2026 is niet meer te toetsen (52.6 dekt de regel)';
   end if;
-  if v_werk is distinct from date '2026-06-22' then
-    raise exception 'FAIL 52.3: de maandaangifte van mei 2026 staat op % i.p.v. maandag 22/06/2026', v_werk;
-  end if;
-  raise notice 'PASS 52.3: de maandaangifte schuift onveranderd vooruit';
 
   -- 52.4 De bijzondere aangifte schoof nooit mee, ook niet voor de kanteldatum.
-  select due_date_wettelijk, due_date into v_wettelijk, v_werk
-    from public.task_instances
-   where client_id = v_bijz and obligation_type_id = v_ot_bijz and periode_label = '2026-Q3';
-  if v_wettelijk is distinct from date '2026-10-25' then
-    raise exception 'FAIL 52.4: de wettelijke datum van de bijzondere aangifte Q3-2026 is %', v_wettelijk;
+  if pg_temp.in_inhaalvenster(date '2026-10-25') then
+    select due_date_wettelijk, due_date into v_wettelijk, v_werk
+      from public.task_instances
+     where client_id = v_bijz and obligation_type_id = v_ot_bijz and periode_label = '2026-Q3';
+    if v_wettelijk is distinct from date '2026-10-25' then
+      raise exception 'FAIL 52.4: de wettelijke datum van de bijzondere aangifte Q3-2026 is %', v_wettelijk;
+    end if;
+    if v_werk is distinct from date '2026-10-23' then
+      raise exception 'FAIL 52.4: de bijzondere aangifte Q3-2026 staat op % i.p.v. vrijdag 23/10/2026', v_werk;
+    end if;
+    raise notice 'PASS 52.4: de bijzondere aangifte schuift ook achteruit';
+  else
+    raise notice 'SKIP 52.4: 2026-Q3 ligt buiten het inhaalvenster; de FOD-kalender 2026 is niet meer te toetsen (52.6 dekt de regel)';
   end if;
-  if v_werk is distinct from date '2026-10-23' then
-    raise exception 'FAIL 52.4: de bijzondere aangifte Q3-2026 staat op % i.p.v. vrijdag 23/10/2026', v_werk;
-  end if;
-  raise notice 'PASS 52.4: de bijzondere aangifte schuift ook achteruit';
 
   -- 52.5 vorige_werkdag() slaat feestdagen over, niet alleen weekends.
+  -- Eerst de feestdagen van 2026 zelf laden. De harnas zaait een bereik rond
+  -- vandaag; vanaf 2028 viel 2026 daarbuiten, wist vorige_werkdag niet meer
+  -- dat 1 mei een feestdag is, en faalde deze test zonder dat er iets stuk
+  -- was. laad_feestdagen() voegt alleen toe wat ontbreekt.
+  perform public.laad_feestdagen(2026, 2026);
   -- 1 mei 2026 is een vrijdag én Dag van de Arbeid; de werkdag ervoor is
   -- donderdag 30 april.
   if public.vorige_werkdag(date '2026-05-02') is distinct from date '2026-04-30' then
@@ -6577,6 +6660,36 @@ begin
     raise exception 'FAIL 52.5: vorige_werkdag() verzette een gewone werkdag';
   end if;
   raise notice 'PASS 52.5: vorige_werkdag() slaat weekends en feestdagen over en laat werkdagen staan';
+
+  -- 52.6 De regel zelf, op elke datum en voor ELKE taak in het venster, niet
+  --      alleen voor de kwartalen van 2026 die de FOD-kalender noemt: na de
+  --      kanteldatum valt de kwartaalaangifte op de werkdag op of vóór de
+  --      wettelijke datum, de maandaangifte op die op of ná, en de bijzondere
+  --      aangifte altijd ervoor. Geen herhaling van de motor: vorige_werkdag
+  --      en next_business_day zijn zelf vastgepind (52.5 en elders).
+  select count(*), count(*) filter (where due_date is distinct from public.vorige_werkdag(due_date_wettelijk))
+    into v_n, v_fout from public.task_instances
+   where client_id = v_kwartaal and obligation_type_id = v_ot_btw
+     and due_date_wettelijk >= date '2026-05-01';
+  if v_n = 0 then
+    raise exception 'FAIL 52.6: geen kwartaalaangiften na de kanteldatum om te toetsen';
+  end if;
+  if v_fout <> 0 then
+    raise exception 'FAIL 52.6: % van % kwartaalaangiften staan niet op de werkdag op of vóór de wettelijke datum', v_fout, v_n;
+  end if;
+  select count(*), count(*) filter (where due_date is distinct from public.next_business_day(due_date_wettelijk))
+    into v_n, v_fout from public.task_instances
+   where client_id = v_maand and obligation_type_id = v_ot_btw;
+  if v_n = 0 or v_fout <> 0 then
+    raise exception 'FAIL 52.6: % van % maandaangiften staan niet op de werkdag op of ná de wettelijke datum', v_fout, v_n;
+  end if;
+  select count(*), count(*) filter (where due_date is distinct from public.vorige_werkdag(due_date_wettelijk))
+    into v_n, v_fout from public.task_instances
+   where client_id = v_bijz and obligation_type_id = v_ot_bijz;
+  if v_n = 0 or v_fout <> 0 then
+    raise exception 'FAIL 52.6: % van % bijzondere aangiften staan niet op de werkdag op of vóór de wettelijke datum', v_fout, v_n;
+  end if;
+  raise notice 'PASS 52.6: kwartaal en bijzondere aangifte schuiven terug, maandaangifte vooruit -- voor elke taak in het venster';
 end $$;
 
 
@@ -6652,7 +6765,7 @@ do $$
 declare
   v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
   v_kw uuid; v_maa uuid; v_ot uuid;
-  v_wet date; v_werk date; v_n int;
+  v_wet date; v_werk date; v_n int; v_fout int;
 begin
   insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's54@test.local', now());
   insert into public.firms (naam) values ('S54 Kantoor') returning id into v_firm;
@@ -6690,38 +6803,63 @@ begin
   raise notice 'PASS 54.1: de opgave volgt het btw-ritme van het dossier';
 
   -- 54.2 De kwartaalopgave schuift NIET op. Q3-2026 valt op zondag 25 oktober.
-  select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
-   where client_id = v_kw and obligation_type_id = v_ot and periode_label = '2026-Q3';
-  if v_wet is distinct from date '2026-10-25' then
-    raise exception 'FAIL 54.2: de wettelijke datum van de kwartaalopgave Q3-2026 is %', v_wet;
-  end if;
-  if v_werk is distinct from date '2026-10-23' then
-    raise exception 'FAIL 54.2: de kwartaalopgave Q3-2026 staat op % i.p.v. vrijdag 23/10/2026', v_werk;
-  end if;
+  if pg_temp.in_inhaalvenster(date '2026-04-25') then
+    select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
+     where client_id = v_kw and obligation_type_id = v_ot and periode_label = '2026-Q3';
+    if v_wet is distinct from date '2026-10-25' then
+      raise exception 'FAIL 54.2: de wettelijke datum van de kwartaalopgave Q3-2026 is %', v_wet;
+    end if;
+    if v_werk is distinct from date '2026-10-23' then
+      raise exception 'FAIL 54.2: de kwartaalopgave Q3-2026 staat op % i.p.v. vrijdag 23/10/2026', v_werk;
+    end if;
 
-  -- En ook niet vóór de kanteldatum van de gewone aangifte: de opgave is
-  -- nooit meeverschoven. Q1-2026 viel op zaterdag 25 april, terwijl de
-  -- periodieke kwartaalaangifte die dag 27 april kreeg.
-  select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
-   where client_id = v_kw and obligation_type_id = v_ot and periode_label = '2026-Q1';
-  if v_wet is distinct from date '2026-04-25' then
-    raise exception 'FAIL 54.2: de wettelijke datum van de kwartaalopgave Q1-2026 is %', v_wet;
+    -- En ook niet vóór de kanteldatum van de gewone aangifte: de opgave is
+    -- nooit meeverschoven. Q1-2026 viel op zaterdag 25 april, terwijl de
+    -- periodieke kwartaalaangifte die dag 27 april kreeg.
+    select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
+     where client_id = v_kw and obligation_type_id = v_ot and periode_label = '2026-Q1';
+    if v_wet is distinct from date '2026-04-25' then
+      raise exception 'FAIL 54.2: de wettelijke datum van de kwartaalopgave Q1-2026 is %', v_wet;
+    end if;
+    if v_werk is distinct from date '2026-04-24' then
+      raise exception 'FAIL 54.2: de kwartaalopgave Q1-2026 staat op % i.p.v. vrijdag 24/04/2026', v_werk;
+    end if;
+    raise notice 'PASS 54.2: de kwartaalopgave schuift nooit vooruit, ook niet voor de kanteldatum';
+  else
+    raise notice 'SKIP 54.2: 2026 ligt buiten het inhaalvenster; de FOD-kalender 2026 is niet meer te toetsen (54.6 dekt de regel)';
   end if;
-  if v_werk is distinct from date '2026-04-24' then
-    raise exception 'FAIL 54.2: de kwartaalopgave Q1-2026 staat op % i.p.v. vrijdag 24/04/2026', v_werk;
-  end if;
-  raise notice 'PASS 54.2: de kwartaalopgave schuift nooit vooruit, ook niet voor de kanteldatum';
 
   -- 54.3 De maandopgave schuift wél vooruit, net als de maandaangifte.
-  select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
-   where client_id = v_maa and obligation_type_id = v_ot and periode_label = '2026-05';
-  if v_wet is distinct from date '2026-06-20' then
-    raise exception 'FAIL 54.3: de wettelijke datum van de maandopgave mei 2026 is %', v_wet;
+  if pg_temp.in_inhaalvenster(date '2026-06-20') then
+    select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
+     where client_id = v_maa and obligation_type_id = v_ot and periode_label = '2026-05';
+    if v_wet is distinct from date '2026-06-20' then
+      raise exception 'FAIL 54.3: de wettelijke datum van de maandopgave mei 2026 is %', v_wet;
+    end if;
+    if v_werk is distinct from date '2026-06-22' then
+      raise exception 'FAIL 54.3: de maandopgave mei 2026 staat op % i.p.v. maandag 22/06/2026', v_werk;
+    end if;
+    raise notice 'PASS 54.3: de maandopgave schuift wel vooruit';
+  else
+    raise notice 'SKIP 54.3: mei 2026 ligt buiten het inhaalvenster; de FOD-kalender 2026 is niet meer te toetsen (54.6 dekt de regel)';
   end if;
-  if v_werk is distinct from date '2026-06-22' then
-    raise exception 'FAIL 54.3: de maandopgave mei 2026 staat op % i.p.v. maandag 22/06/2026', v_werk;
+
+  -- 54.6 De regel zelf, voor elke opgave in het venster: de kwartaalopgave op
+  --      de werkdag op of vóór de wettelijke datum -- ook vóór de kanteldatum,
+  --      ze schoof nooit mee -- en de maandopgave op die op of ná.
+  select count(*), count(*) filter (where due_date is distinct from public.vorige_werkdag(due_date_wettelijk))
+    into v_n, v_fout from public.task_instances
+   where client_id = v_kw and obligation_type_id = v_ot;
+  if v_n = 0 or v_fout <> 0 then
+    raise exception 'FAIL 54.6: % van % kwartaalopgaven staan niet op de werkdag op of vóór de wettelijke datum', v_fout, v_n;
   end if;
-  raise notice 'PASS 54.3: de maandopgave schuift wel vooruit';
+  select count(*), count(*) filter (where due_date is distinct from public.next_business_day(due_date_wettelijk))
+    into v_n, v_fout from public.task_instances
+   where client_id = v_maa and obligation_type_id = v_ot;
+  if v_n = 0 or v_fout <> 0 then
+    raise exception 'FAIL 54.6: % van % maandopgaven staan niet op de werkdag op of ná de wettelijke datum', v_fout, v_n;
+  end if;
+  raise notice 'PASS 54.6: kwartaalopgave terug, maandopgave vooruit -- voor elke opgave in het venster';
 
   -- 54.4 Het kantoor kan per dossier afwijken. De echte regel is een drempel
   -- van 50.000 euro per kwartaal, en die kent Taskflow niet.
@@ -6765,6 +6903,10 @@ declare
   v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
   v_klant uuid; v_ot uuid;
   v_wet date; v_werk date; v_n int;
+  -- Volgend jaar, en niet 2026: een volledig kalenderjaar dat altijd binnen
+  -- het venster valt. Dag en maand blijven voluit, zoals de FOD ze publiceert.
+  v_j int := extract(year from current_date)::int + 1;
+  v_fout int;
 begin
   insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's55@test.local', now());
   insert into public.firms (naam) values ('S55 Kantoor') returning id into v_firm;
@@ -6788,14 +6930,14 @@ begin
   -- 55.1 De 15de van de maand na het kwartaal, letterlijk zoals de FOD ze
   -- publiceert.
   select due_date_wettelijk into v_wet from public.task_instances
-   where client_id = v_klant and obligation_type_id = v_ot and periode_label = '2026-Q1';
-  if v_wet is distinct from date '2026-04-15' then
-    raise exception 'FAIL 55.1: Q1-2026 staat op % i.p.v. 15/04/2026', v_wet;
+   where client_id = v_klant and obligation_type_id = v_ot and periode_label = v_j || '-Q1';
+  if v_wet is distinct from make_date(v_j, 4, 15) then
+    raise exception 'FAIL 55.1: Q1-% staat op % i.p.v. %', v_j, v_wet, make_date(v_j, 4, 15);
   end if;
   select due_date_wettelijk into v_wet from public.task_instances
-   where client_id = v_klant and obligation_type_id = v_ot and periode_label = '2026-Q4';
-  if v_wet is distinct from date '2027-01-15' then
-    raise exception 'FAIL 55.1: Q4-2026 staat op % i.p.v. 15/01/2027', v_wet;
+   where client_id = v_klant and obligation_type_id = v_ot and periode_label = v_j || '-Q4';
+  if v_wet is distinct from make_date(v_j + 1, 1, 15) then
+    raise exception 'FAIL 55.1: Q4-% staat op % i.p.v. %', v_j, v_wet, make_date(v_j + 1, 1, 15);
   end if;
   raise notice 'PASS 55.1: de kwartaalaangifte valt op de 15de van de maand erna';
 
@@ -6807,9 +6949,9 @@ begin
   -- Die mutatie is dus onzichtbaar aan de buitenkant, en er is geen test die
   -- ze kan vangen zonder iets te beweren wat de gebruiker niet ziet.
   select count(*) into v_n from public.task_instances
-   where client_id = v_klant and obligation_type_id = v_ot and periode_label like '2026-Q%';
+   where client_id = v_klant and obligation_type_id = v_ot and periode_label like v_j || '-Q%';
   if v_n <> 4 then
-    raise exception 'FAIL 55.2: % taken voor 2026 in plaats van 4', v_n;
+    raise exception 'FAIL 55.2: % taken voor % in plaats van 4', v_n, v_j;
   end if;
   raise notice 'PASS 55.2: vier aangiftes per jaar';
 
@@ -6817,18 +6959,32 @@ begin
   -- ERVOOR, niet naar de maandag erna. De maandkalender van de FOD toont
   -- diezelfde richting (13.02, 13.03, 14.08, 13.11 in 2026: telkens
   -- vervroegd), en het kantoor koos die richting al voor de btw.
-  select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
-   where client_id = v_klant and obligation_type_id = v_ot and periode_label = '2027-Q4';
-  if v_wet is null then
-    raise exception 'FAIL 55.3: geen taak voor Q4-2027 binnen de horizon';
+  if pg_temp.in_inhaalvenster(date '2028-01-15') then
+    select due_date_wettelijk, due_date into v_wet, v_werk from public.task_instances
+     where client_id = v_klant and obligation_type_id = v_ot and periode_label = '2027-Q4';
+    if v_wet is null then
+      raise exception 'FAIL 55.3: geen taak voor Q4-2027 binnen de horizon';
+    end if;
+    if v_wet is distinct from date '2028-01-15' then
+      raise exception 'FAIL 55.3: de wettelijke datum van Q4-2027 is % i.p.v. 15/01/2028', v_wet;
+    end if;
+    if v_werk is distinct from date '2028-01-14' then
+      raise exception 'FAIL 55.3: 15/01/2028 is een zaterdag; de werkdatum is % i.p.v. vrijdag 14/01/2028', v_werk;
+    end if;
+    raise notice 'PASS 55.3: een zaterdagdeadline plant op de vrijdag ervoor';
+  else
+    raise notice 'SKIP 55.3: Q4-2027 ligt buiten het inhaalvenster (55.5 dekt de regel)';
   end if;
-  if v_wet is distinct from date '2028-01-15' then
-    raise exception 'FAIL 55.3: de wettelijke datum van Q4-2027 is % i.p.v. 15/01/2028', v_wet;
+
+  -- 55.5 De richting, voor elke aangifte in het venster: altijd de werkdag op
+  --      of vóór de wettelijke datum.
+  select count(*), count(*) filter (where due_date is distinct from public.vorige_werkdag(due_date_wettelijk))
+    into v_n, v_fout from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot;
+  if v_n = 0 or v_fout <> 0 then
+    raise exception 'FAIL 55.5: % van % aangiften bedrijfsvoorheffing staan niet op de werkdag op of vóór de wettelijke datum', v_fout, v_n;
   end if;
-  if v_werk is distinct from date '2028-01-14' then
-    raise exception 'FAIL 55.3: 15/01/2028 is een zaterdag; de werkdatum is % i.p.v. vrijdag 14/01/2028', v_werk;
-  end if;
-  raise notice 'PASS 55.3: een zaterdagdeadline plant op de vrijdag ervoor';
+  raise notice 'PASS 55.5: de aangifte bedrijfsvoorheffing schuift terug, voor elke aangifte in het venster';
 
   -- 55.4 Ze staat bij het werk rond loon, waar ook de fiches 281 zitten.
   if (select werkstroom from public.obligation_types where id = v_ot) <> 'fiches' then
@@ -6852,6 +7008,14 @@ declare
   v_w uuid; v_n int; v_aantal int;
   v_due date; v_eind date; v_status public.task_status;
   v_taak uuid; v_herzetbaar boolean; v_reden text;
+  -- Het boekjaar waarrond deze sectie draait. Afgeleid van vandaag in plaats
+  -- van hard uitgeschreven: tot 02/10/2026 stond hier 2026, met een nieuwe
+  -- deadline op 30/09/2026. De motor maakt geen taken in het verleden aan, dus
+  -- vanaf 1 oktober bestond die taak niet meer en faalde 56.4 voorgoed -- niet
+  -- omdat er iets stuk was, maar omdat de kalender verder was. Het eerste jaar
+  -- waarvan 30 september nog moet komen.
+  v_j int := extract(year from current_date)::int
+    + case when current_date > make_date(extract(year from current_date)::int, 9, 30) then 1 else 0 end;
 begin
   insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's56@test.local', now());
   insert into public.firms (naam) values ('S56 Kantoor') returning id into v_firm;
@@ -6867,7 +7031,10 @@ begin
   insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters)
     values (v_klant, v_ot_jaar, true, date '2000-01-01', '{"sla_maanden": 3}'::jsonb);
 
-  perform public.generate_task_instances(24, 0);
+  -- 36 en niet 24: tussen oktober en december valt de jaarafsluiting van het
+  -- jaar NA v_j (deadline 31/03 van v_j+2) anders net buiten het venster, en
+  -- dan heeft 56.3 geen taak om een handmatige afspraak op te zetten.
+  perform public.generate_task_instances(36, 0);
 
   -- 56.0 Voorwaarde: er staan taken op het oude boekjaar.
   select count(*) into v_n from public.task_instances
@@ -6886,11 +7053,13 @@ begin
     raise exception 'FAIL 56.1: een gewijzigd boekjaareinde levert geen openstaande melding op';
   end if;
 
-  select due_date into v_due from public.task_instances
+  -- De wettelijke datum, niet de verschoven: 31/03 valt soms in een weekend
+  -- of op paasmaandag (in 2029 allebei), en dan staat due_date op 3 april.
+  select due_date_wettelijk into v_due from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_jaar
-     and periode_label = '2026' and status = 'open';
-  if v_due is distinct from date '2027-03-31' then
-    raise exception 'FAIL 56.1: de taak van 2026 is al herrekend (%) terwijl er nog niemand goedgekeurd heeft', v_due;
+     and periode_label = v_j::text and status = 'open';
+  if v_due is distinct from make_date(v_j + 1, 3, 31) then
+    raise exception 'FAIL 56.1: de taak van % is al herrekend (%) terwijl er nog niemand goedgekeurd heeft', v_j, v_due;
   end if;
   raise notice 'PASS 56.1: de wijziging wordt gemeld en niets wordt stil herrekend';
 
@@ -6915,10 +7084,10 @@ begin
   -- ---------------------------------------------------------
   select id into v_taak from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_jaar
-     and periode_label = '2027' and status = 'open';
+     and periode_label = (v_j + 1)::text and status = 'open';
   perform set_config('taskflow.pipeline_task_id', '', true);
   update public.task_instances
-  set due_date = date '2028-02-15', due_date_handmatig_op = now()
+  set due_date = make_date(v_j + 2, 2, 15), due_date_handmatig_op = now()
   where id = v_taak;
 
   select t.herzetbaar, t.reden into v_herzetbaar, v_reden
@@ -6942,29 +7111,29 @@ begin
     raise exception 'FAIL 56.4: er is niets herzet';
   end if;
 
-  select periode_eind, due_date into v_eind, v_due from public.task_instances
+  select periode_eind, due_date_wettelijk into v_eind, v_due from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_jaar
-     and periode_label = '2026' and status = 'open';
-  if v_eind is distinct from date '2026-06-30' then
-    raise exception 'FAIL 56.4: de taak van 2026 eindigt op % i.p.v. 30/06/2026', v_eind;
+     and periode_label = v_j::text and status = 'open';
+  if v_eind is distinct from make_date(v_j, 6, 30) then
+    raise exception 'FAIL 56.4: de taak van % eindigt op % i.p.v. %', v_j, v_eind, make_date(v_j, 6, 30);
   end if;
-  if v_due is distinct from date '2026-09-30' then
-    raise exception 'FAIL 56.4: de deadline van 2026 is % i.p.v. 30/09/2026', v_due;
+  if v_due is distinct from make_date(v_j, 9, 30) then
+    raise exception 'FAIL 56.4: de deadline van % is % i.p.v. %', v_j, v_due, make_date(v_j, 9, 30);
   end if;
 
   -- De oude taak is er nog, geannuleerd. Verwijderen zou de geschiedenis van
   -- het dossier uithollen.
   select status into v_status from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_jaar
-     and periode_label = '2026' and periode_eind = date '2026-12-31';
+     and periode_label = v_j::text and periode_eind = make_date(v_j, 12, 31);
   if v_status is distinct from 'geannuleerd' then
-    raise exception 'FAIL 56.4: de oude taak van 2026 heeft status % i.p.v. geannuleerd', coalesce(v_status::text, 'niets');
+    raise exception 'FAIL 56.4: de oude taak van % heeft status % i.p.v. geannuleerd', v_j, coalesce(v_status::text, 'niets');
   end if;
   raise notice 'PASS 56.4: doorvoeren zet de taken op het nieuwe boekjaar en bewaart de oude';
 
   -- 56.5 De taak met de handmatige afspraak is niet aangeraakt.
   select due_date, status into v_due, v_status from public.task_instances where id = v_taak;
-  if v_status is distinct from 'open' or v_due is distinct from date '2028-02-15' then
+  if v_status is distinct from 'open' or v_due is distinct from make_date(v_j + 2, 2, 15) then
     raise exception 'FAIL 56.5: de handmatig afgesproken taak is toch gewijzigd (% op %)', v_status, v_due;
   end if;
   raise notice 'PASS 56.5: de handmatig afgesproken taak is ongemoeid gelaten';
@@ -7110,6 +7279,10 @@ declare
   v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
   v_klant uuid; v_ot_venb uuid; v_ot_av uuid; v_ot_neer uuid; v_co_venb uuid;
   v_n int; v_due date; v_status public.task_status;
+  -- Dit jaar, en niet 2026: een verplichting loopt niet meer na haar
+  -- einddatum, dus vanaf 1/01/2027 genereerde een vaste 31/12/2026 hier
+  -- niets meer en faalde de sectie. 31/12 van dit jaar ligt nooit achter ons.
+  v_j int := extract(year from current_date)::int;
 begin
   insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's57@test.local', now());
   insert into public.firms (naam) values ('S57 Kantoor') returning id into v_firm;
@@ -7125,19 +7298,19 @@ begin
   select id into v_ot_av   from public.obligation_types where code = 'algemene_vergadering';
   select id into v_ot_neer from public.obligation_types where code = 'neerlegging_jaarrekening';
 
-  -- De sluiting van de vereffening valt op 31/12/2026.
+  -- De sluiting van de vereffening valt op 31/12 van dit jaar.
   insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, geldig_tot)
-    values (v_klant, v_ot_venb, true, date '2000-01-01', date '2026-12-31')
+    values (v_klant, v_ot_venb, true, date '2000-01-01', make_date(v_j, 12, 31))
     returning id into v_co_venb;
   insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, geldig_tot)
-    values (v_klant, v_ot_av, true, date '2000-01-01', date '2026-12-31');
+    values (v_klant, v_ot_av, true, date '2000-01-01', make_date(v_j, 12, 31));
 
   perform public.generate_task_instances(36, 0);
 
   -- 57.1 Niets over een boekjaar na de sluiting.
   select count(*) into v_n from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_venb
-     and periode_eind > date '2026-12-31';
+     and periode_eind > make_date(v_j, 12, 31);
   if v_n <> 0 then
     raise exception 'FAIL 57.1: % aangifte(s) voor een boekjaar na de sluiting van de vereffening', v_n;
   end if;
@@ -7148,7 +7321,7 @@ begin
   --      tussen "grens op de periode" en "grens op de deadline".
   select due_date into v_due from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_venb
-     and periode_eind = date '2026-12-31';
+     and periode_eind = make_date(v_j, 12, 31);
   if v_due is null then
     raise exception 'FAIL 57.2: de aangifte over het laatste boekjaar ontbreekt';
   end if;
@@ -7156,7 +7329,7 @@ begin
   -- overheen liggen, en die mag winnen. Wat deze test wél moet vastleggen is
   -- dat de deadline ná de einddatum valt -- anders bewijst ze het verschil
   -- tussen "grens op de periode" en "grens op de deadline" niet.
-  if v_due <= date '2026-12-31' then
+  if v_due <= make_date(v_j, 12, 31) then
     raise exception 'FAIL 57.2: deze test bewijst niets -- de deadline (%) valt niet na de einddatum', v_due;
   end if;
   raise notice 'PASS 57.2: de aangifte over het laatste boekjaar blijft, ook al valt ze na de einddatum';
@@ -7164,7 +7337,7 @@ begin
   -- 57.3 De neerlegging volgt de algemene vergadering en verdwijnt mee.
   select count(*) into v_n from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_neer
-     and periode_eind > date '2026-12-31';
+     and periode_eind > make_date(v_j, 12, 31);
   if v_n <> 0 then
     raise exception 'FAIL 57.3: % neerlegging(en) na de sluiting, terwijl de AV ophoudt', v_n;
   end if;
@@ -7183,32 +7356,32 @@ begin
 
   select count(*) into v_n from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_venb
-     and periode_eind > date '2026-12-31' and status = 'open';
+     and periode_eind > make_date(v_j, 12, 31) and status = 'open';
   if v_n = 0 then
-    raise exception 'FAIL 57.4: geen taken na 2026 om op te ruimen -- de test bewijst niets';
+    raise exception 'FAIL 57.4: geen taken na % om op te ruimen -- de test bewijst niets', v_j;
   end if;
 
-  update public.client_obligations set geldig_tot = date '2026-12-31' where id = v_co_venb;
+  update public.client_obligations set geldig_tot = make_date(v_j, 12, 31) where id = v_co_venb;
   perform public.sync_client_tasks(v_klant);
 
   select count(*) into v_n from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_venb
-     and periode_eind > date '2026-12-31' and status = 'open';
+     and periode_eind > make_date(v_j, 12, 31) and status = 'open';
   if v_n <> 0 then
     raise exception 'FAIL 57.4: % taak/taken na de einddatum blijven open staan', v_n;
   end if;
 
   select status into v_status from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_venb
-     and periode_eind = date '2027-12-31';
+     and periode_eind = make_date(v_j + 1, 12, 31);
   if v_status is distinct from 'geannuleerd' then
-    raise exception 'FAIL 57.4: de taak over 2027 staat op % i.p.v. geannuleerd', coalesce(v_status::text, 'niets');
+    raise exception 'FAIL 57.4: de taak over % staat op % i.p.v. geannuleerd', v_j + 1, coalesce(v_status::text, 'niets');
   end if;
 
   -- En wat vóór de einddatum ligt, blijft ongemoeid.
   select status into v_status from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_venb
-     and periode_eind = date '2026-12-31';
+     and periode_eind = make_date(v_j, 12, 31);
   if v_status is distinct from 'open' then
     raise exception 'FAIL 57.4: de taak over het laatste boekjaar is meegesneuveld (%)', coalesce(v_status::text, 'niets');
   end if;
@@ -7222,7 +7395,7 @@ begin
   perform public.generate_task_instances(36, 0);
   select count(*) into v_n from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_venb
-     and periode_eind > date '2026-12-31';
+     and periode_eind > make_date(v_j, 12, 31);
   if v_n = 0 then
     raise exception 'FAIL 57.5: een verplichting zonder einddatum genereert niets meer na 2026';
   end if;
@@ -7245,6 +7418,11 @@ declare
   v_klant uuid; v_ot_venb uuid; v_co uuid;
   v_voor int; v_na int; v_n int; v_aantal int;
   v_status public.task_status; v_tot date; v_melding text;
+  -- Ontbonden dit jaar, vereffend in september volgend jaar. Met vaste
+  -- jaartallen (2026/2027) bestond de aangifte over 2026 vanaf oktober 2027
+  -- niet meer -- de motor maakt geen taken in het verleden aan -- en faalde
+  -- 58.3 zonder dat er iets stuk was.
+  v_j int := extract(year from current_date)::int;
 begin
   insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's58@test.local', now());
   insert into public.firms (naam) values ('S58 Kantoor') returning id into v_firm;
@@ -7271,7 +7449,7 @@ begin
   --      Een vereffening kan jaren duren; intussen dient de vereffenaar
   --      gewoon elk jaar de aangifte in (art. 305, derde lid in fine WIB 92).
   -- ---------------------------------------------------------
-  update public.clients set ontbonden_op = date '2026-04-30' where id = v_klant;
+  update public.clients set ontbonden_op = make_date(v_j, 4, 30) where id = v_klant;
   perform public.sync_client_tasks(v_klant);
 
   select count(*) into v_na from public.task_instances
@@ -7296,18 +7474,18 @@ begin
   -- ---------------------------------------------------------
   -- 58.2 VEREFFEND zet de einddatum op de verplichtingen.
   -- ---------------------------------------------------------
-  v_aantal := public.klant_vereffend(v_klant, date '2027-09-30');
+  v_aantal := public.klant_vereffend(v_klant, make_date(v_j + 1, 9, 30));
   if v_aantal < 1 then
     raise exception 'FAIL 58.2: geen enkele verplichting kreeg een einddatum';
   end if;
   select geldig_tot into v_tot from public.client_obligations where id = v_co;
-  if v_tot is distinct from date '2027-09-30' then
-    raise exception 'FAIL 58.2: de verplichting loopt tot % i.p.v. 30/09/2027', coalesce(v_tot::text, 'niets');
+  if v_tot is distinct from make_date(v_j + 1, 9, 30) then
+    raise exception 'FAIL 58.2: de verplichting loopt tot % i.p.v. %', coalesce(v_tot::text, 'niets'), make_date(v_j + 1, 9, 30);
   end if;
 
   -- Niets meer over een boekjaar na de sluiting.
   select count(*) into v_n from public.task_instances
-   where client_id = v_klant and periode_eind > date '2027-09-30' and status = 'open';
+   where client_id = v_klant and periode_eind > make_date(v_j + 1, 9, 30) and status = 'open';
   if v_n <> 0 then
     raise exception 'FAIL 58.2: % open taak/taken over een periode na de sluiting', v_n;
   end if;
@@ -7316,12 +7494,13 @@ begin
   -- ---------------------------------------------------------
   -- 58.3 Het papierwerk over het LAATSTE boekjaar blijft staan.
   --      Dit is het verschil met archiveren, dat alles wegveegt (0026): de
-  --      aangifte over boekjaar 2026 wordt pas in september 2027 ingediend en
+  --      aangifte over het boekjaar van dit jaar wordt pas in september
+  --      volgend jaar ingediend en
   --      moet er dus nog zijn.
   -- ---------------------------------------------------------
   select status into v_status from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_venb
-     and periode_eind = date '2026-12-31';
+     and periode_eind = make_date(v_j, 12, 31);
   if v_status is distinct from 'open' then
     raise exception 'FAIL 58.3: de aangifte over het laatste boekjaar staat op % i.p.v. open', coalesce(v_status::text, 'niets');
   end if;
@@ -7695,9 +7874,18 @@ begin
   -- 61.2 Genereren met de nieuwe horizon maakt niets verder dan 15 maanden.
   -- ---------------------------------------------------------
   perform public.generate_task_instances(public.horizon_maanden(), 0);
+  -- Twee uitzonderingen die 0057 zelf zo vastlegt, en die de test tot
+  -- 02/10/2026 niet uitsloot (en dus op sommige dagen faalde):
+  --   * de WETTELIJKE datum telt, niet de verschoven: de motor toetst het
+  --     venster op de ruwe deadline, en een zaterdag op de grens schuift
+  --     daarna nog een of twee dagen door;
+  --   * een vervolgtaak (de neerlegging na de AV) hangt aan haar voorloper
+  --     en mag bewust voorbij de horizon vallen -- een AV zonder neerlegging
+  --     is erger dan een taak die een maand te vroeg in de lijst staat.
   select count(*) into v_n from public.task_instances ti
    where ti.client_id = v_klant
-     and ti.due_date > (current_date + interval '15 months')::date;
+     and ti.voorloper_taak_id is null
+     and ti.due_date_wettelijk > (current_date + interval '15 months')::date;
   if v_n <> 0 then
     raise exception 'FAIL 61.2: % taak/taken voorbij de horizon aangemaakt', v_n;
   end if;
@@ -7744,22 +7932,23 @@ begin
   raise notice 'PASS 61.3: buiten de horizon wordt gesnoeid, lopend werk blijft';
 
   -- ---------------------------------------------------------
-  -- 61.4 En de lopende cyclus blijft staan. Dit is waarom het 15 is en geen
-  --      12: de aangifte VenB over het boekjaar dat eind dit jaar sluit, valt
-  --      pas bijna dertien maanden vooruit (winteruitzondering, 0033). Bij een
-  --      horizon van twaalf maanden zou net die uit beeld vallen.
+  -- 61.4 En de lopende cyclus blijft staan: met deze horizon is er altijd een
+  --      aangifte VenB in beeld.
+  --
+  --      Tot 02/10/2026 eiste deze test bovendien dat die aangifte verder dan
+  --      twaalf maanden vooruit lag, als bewijs dat 12 te kort zou zijn. Dat
+  --      klopt maar een paar weken per jaar -- rond september-oktober, als de
+  --      aangifte over het lopende boekjaar net iets meer dan een jaar vooruit
+  --      ligt -- en daarbuiten faalde de test zonder dat er iets stuk was. Een
+  --      bewering over één moment in de jaarcyclus hoort niet in een test die
+  --      op elke dag moet slagen. De redenering voor 15 staat in PLAN §22.
   -- ---------------------------------------------------------
   select max(due_date) into v_ver from public.task_instances
    where client_id = v_klant and obligation_type_id = v_ot_venb and status <> 'geannuleerd';
   if v_ver is null then
     raise exception 'FAIL 61.4: er staat geen aangifte VenB meer -- de horizon kapt de cyclus af';
   end if;
-  if v_ver <= (current_date + interval '12 months')::date then
-    raise exception
-      'FAIL 61.4: de verste aangifte VenB valt op % en dus binnen 12 maanden; deze test bewijst niet dat 15 nodig is',
-      v_ver;
-  end if;
-  raise notice 'PASS 61.4: de aangifte VenB van de lopende cyclus valt voorbij 12 maanden en blijft staan';
+  raise notice 'PASS 61.4: de aangifte VenB van de lopende cyclus blijft in beeld';
 end $$;
 
 -- ============================================================

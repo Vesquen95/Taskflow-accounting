@@ -42,6 +42,25 @@ $$;
 -- Via ALTER DEFAULT PRIVILEGES, want de tabellen bestaan hier nog niet: de
 -- migraties draaien hierna, en krijgen de rechten dan vanzelf mee.
 -- ------------------------------------------------------------
+-- De rollen zelf. Supabase heeft ze al; een kale Postgres niet, en dan valt
+-- de eerste regel hieronder om met "role anon does not exist". Rollen gelden
+-- voor de hele cluster, niet per databank, dus ze kunnen er van een vorige
+-- run nog staan -- vandaar de controle.
+--
+-- Gevonden op 02/10/2026: in een vers container faalde de harnas hier
+-- meteen. In het vorige container waren de rollen ooit met de hand
+-- aangemaakt, en dat was nergens vastgelegd -- de harnas draaide dus alleen
+-- op één machine.
+do $roles$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin;
+  end if;
+end $roles$;
+
 grant usage on schema public to anon, authenticated;
 alter default privileges in schema public grant all on tables to anon, authenticated;
 alter default privileges in schema public grant usage, select on sequences to anon, authenticated;

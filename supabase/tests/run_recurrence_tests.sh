@@ -22,6 +22,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGRATIONS_DIR="$(cd "$SCRIPT_DIR/../migrations" && pwd)"
 PSQL=(psql -v ON_ERROR_STOP=1 -X)
 
+# Opruimen, ook als een test faalt. Zonder deze trap bleef de testdatabank
+# na een rode run staan -- en hield ze de rollen anon en authenticated vast,
+# zodat een volgende proef die ze wilde weghalen stil mislukte en vacuüm
+# groen werd (02/10/2026).
+trap 'dropdb --if-exists "$DB_NAME" >/dev/null 2>&1 || true' EXIT
+
 echo "==> Dropping/creating database '$DB_NAME'"
 dropdb --if-exists "$DB_NAME"
 createdb "$DB_NAME"
@@ -29,8 +35,12 @@ createdb "$DB_NAME"
 echo "==> Bootstrapping local auth stub"
 "${PSQL[@]}" -d "$DB_NAME" -f "$SCRIPT_DIR/00_local_auth_stub.sql"
 
-for prefix in 0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011 0012 0013 0014 0015 0016 0017 0018 0019 0020 0021 0022 0023 0024 0025 0026 0027 0028 0029 0030 0031 0032 0033 0034 0035 0036 0037 0038 0039 0040 0041 0042 0043 0044 0045 0046 0047 0048 0049 0050 0051 0052 0053 0054 0055 0056 0057 0058 0059 0060 0061; do
-  file="$(ls "$MIGRATIONS_DIR/${prefix}"_*.sql)"
+# Elke migratie, in volgorde. Tot 02/10/2026 stond hier een uitgeschreven lijst
+# 0001 0002 ... die bij elke nieuwe migratie met de hand verlengd moest
+# worden. Wie dat vergat, liet de harnas stilzwijgend tegen het oude schema
+# draaien. De glob sorteert lexicografisch, en de vier cijfers maken dat
+# gelijk aan de nummervolgorde.
+for file in "$MIGRATIONS_DIR"/[0-9][0-9][0-9][0-9]_*.sql; do
   echo "==> Applying $(basename "$file")"
   "${PSQL[@]}" -d "$DB_NAME" -f "$file"
 done
