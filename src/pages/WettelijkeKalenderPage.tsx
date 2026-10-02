@@ -207,8 +207,25 @@ export function WettelijkeKalenderPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-500">Jaar</label>
-            <input type="number" value={jaar} onChange={(e) => setJaar(Number(e.target.value))} className="w-24 rounded-md border border-slate-300 px-2 py-1.5" />
+            {/* Boekjaar, niet aanslagjaar: de motor zoekt een rij op het jaar
+                waarin het boekjaar afsluit (migratie 0064). De FOD publiceert
+                per AANSLAGjaar, en wie dat letterlijk overtikt, verzet de
+                aangifte van het verkeerde boekjaar. Vandaar de omrekening
+                hieronder, op de plek waar je het getal intikt. */}
+            <label htmlFor="lc-boekjaar" className="mb-1 block text-xs font-medium text-slate-500">
+              Boekjaar
+            </label>
+            <input
+              id="lc-boekjaar"
+              type="number"
+              value={jaar}
+              onChange={(e) => setJaar(Number(e.target.value))}
+              aria-describedby="lc-boekjaar-uitleg"
+              className="w-24 rounded-md border border-slate-300 px-2 py-1.5"
+            />
+            <p id="lc-boekjaar-uitleg" className="mt-1 max-w-[16rem] text-xs text-slate-400">
+              Het jaar waarin het boekjaar afsluit. Bij een boekjaar per 31/12 is dat aanslagjaar {jaar + 1}.
+            </p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">Scope (optioneel)</label>
@@ -244,7 +261,7 @@ export function WettelijkeKalenderPage() {
               <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-2">Type</th>
-                  <th className="px-3 py-2">Jaar</th>
+                  <th className="px-3 py-2">Boekjaar</th>
                   <th className="px-3 py-2">Scope</th>
                   <th className="px-3 py-2">Deadline</th>
                   <th className="px-3 py-2">Override?</th>

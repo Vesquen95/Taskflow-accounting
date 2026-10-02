@@ -260,3 +260,21 @@ describe('WettelijkeKalenderPage — stand van het automatische onderhoud', () =
     expect(screen.getByText(/nog geen enkele onderhoudsronde/)).toBeInTheDocument()
   })
 })
+
+describe('WettelijkeKalenderPage — welk jaar je intikt', () => {
+  it('vraagt het boekjaar en rekent het aanslagjaar voor je om', async () => {
+    // De motor zoekt een kalenderrij op het jaar waarin het boekjaar afsluit
+    // (0064). De FOD publiceert per aanslagjaar -- wie dat letterlijk overtikt,
+    // verzet de aangifte van het verkeerde boekjaar.
+    rol = 'kantoorbeheerder'
+    onderhoud = null
+    render(<WettelijkeKalenderPage />)
+
+    const veld = screen.getByLabelText('Boekjaar')
+    expect(veld).toHaveAccessibleDescription(/het jaar waarin het boekjaar afsluit/i)
+
+    await userEvent.clear(veld)
+    await userEvent.type(veld, '2026')
+    expect(veld).toHaveAccessibleDescription(/aanslagjaar 2027/)
+  })
+})

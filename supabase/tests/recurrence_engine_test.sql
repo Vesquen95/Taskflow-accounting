@@ -8490,4 +8490,299 @@ begin
   raise notice 'PASS 64.4: gedeactiveerd ziet de eigen rij, en niemand anders';
 end $$;
 
+-- ============================================================
+-- Sectie 65 (0063): de snoeier en de generator gebruiken dezelfde grens.
+--
+-- De fout werd gevonden met een verschoven klok: op 31/12/2027 ligt de
+-- horizongrens op zaterdag 31/03/2029, net voor paasmaandag, en dan maakte elke
+-- onderhoudsronde zeventien jaarafsluitingen opnieuw aan. Deze sectie bootst
+-- die situatie na zonder op de kalender te wachten: een taak met de wettelijke
+-- datum precies OP de grens en de verschoven datum twee dagen erna -- wat een
+-- zaterdag doet.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot_btw uuid;
+  v_grens date := (current_date + (public.horizon_maanden() || ' months')::interval)::date;
+  v_op_grens uuid; v_erover uuid; v_afgesproken uuid;
+  v_status public.task_status; v_handmatig timestamptz;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's65@test.local', now());
+  insert into public.firms (naam) values ('S65 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S65 Beheerder', 's65@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S65 Klant', 12, 31, 'geen', true) returning id into v_klant;
+  select id into v_ot_btw from public.obligation_types where code = 'btw_aangifte';
+
+  perform set_config('taskflow.generating', 'on', true);
+  -- Wettelijk op de grens, verschoven twee dagen erna.
+  insert into public.task_instances (client_id, obligation_type_id, periode_label,
+      due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant, v_ot_btw, 'S65-op-de-grens', v_grens + 2, v_grens, 'open', v_admin,
+      'automatisch_gegenereerd', true)
+    returning id into v_op_grens;
+  -- Wettelijk ruim erover: die hoort wél gesnoeid te worden.
+  insert into public.task_instances (client_id, obligation_type_id, periode_label,
+      due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant, v_ot_btw, 'S65-erover', v_grens + 30, v_grens + 30, 'open', v_admin,
+      'automatisch_gegenereerd', true)
+    returning id into v_erover;
+  -- Ook ruim erover, maar met een afgesproken deadline.
+  insert into public.task_instances (client_id, obligation_type_id, periode_label,
+      due_date, due_date_wettelijk, status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+    values (v_klant, v_ot_btw, 'S65-afgesproken', v_grens + 40, v_grens + 40, 'open', v_admin,
+      'automatisch_gegenereerd', true)
+    returning id into v_afgesproken;
+  perform set_config('taskflow.generating', 'off', true);
+
+  -- Een medewerker verzet de deadline: dan zet de statustrigger de stempel.
+  update public.task_instances set due_date = v_grens + 45 where id = v_afgesproken;
+  select due_date_handmatig_op into v_handmatig from public.task_instances where id = v_afgesproken;
+  if v_handmatig is null then
+    raise exception 'FAIL 65.0: de fixture kreeg geen stempel voor een afgesproken deadline';
+  end if;
+
+  perform public.snoei_taken_buiten_horizon();
+  -- De snoeier wist zijn eigen actor op het einde (0057); hier opnieuw zetten
+  -- voor wat er eventueel nog volgt.
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  -- ---------------------------------------------------------
+  -- 65.1 Wettelijk binnen de grens, verschoven erbuiten: blijft staan. Anders
+  --      maakt de generator haar elke ronde opnieuw aan en snoeit de snoeier
+  --      ze weer.
+  -- ---------------------------------------------------------
+  select status into v_status from public.task_instances where id = v_op_grens;
+  if v_status is distinct from 'open' then
+    raise exception 'FAIL 65.1: een taak met haar wettelijke datum op de grens werd gesnoeid (%)', v_status;
+  end if;
+  raise notice 'PASS 65.1: de snoeier kijkt naar de wettelijke datum, net als de generator';
+
+  -- ---------------------------------------------------------
+  -- 65.2 Wat écht voorbij de grens ligt, wordt nog steeds gesnoeid. Zonder
+  --      deze test zou 65.1 ook slagen met een snoeier die niets meer doet.
+  -- ---------------------------------------------------------
+  select status into v_status from public.task_instances where id = v_erover;
+  if v_status is distinct from 'geannuleerd' then
+    raise exception 'FAIL 65.2: een taak ruim voorbij de grens bleef staan (%)', v_status;
+  end if;
+  raise notice 'PASS 65.2: wat voorbij de horizon ligt, wordt nog gesnoeid';
+
+  -- ---------------------------------------------------------
+  -- 65.3 Een met de hand afgesproken deadline wordt niet gesnoeid, ook niet
+  --      voorbij de grens. Dat is een afspraak met de klant.
+  -- ---------------------------------------------------------
+  select status into v_status from public.task_instances where id = v_afgesproken;
+  if v_status is distinct from 'open' then
+    raise exception 'FAIL 65.3: een afgesproken deadline werd gesnoeid (%)', v_status;
+  end if;
+  raise notice 'PASS 65.3: een afgesproken deadline blijft staan';
+end $$;
+
+-- ============================================================
+-- Sectie 66 (0064): een override raakt één aangifte, niet twee.
+--
+-- Een boekjaar per 30/06: de aangifte over boekjaar J valt op 31/01 van J+1,
+-- die over boekjaar J-1 op 31/01 van J. Een override voor jaar J hoort alleen
+-- de eerste te raken. Vóór 0064 raakte ze beide, omdat de wettelijke datum
+-- van de tweede ook in J valt.
+--
+-- Bewust cohort 30/06 en niet 31/12: sectie 27 laat een override voor 31/12
+-- achter, en legal_calendar is niet per kantoor. Op hetzelfde cohort zou de
+-- motor die al bij het aanmaken toepassen, en dan bewees 66.1 niets.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot uuid;
+  v_j int := extract(year from current_date)::int;
+  v_vorige_voor date; v_vorige_na date; v_deze date;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's66@test.local', now());
+  insert into public.firms (naam) values ('S66 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S66 Beheerder', 's66@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S66 Sluit op 30/06', 6, 30, 'geen', true) returning id into v_klant;
+  select id into v_ot from public.obligation_types where code = 'aangifte_venb_pb';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot, true, date '2000-01-01');
+  perform public.generate_task_instances(36, 24);
+
+  select due_date_wettelijk into v_vorige_voor from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot and periode_label = (v_j - 1)::text;
+  if v_vorige_voor is null or extract(year from v_vorige_voor) <> v_j then
+    raise exception 'FAIL 66.0: de aangifte over % valt niet in % (%) -- de test bewijst dan niets',
+      v_j - 1, v_j, v_vorige_voor;
+  end if;
+
+  insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, aangemaakt_door, gewijzigd_door)
+    values (v_ot, v_j, 'boekjaar_6', make_date(v_j + 1, 2, 15), true, v_admin, v_admin);
+
+  -- 66.1 De aangifte over het genoemde boekjaar schuift mee.
+  select due_date_wettelijk into v_deze from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot and periode_label = v_j::text;
+  if v_deze is distinct from make_date(v_j + 1, 2, 15) then
+    raise exception 'FAIL 66.1: de override verzette de aangifte over % niet (% i.p.v. %)',
+      v_j, v_deze, make_date(v_j + 1, 2, 15);
+  end if;
+  raise notice 'PASS 66.1: de override verzet de aangifte over het genoemde boekjaar';
+
+  -- 66.2 En die over het boekjaar ervoor blijft waar ze stond, ook al valt haar
+  --      deadline in hetzelfde kalenderjaar. Vóór 0064 kwam ze een jaar te laat
+  --      te staan.
+  select due_date_wettelijk into v_vorige_na from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot and periode_label = (v_j - 1)::text;
+  if v_vorige_na is distinct from v_vorige_voor then
+    raise exception 'FAIL 66.2: de aangifte over % werd mee verzet, van % naar %',
+      v_j - 1, v_vorige_voor, v_vorige_na;
+  end if;
+  raise notice 'PASS 66.2: de aangifte over het boekjaar ervoor blijft ongemoeid';
+end $$;
+
+-- ============================================================
+-- Sectie 67 (0065): een feestdag respecteert de richting van de taak.
+--
+-- Gevonden door 52.6 met een verschoven klok: een bijzondere aangifte die
+-- correct op de vrijdag vóór haar zaterdagdeadline stond, werd na het
+-- toevoegen van een feestdag naar de maandag erna geduwd -- na de wettelijke
+-- datum. Deze sectie bootst dat na in 2045, een jaar waarvoor de harnas geen
+-- feestdagen laadt: dan tellen alleen de feestdagen die de test zelf toevoegt,
+-- en hangt niets af van de dag waarop je draait.
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_klant uuid; v_bijz uuid; v_btw uuid; v_maand uuid; v_kw uuid;
+  v_ot_btw uuid; v_ot_bijz uuid;
+  -- De eerste zaterdag van maart 2045, en twee zaterdagen drie weken verder.
+  v_s1 date := date '2045-03-01' + ((6 - extract(isodow from date '2045-03-01')::int + 7) % 7);
+  v_s2 date; v_s3 date;
+  v_a uuid; v_b uuid; v_c uuid;
+  v_due date; v_n int; v_richting text;
+begin
+  v_s2 := v_s1 + 21; v_s3 := v_s1 + 42;
+
+  insert into auth.users (id, email, email_confirmed_at) values (v_admin_uid, 's67@test.local', now());
+  insert into public.firms (naam) values ('S67 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_admin_uid, 'S67 Beheerder', 's67@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+
+  select id into v_ot_btw from public.obligation_types where code = 'btw_aangifte';
+  select id into v_ot_bijz from public.obligation_types where code = 'btw_bijzondere_aangifte';
+
+  -- ---------------------------------------------------------
+  -- 67.0 De motor bewaart de richting die hij koos. Zonder dit weet geen
+  --      enkele trigger achteraf welke kant een taak hoort uit te schuiven.
+  -- ---------------------------------------------------------
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S67 Vrijgesteld', 12, 31, 'vrijgesteld_kleine_onderneming', true) returning id into v_bijz;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_bijz, v_ot_bijz, true, date '2000-01-01');
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S67 Maand', 12, 31, 'periodieke_aangever', 'maand', true) returning id into v_maand;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, btw_aangifte_frequentie, actief)
+    values (v_firm, 'S67 Kwartaal', 12, 31, 'periodieke_aangever', 'kwartaal', true) returning id into v_kw;
+  perform public.generate_task_instances(public.horizon_maanden(), 0);
+
+  select count(*) into v_n from public.task_instances
+   where client_id = v_bijz and obligation_type_id = v_ot_bijz and verschuiving <> 'terug';
+  if v_n <> 0 or not exists (select 1 from public.task_instances where client_id = v_bijz) then
+    raise exception 'FAIL 67.0: % bijzondere aangifte(n) staan niet op richting terug', v_n;
+  end if;
+  select count(*) into v_n from public.task_instances
+   where client_id = v_kw and obligation_type_id = v_ot_btw and verschuiving <> 'terug';
+  if v_n <> 0 then
+    raise exception 'FAIL 67.0: % kwartaalaangifte(n) staan niet op richting terug', v_n;
+  end if;
+  select count(*) into v_n from public.task_instances
+   where client_id = v_maand and obligation_type_id = v_ot_btw and verschuiving <> 'vooruit';
+  if v_n <> 0 or not exists (select 1 from public.task_instances where client_id = v_maand) then
+    raise exception 'FAIL 67.0: % maandaangifte(n) staan niet op richting vooruit', v_n;
+  end if;
+  raise notice 'PASS 67.0: de motor bewaart de richting -- terug voor kwartaal en bijzonder, vooruit per maand';
+
+  -- De richting staat daarna vast: niemand anders dan de motor beslist ze.
+  -- Uitdrukkelijk de bijzondere aangifte: een vrijgestelde onderneming krijgt
+  -- ook een klantenlisting, en die schuift terecht vooruit. Met een losse
+  -- `limit 1` las deze test eerst die, en leek de bevriezing te falen.
+  select id into v_a from public.task_instances
+   where client_id = v_bijz and obligation_type_id = v_ot_bijz limit 1;
+  update public.task_instances set verschuiving = 'vooruit' where id = v_a;
+  select verschuiving into v_richting from public.task_instances where id = v_a;
+  if v_richting <> 'terug' then
+    raise exception 'FAIL 67.0: de richting van een taak was achteraf te wijzigen';
+  end if;
+  raise notice 'PASS 67.0b: de richting staat vast na het aanmaken';
+
+  -- ---------------------------------------------------------
+  -- Drie taken in 2045, rechtstreeks zoals de motor ze zou neerzetten.
+  -- ---------------------------------------------------------
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S67 Klant', 12, 31, 'geen', true) returning id into v_klant;
+  perform set_config('taskflow.generating', 'on', true);
+  insert into public.task_instances (client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
+      status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring, verschuiving)
+    values (v_klant, v_ot_bijz, 'S67-A', v_s1 - 1, v_s1, 'open', v_admin, 'automatisch_gegenereerd', true, 'terug')
+    returning id into v_a;
+  insert into public.task_instances (client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
+      status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring, verschuiving)
+    values (v_klant, v_ot_bijz, 'S67-B', v_s2 - 1, v_s2, 'open', v_admin, 'automatisch_gegenereerd', true, 'terug')
+    returning id into v_b;
+  insert into public.task_instances (client_id, obligation_type_id, periode_label, due_date, due_date_wettelijk,
+      status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring, verschuiving)
+    values (v_klant, v_ot_btw, 'S67-C', v_s3 + 2, v_s3, 'open', v_admin, 'automatisch_gegenereerd', true, 'vooruit')
+    returning id into v_c;
+  perform set_config('taskflow.generating', 'off', true);
+
+  -- ---------------------------------------------------------
+  -- 67.1 Een feestdag die er niets mee te maken heeft -- de vrijdag ná de
+  --      zaterdagdeadline -- duwt een achteruitschuivende taak niet vooruit.
+  --      Dit is precies wat er met de bijzondere aangifte van 2026-Q1 gebeurde.
+  -- ---------------------------------------------------------
+  insert into public.public_holidays (jaar, datum, omschrijving, aangemaakt_door, gewijzigd_door)
+    values (2045, v_s1 + 6, 'S67 test 1', v_admin, v_admin);
+  select due_date into v_due from public.task_instances where id = v_a;
+  if v_due is distinct from v_s1 - 1 then
+    raise exception 'FAIL 67.1: een achteruitschuivende taak werd verzet naar % (wettelijk %, hoort %)', v_due, v_s1, v_s1 - 1;
+  end if;
+  raise notice 'PASS 67.1: een feestdag duwt een achteruitschuivende taak niet voorbij haar wettelijke datum';
+
+  -- ---------------------------------------------------------
+  -- 67.2 Een feestdag op de vrijdag vóór de zaterdagdeadline: de taak schuift
+  --      één werkdag verder terug. Vroeger viel die feestdag buiten de
+  --      selectie van de trigger en bleef de taak op de feestdag staan.
+  -- ---------------------------------------------------------
+  insert into public.public_holidays (jaar, datum, omschrijving, aangemaakt_door, gewijzigd_door)
+    values (2045, v_s2 - 1, 'S67 test 2', v_admin, v_admin);
+  select due_date into v_due from public.task_instances where id = v_b;
+  if v_due is distinct from v_s2 - 2 then
+    raise exception 'FAIL 67.2: met een feestdag op vrijdag staat de taak op % i.p.v. donderdag %', v_due, v_s2 - 2;
+  end if;
+  raise notice 'PASS 67.2: een feestdag op de werkdag ervoor schuift de taak verder terug';
+
+  -- ---------------------------------------------------------
+  -- 67.3 En vooruit blijft vooruit: een feestdag op de maandag na een
+  --      zaterdagdeadline zet een maandaangifte op dinsdag. Dit werkte al; het
+  --      hoort te blijven werken.
+  -- ---------------------------------------------------------
+  insert into public.public_holidays (jaar, datum, omschrijving, aangemaakt_door, gewijzigd_door)
+    values (2045, v_s3 + 2, 'S67 test 3', v_admin, v_admin);
+  select due_date into v_due from public.task_instances where id = v_c;
+  if v_due is distinct from v_s3 + 3 then
+    raise exception 'FAIL 67.3: een vooruitschuivende taak staat op % i.p.v. dinsdag %', v_due, v_s3 + 3;
+  end if;
+  raise notice 'PASS 67.3: een vooruitschuivende taak schuift nog steeds vooruit';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
