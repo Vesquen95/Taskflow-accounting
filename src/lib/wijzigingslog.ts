@@ -9,7 +9,7 @@ import type { Employee } from '../types'
  */
 
 /** Leesbare namen voor `client_change_log.veld`. */
-export const VELD_LABEL: Record<string, string> = {
+const VELD_LABEL: Record<string, string> = {
   vertrouwelijk: 'Vertrouwelijk',
   standaard_verantwoordelijke_id: 'Standaard verantwoordelijke',
   toegang_vertrouwelijk_verleend: 'Toegang tot dit vertrouwelijke dossier verleend',

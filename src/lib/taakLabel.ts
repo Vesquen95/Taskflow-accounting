@@ -10,7 +10,7 @@ type TaakVoorLabel = Pick<TaskInstanceWithRelations, 'title' | 'obligation_type'
 type TaakVoorLabelMetPeriode = Pick<TaskInstanceWithRelations, 'title' | 'obligation_type' | 'periode_label'>
 
 /** De korte naam zoals ze in de kolom "Verplichting" staat. */
-export function taakNaam(task: Pick<TaakVoorLabel, 'title' | 'obligation_type'>): string {
+function taakNaam(task: Pick<TaakVoorLabel, 'title' | 'obligation_type'>): string {
   return task.obligation_type?.naam ?? task.title ?? 'Ad-hoc taak'
 }
 
@@ -54,7 +54,7 @@ export function taakOmschrijving(task: TaakVoorLabel): string {
  * waar een datum verkeerd gaat: je vraagt de btw van 2025 terug tegen
  * 30 september 2026, niet 2025.
  */
-export const BUITENLANDSE_BTW_TITEL = 'Teruggaaf buitenlandse btw'
+const BUITENLANDSE_BTW_TITEL = 'Teruggaaf buitenlandse btw'
 
 /** De titel voor één teruggaafjaar, bv. "Teruggaaf buitenlandse btw 2025". */
 export function buitenlandseBtwTitel(jaar: number): string {

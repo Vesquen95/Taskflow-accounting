@@ -24,7 +24,7 @@ export interface Voorafbetaling {
 }
 
 /** De code van de verplichting in de databank (migratie 0003). */
-export const VA_CODE = 'va_venb'
+const VA_CODE = 'va_venb'
 
 const LABEL = /^VA([1-4])-(\d{4})$/
 

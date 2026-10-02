@@ -8411,4 +8411,83 @@ begin
   raise notice 'PASS 63.11: ook de taken zonder verplichting volgen mee';
 end $$;
 
+-- ============================================================
+-- Sectie 64 (0062): opruimen.
+--
+-- 64.4 is de test die ertoe doet. 0062 raakt de policy waarmee een
+-- gedeactiveerde medewerker zijn eigen rij nog kan lezen -- de enige weg
+-- waarlangs de app kan zien dat iemand gedeactiveerd is. Die eigenschap had
+-- nog geen eigen test. Nu wel, en in twee richtingen: de eigen rij zichtbaar,
+-- die van een collega niet.
+-- ============================================================
+do $$
+declare
+  v_firm uuid;
+  v_baas uuid; v_baas_uid uuid := gen_random_uuid();
+  v_weg uuid;  v_weg_uid uuid := gen_random_uuid();
+  v_n int; v_def text;
+begin
+  -- ---------------------------------------------------------
+  -- 64.1 De demodata-functie bestaat niet meer.
+  -- ---------------------------------------------------------
+  if exists (select 1 from pg_proc where proname = 'seed_demo_data_for_firm'
+               and pronamespace = 'public'::regnamespace) then
+    raise exception 'FAIL 64.1: seed_demo_data_for_firm() bestaat nog';
+  end if;
+  raise notice 'PASS 64.1: de demodata-functie is weg';
+
+  -- ---------------------------------------------------------
+  -- 64.2 Het inrichten van een kantoor roept haar ook niet meer aan -- en zaait
+  --      de feestdagen nog wel. Op de definitie, omdat het slot van 0014 een
+  --      tweede kantoor hier terecht weigert.
+  -- ---------------------------------------------------------
+  select pg_get_functiondef('public.create_firm_and_admin(text, text)'::regprocedure) into v_def;
+  if position('seed_demo_data_for_firm' in v_def) > 0 then
+    raise exception 'FAIL 64.2: create_firm_and_admin() roept de demodata nog aan';
+  end if;
+  if position('seed_default_public_holidays' in v_def) = 0 then
+    raise exception 'FAIL 64.2: de feestdagen worden niet meer gezaaid -- dat mocht niet mee weg';
+  end if;
+  raise notice 'PASS 64.2: een nieuw kantoor krijgt feestdagen, geen verzonnen klanten';
+
+  -- ---------------------------------------------------------
+  -- 64.3 De twee interne helpers staan niet in de publieke API.
+  -- ---------------------------------------------------------
+  if has_function_privilege('authenticated', 'public.taskflow_pipeline_owns_row(uuid)', 'execute')
+     or has_function_privilege('authenticated', 'public.taskflow_verantwoordelijke_verplaatsing()', 'execute') then
+    raise exception 'FAIL 64.3: een interne helper is nog aan te roepen via de API';
+  end if;
+  raise notice 'PASS 64.3: de interne helpers staan dicht';
+
+  -- ---------------------------------------------------------
+  -- 64.4 Een gedeactiveerde medewerker leest zijn eigen rij -- en alleen die.
+  -- ---------------------------------------------------------
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_baas_uid, 's64a@test.local', now()), (v_weg_uid, 's64b@test.local', now());
+  insert into public.firms (naam) values ('S64 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_baas_uid, 'S64 Beheerder', 's64a@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_baas;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_weg_uid, 'S64 Vertrokken', 's64b@test.local', 'medewerker', false, true)
+    returning id into v_weg;
+
+  perform set_config('taskflow.test_uid', v_baas_uid::text, true);
+  update public.employees set actief = false where id = v_weg;
+
+  perform set_config('taskflow.test_uid', v_weg_uid::text, true);
+  set local role authenticated;
+  select count(*) into v_n from public.employees where id = v_weg;
+  if v_n <> 1 then
+    set local role postgres;
+    raise exception 'FAIL 64.4: een gedeactiveerde medewerker kan zijn eigen rij niet meer lezen';
+  end if;
+  select count(*) into v_n from public.employees where id = v_baas;
+  set local role postgres;
+  if v_n <> 0 then
+    raise exception 'FAIL 64.4: een gedeactiveerde medewerker ziet nog een collega';
+  end if;
+  raise notice 'PASS 64.4: gedeactiveerd ziet de eigen rij, en niemand anders';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
