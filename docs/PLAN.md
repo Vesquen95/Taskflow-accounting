@@ -1477,9 +1477,44 @@ dat is precies de activiteit die telt. De workflow aanvaardt daarom 2xx én een
 uitblijvend antwoord — want dan nam er niemand op en staat het project
 vermoedelijk alsnog op pauze.
 
-**Twee dingen om te weten.** GitHub laat geplande workflows alleen vuren vanaf de
-**default branch** (hier is dat de werkbranch, want er is er maar één), en
-schakelt ze uit na 60 dagen zonder activiteit in de repo. En dit is
-best-effort: of Supabase's pauzeheuristiek precies deze activiteit meetelt, is
-niet van buitenaf te verifiëren. De echte proef is of het project de komende
-week wakker blijft.
+**Wat GitHub echt doet** (nagekeken in de docs op 02/10/2026, niet uit het
+hoofd). De repo is **openbaar** en `claude/taskflow-webapp-subagents-mxc0yz` is
+de default branch. Dat betekent:
+
+- Actions-minuten zijn op een publieke repo onbeperkt, ook op het gratis plan.
+  Er is dus geen minutenbudget dat deze workflow opeet.
+- Geplande workflows vuren **alleen vanaf de default branch**. Dat komt hier
+  goed uit, want er is maar één branch.
+- Geplande workflows worden op een publieke repo automatisch uitgeschakeld na
+  **60 dagen zonder activiteit in de repo** — niet na zeven. Er bestaat geen
+  pauze van zeven dagen bij GitHub; die zeven dagen zijn van Supabase.
+
+Die 60 dagen zijn wél de zwakke plek: ligt het project twee maanden stil, dan
+valt de wekker uit precies wanneer je hem nodig hebt. Daarom staat er een tweede
+laag onder (zie §29).
+
+Verder is dit best-effort: of Supabase's pauzeheuristiek precies deze activiteit
+meetelt, is van buitenaf niet te verifiëren. De echte proef is of het project de
+komende week wakker blijft.
+
+## §29 — Het vangnet onder de wekker (02/10/2026)
+
+De dagelijkse workflow van §28 hangt aan GitHub. Daaronder staat een Routine op
+het Claude-account, `Taskflow — Supabase niet laten pauzeren`, die maandag en
+donderdag om 07:00 UTC hetzelfde leesverzoek doet. Twee keer per week is ruim
+binnen de week die Supabase aanhoudt, en ze hangt aan niets in de repo.
+
+**Wat ze niet kan, en waarom dat zo is.** De sessies die zo'n Routine start
+krijgen geen MCP-tools mee, dus geen Supabase-beheertools. Ze kan de
+projectstatus niet opvragen en een gepauzeerd project niet zelf terugzetten —
+dat was het eerste ontwerp, en het bleek niet te kunnen. Ze doet nu wat ze wél
+kan: het project aantikken, en luid melden wanneer er niemand opneemt. Het
+terugzetten blijft mensenwerk (of werk voor een sessie die de Supabase-tools wél
+heeft).
+
+Wie dat ook wil automatiseren, heeft twee wegen: de Routine aanmaken vanuit de
+Routines-pagina op claude.ai zodat ze de connector meeneemt, of een Supabase
+personal access token als omgevingsgeheim zetten en de Management-API met curl
+aanroepen. Dat laatste zet een sleutel met volledige projectrechten in een
+geplande taak; dat is een afweging die het kantoor zelf moet maken, niet iets om
+er stil bij te bouwen.

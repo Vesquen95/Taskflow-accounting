@@ -17,9 +17,15 @@ name: Supabase wakker houden
 on:
   schedule:
     # Dagelijks, niet op het uur: GitHub is om :00 het drukst en stelt
-    # geplande runs dan uit. Let op: GitHub schakelt geplande workflows uit na
-    # 60 dagen zonder activiteit in de repo, en laat ze alleen vanaf de
-    # default branch vuren.
+    # geplande runs dan uit.
+    #
+    # Twee regels van GitHub die hier gelden (docs nagekeken 02/10/2026):
+    # geplande workflows vuren ALLEEN vanaf de default branch -- dat is hier de
+    # werkbranch, want er is er maar één -- en ze worden op een publieke repo
+    # automatisch uitgeschakeld na 60 dagen zonder activiteit in de repo. Niet
+    # na zeven dagen; die zeven dagen zijn van Supabase. Die 60 dagen zijn wel
+    # de zwakke plek van deze workflow, en daarom staat er een Routine op het
+    # Claude-account als tweede laag onder (docs/PLAN.md §29).
     - cron: '23 5 * * *'
   workflow_dispatch:
 
