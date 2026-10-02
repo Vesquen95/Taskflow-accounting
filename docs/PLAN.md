@@ -1146,6 +1146,15 @@ vereffening).
 Staat uit; vereist een Supabase Pro-abonnement. Blijft op de advisorlijst tot
 dat er is.
 
+**Aangevuld 02/10/2026:**
+
+- **Boekjaar of aanslagjaar** in de wettelijke kalender — zie §31.
+- **De maandagmail noemt de voorafbetalingen nog "Voorafbetaling VenB
+  (VA1-VA4)"**, met het periodelabel ernaast. De naamgeving van §25 zit in de
+  schermen, niet in `weekoverzicht_voor()`. Meenemen zodra de mail live gaat.
+- **De e2e-testaccounts zijn weg** (13/09/2026, op vraag). Opnieuw aanmaken staat
+  in `e2e/README.md`.
+
 ## §22 — De horizon van 36 naar 15 maanden (06/09/2026)
 
 Het kantoor: *"Een dossier bekijken we niet 3 jaren vanaf vandaag, meestal is
@@ -1518,3 +1527,111 @@ personal access token als omgevingsgeheim zetten en de Management-API met curl
 aanroepen. Dat laatste zet een sleutel met volledige projectrechten in een
 geplande taak; dat is een afweging die het kantoor zelf moet maken, niet iets om
 er stil bij te bouwen.
+
+## §30 — Opruimen na 61 migraties (02/10/2026)
+
+**Gevraagd:** "Bekijk alle codes en verwijder wat niet nodig is."
+
+**Gemeten, niet gegokt.** De frontend met `knip` (ongebruikte bestanden,
+exports en dependencies), de databank door elke functie na te lopen op wie ze
+gebruikt — de app via `rpc()`, een trigger, een policy, cron of een andere
+functie. Uitkomst: de code was al vrij schoon. Geen ongebruikte dependencies,
+geen dode tabellen, op één na geen dode functie.
+
+**Weg:**
+- *De demodata bij het inrichten van een kantoor* (0062). `create_firm_and_admin()`
+  zaaide vier verzonnen dossiers. In deze installatie kan dat pad nooit meer
+  lopen (het slot van 0014), dus het raakte alleen een nieuwe installatie — en
+  daar is het precies verkeerd: een echt kantoor begint dan met
+  "[DEMO] Bakkerij Verhaegen BV" in zijn productiedatabank.
+- *Twee interne helpers uit de publieke API* (0062): `taskflow_pipeline_owns_row`
+  en `taskflow_verantwoordelijke_verplaatsing` (die laatste vergat ik in 0059).
+- *Vier onnodige `export`s* in de frontend.
+
+**Bewust niet weg, hoewel het ongebruikt lijkt:**
+- *De 61 migraties.* Geschiedenis: productie heeft ze toegepast, een nieuwe
+  installatie en de harnas spelen ze opnieuw af.
+- *De maandagmail* (`src/lib/weekoverzicht.ts`, `weekoverzicht_voor()`,
+  `weekoverzicht_ontvangers()`). Niemand roept ze vandaag aan, maar ze staan
+  geparkeerd in §21, niet geschrapt.
+- *`playwright.lokaal.config.ts`.* `knip` ziet het als ongebruikt, maar je roept
+  het aan met `-c` (staat in zijn eigen kop).
+- *`design/`.* Geen code maar de bron van de ontwerpschetsen; jouw beslissing.
+- *De vijftien "ongebruikte" indexen* die de Supabase-advisor meldt. Die
+  statistiek komt uit een databank die net leeggemaakt is en twee keer op pauze
+  stond. Op vijf dossiers kiest Postgres altijd een volledige scan; bij honderd
+  zijn ze nodig.
+- *De 23 SECURITY DEFINER-functies* die de advisor meldt. Dat zijn de RPC's van
+  de app en de helpers van de RLS; dichtzetten breekt de app.
+- *De tweede policy op `employees`* die de advisor "dubbel" noemt. Ze is het
+  enige waarlangs een gedeactiveerde medewerker kan lezen dát hij gedeactiveerd
+  is — `current_employee_firm_id()` filtert op `actief`. Nu ook met een eigen
+  test (64.4).
+
+**De harnas draait op elke machine.** Ze leunde op de rollen `anon` en
+`authenticated`, die in het vorige container ooit met de hand waren aangemaakt.
+In een vers container viel ze meteen om. De stub maakt ze nu aan. Daarnaast:
+de migraties via een glob in plaats van een uitgeschreven lijst die bij elke
+migratie verlengd moest worden, en een trap die de testdatabank ook na een rode
+run opruimt (zonder die trap gaf een rode proef bijna vals groen).
+
+## §31 — De tijdbommen in de harnas, en drie fouten die ze verborgen (02/10/2026)
+
+**Hoe het begon.** Na het opruimen stond de harnas rood op test 56.4 — niet
+door de opruiming, maar omdat die test hard 2026 en een deadline van 30/09/2026
+uitschreef. De motor maakt geen taken in het verleden aan, dus sinds 1 oktober
+bestond die taak niet meer.
+
+**Hoe groot het was.** Met een verschoven klok (libfaketime) bleek de harnas op
+élke datum in de komende jaren om te vallen, telkens op andere tests. Achttien
+tests in veertien secties, waarvan een flink deel uit september en van mijn
+hand. Drie soorten:
+- vaste jaartallen die uit het generatievenster schuiven;
+- een verwachte datum die toevallig een werkdag was (31/03/2029 is een zaterdag
+  vóór paasmaandag);
+- een feestdagenkalender die met vandaag meeschuift.
+
+Formuletests rekenen nu met het jaar van vandaag (maand en dag blijven
+letterlijk, zoals de tests zelf vragen). Tests die de gepubliceerde
+**FOD-kalender van 2026** vastpinnen, toetsen die zolang 2026 binnen het
+inhaalvenster van 24 maanden valt, en melden daarna uitdrukkelijk `SKIP`. De
+regels zelf blijven gedekt door eigenschapstests die op elke datum werken
+(52.6, 54.6, 55.5): voor élke taak in het venster, de werkdatum = de wettelijke
+datum verschoven in de juiste richting.
+
+**`supabase/tests/tijdreis.sh`** draait de harnas op een reeks datums tot vijf
+jaar vooruit, in een eigen wegwerpcluster. Draai het na elke wijziging aan de
+motor of aan de tests. Stand bij oplevering: 22 datums tot juli 2031, nul fouten.
+
+**De drie echte fouten** die de tijdreis vond, en die op de datum van vandaag
+onzichtbaar waren:
+
+1. **Snoeier en generator gebruikten een andere grens** (0063). De generator
+   keek naar de wettelijke datum, de snoeier naar de verschoven. Een deadline
+   vlak voor de horizongrens op een zaterdag werd aangemaakt en in dezelfde
+   ronde weer geannuleerd, elke maand opnieuw. In productie had dat op 1 juli
+   2027 de aangifte VenB van elke klant met boekjaar 31/12 geraakt (30/09/2028
+   is een zaterdag). Meteen meegenomen: een met de hand afgesproken deadline
+   wordt niet meer gesnoeid.
+2. **Een override in de wettelijke kalender raakte twee aangiften** (0064). De
+   motor leest `jaar` als het jaar waarin het boekjaar afsluit; de trigger las
+   het óf als dat óf als het jaar van de deadline. Een campagnedatum voor
+   boekjaar 2026 verzette zo ook de aangifte over 2025 — een jaar te laat. Twee
+   tests hadden elk een andere lezing vastgelegd, en de `OR` hield ze allebei
+   groen.
+3. **Een nieuwe of ingetrokken feestdag schoof altijd vooruit** (0065). Ook de
+   vier verplichtingen die sinds 0048 naar de werkdag ervóór horen te gaan. Een
+   bijzondere aangifte op vrijdag 24/04 (wettelijk zaterdag 25/04) belandde na
+   het toevoegen van 1 mei op maandag 27/04 — na haar wettelijke datum. De
+   richting staat nu op de taak zelf (`verschuiving`), gezet door de motor, en
+   elke herberekening gebruikt dezelfde regel.
+
+Geen van de drie had in productie al schade aangericht: er stonden geen rijen in
+`legal_calendar`, en de feestdagenkalender is sinds de start niet aangepast.
+
+**Open voor het kantoor: `jaar` in de wettelijke kalender.** Het scherm vraagt
+nu uitdrukkelijk het **boekjaar** en rekent het aanslagjaar voor je om, want de
+FOD publiceert per aanslagjaar. Overschakelen op aanslagjaar is ook mogelijk,
+maar niet triviaal: in België is het aanslagjaar het jaar waarin het boekjaar
+afsluit, *behalve* bij afsluiting op 31/12 — dan is het het jaar erna. Dat is een
+fiscale keuze, geen technische.

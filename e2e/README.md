@@ -73,6 +73,17 @@ weg is.
 
 ## De testaccounts
 
+> **Stand op 13/09/2026: deze vijf accounts bestaan niet meer.** Het kantoor
+> liet alle medewerkers behalve de eigen account verwijderen om met eigen
+> testgebruikers te werken — ook hun aanmelding in Supabase Auth. De e2e-tests
+> kunnen dus niet inloggen tot de accounts opnieuw bestaan. De deploy merkt
+> daar niets van: die draait alleen de unittests (`npm test`), niet Playwright.
+>
+> Opnieuw aanmaken: nodig ze uit via het scherm Medewerkers met de e-mailadressen
+> uit de tabel hieronder, met de rol, het niveau en het team dat erbij staat, en
+> geef ze allemaal hetzelfde wachtwoord als `TASKFLOW_TEST_PASSWORD`. De tests
+> zelf zijn niet aangepast; ze werken weer zodra de accounts er zijn.
+
 Vier schermen lagen buiten bereik zolang er maar één testaccount was: Workload,
 Wettelijke kalender en Medewerkers vragen de rol kantoorbeheerder, Goedkeuren
 vraagt goedkeuringsrecht. En de teammuur (migratie 0039) valt alleen van
