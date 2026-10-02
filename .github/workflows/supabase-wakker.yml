@@ -1,0 +1,70 @@
+name: Supabase wakker houden
+
+# Supabase pauzeert een project op het gratis plan na ongeveer een week zonder
+# activiteit. Dat is niet onschuldig: pg_cron leeft ín de databank, dus een
+# slapend project draait het maandelijkse horizononderhoud niet. Die ronde wordt
+# ook niet ingehaald — ze wordt overgeslagen. Op 1 oktober 2026 gebeurde dat.
+#
+# Eén leesverzoek per dag is genoeg om het project actief te houden.
+#
+# Waarom géén klant of taak aanmaken en weer verwijderen, zoals eerst geopperd:
+# dat is een schrijfactie, en in Taskflow is een schrijfactie nooit klein. Eén
+# klant levert meteen een twintigtal gegenereerde taken op, plus regels in
+# client_change_log en task_status_log. Verwijderen laat dat spoor staan of
+# botst op verwijzingen, en het kan midden in een testronde van het kantoor
+# vallen. Lezen bereikt precies hetzelfde zonder één rij aan te raken.
+
+on:
+  schedule:
+    # Dagelijks, niet op het uur: GitHub is om :00 het drukst en stelt
+    # geplande runs dan uit. Let op: GitHub schakelt geplande workflows uit na
+    # 60 dagen zonder activiteit in de repo, en laat ze alleen vanaf de
+    # default branch vuren.
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+jobs:
+  wakker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Eén leesverzoek naar de databank
+        env:
+          URL: ${{ vars.VITE_SUPABASE_URL }}
+          KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          set -u
+          if [ -z "${URL:-}" ] || [ -z "${KEY:-}" ]; then
+            echo "VITE_SUPABASE_URL of VITE_SUPABASE_ANON_KEY ontbreekt in de repo-variabelen."
+            exit 1
+          fi
+
+          code=$(curl -sS -o body.txt -w '%{http_code}' --max-time 30 \
+            "$URL/rest/v1/obligation_types?select=code&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY" || echo 000)
+
+          echo "HTTP $code"
+          head -c 300 body.txt; echo
+
+          # Een 401 van PostgREST met een Postgres-foutcode erin is géén
+          # mislukking voor dit doel: de anon-sleutel mag niets lezen (RLS), maar
+          # het verzoek is wél tot in Postgres geraakt en daar uitgevoerd. Dat
+          # is precies de activiteit die het project wakker houdt. Een 5xx of
+          # een uitblijvend antwoord betekent dat er niemand opnam -- dan staat
+          # het project waarschijnlijk alsnog op pauze en moet iemand kijken.
+          case "$code" in
+            2??)
+              uitkomst="ok — de databank gaf gegevens terug" ;;
+            401|403)
+              if grep -q '"code"' body.txt; then
+                uitkomst="ok — de databank antwoordde met een weigering (HTTP $code)"
+              else
+                echo "HTTP $code zonder antwoord van Postgres: het verzoek is daar niet geraakt."
+                exit 1
+              fi ;;
+            *)
+              echo "Geen bruikbaar antwoord (HTTP $code). Staat het project op pauze?"
+              exit 1 ;;
+          esac
+
+          echo "$uitkomst"
+          echo "Supabase aangetikt op $(date -u '+%Y-%m-%d %H:%M UTC'): $uitkomst" >> "$GITHUB_STEP_SUMMARY"

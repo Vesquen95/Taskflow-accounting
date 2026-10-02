@@ -1449,3 +1449,37 @@ testblok is één transactie, dus elke logregel draagt dezelfde `created_at` en
 **Live nagegaan.** De 18 taken van het dossier stonden na de reparatie op naam.
 Daarna wisselde het kantoor zelf terug in het scherm: 17 taken verhuisden mee,
 met de regel erover in de historiek.
+
+## §28 — Het project wakker houden (02/10/2026)
+
+Op 1 oktober liep het maandelijkse horizononderhoud **niet**. Niet omdat de job
+stuk is, maar omdat Supabase het project op pauze had gezet: pg_cron leeft ín de
+databank, en een slapende databank draait niets. Zo'n ronde wordt ook niet
+ingehaald — ze wordt overgeslagen. Het logboek sprong van 1 september naar niets.
+
+Op het gratis plan pauzeert Supabase na ongeveer een week zonder activiteit. Eén
+leesverzoek per dag is genoeg om dat te voorkomen, en dat doet
+`.github/workflows/supabase-wakker.yml` nu: dagelijks om 05:23 UTC één REST-call
+met de anon-sleutel.
+
+**Waarom lezen en niet een klant of taak aanmaken en weer verwijderen**, zoals
+eerst geopperd: in Taskflow is een schrijfactie nooit klein. Eén klant levert
+meteen een twintigtal gegenereerde taken op plus regels in `client_change_log`
+en `task_status_log`; verwijderen laat dat spoor staan of botst op verwijzingen,
+en het kan midden in een testronde vallen. Lezen bereikt hetzelfde zonder één
+rij aan te raken.
+
+**Waarom een 401 hier een goed teken is.** De anon-sleutel mag niets lezen (RLS),
+dus PostgREST antwoordt met `42501 permission denied`. Dat is een foutcode van
+Postgres zélf: het verzoek is tot in de databank geraakt en daar uitgevoerd, en
+dat is precies de activiteit die telt. De workflow aanvaardt daarom 2xx én een
+401/403 met een Postgres-code in het antwoord, en faalt luid op een 5xx of een
+uitblijvend antwoord — want dan nam er niemand op en staat het project
+vermoedelijk alsnog op pauze.
+
+**Twee dingen om te weten.** GitHub laat geplande workflows alleen vuren vanaf de
+**default branch** (hier is dat de werkbranch, want er is er maar één), en
+schakelt ze uit na 60 dagen zonder activiteit in de repo. En dit is
+best-effort: of Supabase's pauzeheuristiek precies deze activiteit meetelt, is
+niet van buitenaf te verifiëren. De echte proef is of het project de komende
+week wakker blijft.
