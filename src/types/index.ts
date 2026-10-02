@@ -272,6 +272,9 @@ export interface OnderhoudLog {
   aanleiding: string
   nieuwe_taken: number | null
   nieuwe_feestdagen: number | null
+  /** Taken die buiten de horizon vielen en geannuleerd zijn (migratie 0057).
+   *  Null voor rondes van vóór die migratie. */
+  gesnoeide_taken: number | null
   /** Gevuld wanneer de ronde afbrak. Een lege en een mislukte ronde tellen
    *  allebei nul taken; dit veld houdt ze uit elkaar. */
   fout: string | null

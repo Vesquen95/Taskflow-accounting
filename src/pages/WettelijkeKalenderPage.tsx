@@ -569,13 +569,22 @@ function OnderhoudStand({ onderhoud }: { onderhoud: OnderhoudLog | null }) {
           Laatste ronde {formatDateTime(onderhoud.gestart_op)} ({onderhoud.aanleiding}):{' '}
           {onderhoud.nieuwe_taken ?? 0} nieuwe {onderhoud.nieuwe_taken === 1 ? 'taak' : 'taken'},{' '}
           {onderhoud.nieuwe_feestdagen ?? 0} nieuwe{' '}
-          {onderhoud.nieuwe_feestdagen === 1 ? 'feestdag' : 'feestdagen'}.
-          {onderhoud.geeindigd_op === null && ' Nog bezig.'}
+          {onderhoud.nieuwe_feestdagen === 1 ? 'feestdag' : 'feestdagen'}
+          {/* Sinds 0057 snoeit de ronde ook. Dat is de helft die taken laat
+              verdwijnen, dus die hoort hier te staan en niet alleen in de
+              databank. */}
+          {onderhoud.gesnoeide_taken !== null && onderhoud.gesnoeide_taken > 0
+            ? `, ${onderhoud.gesnoeide_taken} taken buiten de horizon geannuleerd`
+            : ''}
+          .{onderhoud.geeindigd_op === null && ' Nog bezig.'}
         </p>
       )}
+      {/* Geen maandenaantal in deze zin: de horizon staat in de databank
+          (horizon_maanden(), migratie 0057) en is daar al een keer gewijzigd.
+          Een getal hier gaat vroeg of laat afwijken van wat er echt gebeurt. */}
       <p className="mt-1 text-xs text-slate-400">
-        Loopt elke maand op de 1e om 03:00 UTC: de horizon 36 maanden vooruit, de feestdagen
-        eroverheen.
+        Loopt elke maand op de 1e om 03:00 UTC: de horizon schuift op, taken die erbuiten vallen
+        worden geannuleerd, en de feestdagenkalender wordt aangevuld.
       </p>
     </section>
   )

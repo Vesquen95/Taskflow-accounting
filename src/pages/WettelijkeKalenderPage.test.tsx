@@ -15,7 +15,8 @@ const generateTaskInstances = vi.fn()
 const laadFeestdagen = vi.fn()
 let onderhoud: {
   id: string; gestart_op: string; geeindigd_op: string | null; aanleiding: string
-  nieuwe_taken: number | null; nieuwe_feestdagen: number | null; fout: string | null
+  nieuwe_taken: number | null; nieuwe_feestdagen: number | null
+  gesnoeide_taken: number | null; fout: string | null
 } | null = null
 
 const holidays = [
@@ -196,6 +197,7 @@ describe('WettelijkeKalenderPage — stand van het automatische onderhoud', () =
     aanleiding: 'cron',
     nieuwe_taken: 14,
     nieuwe_feestdagen: 10,
+    gesnoeide_taken: 0,
     fout: null,
   }
 
@@ -206,6 +208,34 @@ describe('WettelijkeKalenderPage — stand van het automatische onderhoud', () =
 
     expect(screen.getByText(/14 nieuwe taken/)).toBeInTheDocument()
     expect(screen.getByText(/10 nieuwe feestdagen/)).toBeInTheDocument()
+  })
+
+  it('noemt ook wat er gesnoeid werd -- dat is de helft die taken laat verdwijnen', () => {
+    rol = 'kantoorbeheerder'
+    onderhoud = { ...geslaagd, gesnoeide_taken: 23 }
+    render(<WettelijkeKalenderPage />)
+
+    expect(screen.getByText(/23 taken buiten de horizon geannuleerd/)).toBeInTheDocument()
+  })
+
+  it('zwijgt over snoeien als er niets gesnoeid werd', () => {
+    rol = 'kantoorbeheerder'
+    onderhoud = { ...geslaagd, gesnoeide_taken: 0 }
+    render(<WettelijkeKalenderPage />)
+
+    expect(screen.queryByText(/buiten de horizon geannuleerd/)).not.toBeInTheDocument()
+  })
+
+  it('belooft geen vast aantal maanden -- de horizon staat in de databank', () => {
+    // Dit stond er wel, en was al fout: 0057 zette de horizon van 36 op 15
+    // terwijl deze zin 36 bleef beweren.
+    rol = 'kantoorbeheerder'
+    onderhoud = geslaagd
+    render(<WettelijkeKalenderPage />)
+
+    const uitleg = screen.getByText(/Loopt elke maand op de 1e/)
+    expect(uitleg).toHaveTextContent('de horizon schuift op')
+    expect(uitleg.textContent).not.toMatch(/\d+ maanden/)
   })
 
   it('zet een mislukte ronde in het rood, met de fout erbij', () => {
