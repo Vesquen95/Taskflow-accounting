@@ -1635,3 +1635,33 @@ FOD publiceert per aanslagjaar. Overschakelen op aanslagjaar is ook mogelijk,
 maar niet triviaal: in België is het aanslagjaar het jaar waarin het boekjaar
 afsluit, *behalve* bij afsluiting op 31/12 — dan is het het jaar erna. Dat is een
 fiscale keuze, geen technische.
+
+## §32 — Het uitstel van aanslagjaar 2026, en wat het blootlegde (03/10/2026)
+
+**Uitstel, als rijen in de wettelijke kalender (geen code).** De FOD gaf uitstel
+tot 15/10/2026 voor VenB, RPB en BNI-ven met een termijn van 30/09 tot en met
+14/10/2026, en tot 31/10/2026 voor de PB met specifieke inkomsten. In
+productie staan daarvoor zeven override-rijen: VenB en RPB voor boekjaar 2025
+(cohort `boekjaar_12`) en boekjaar 2026 (cohorten `boekjaar_1`, `boekjaar_2`),
+en PB `vorm_complex` voor inkomstenjaar 2025.
+
+**Waarom drie nieuwe klanten geen VenB-taak hadden.** Een verplichting loopt
+vanaf de dag dat ze ingevoerd wordt (`geldig_vanaf`), en de motor maakt geen
+taak voor een deadline die daarvóór ligt. Op 03/10 lag 30/09 al achter ons.
+Met de override op 15/10 kwamen de taken er vanzelf.
+
+**Een fout die het uitstel zichtbaar maakte (0066).** Een nieuwe PB-klant die
+tussen juli en eind oktober werd toegevoegd, kreeg de aangifte over vorig jaar
+niet: de jaarlus begon een jaar te laat. De VenB had dat gat niet.
+
+**Les voor de volgende keer:** een aanmaakronde op een bestaand dossier maakt
+ook taken opnieuw aan die met de hand geannuleerd werden (dat is het ontwerp:
+"geannuleerd" geeft het periodeslot vrij; "niet van toepassing" doet dat niet).
+Bij PATO kwam zo VA3-2026 terug; dat is meteen rechtgezet. Vóór een
+aanmaakronde dus eerst kijken naar geannuleerde taken in het venster.
+
+**0062 staat in productie zonder de DROP.** Elke route die een `DROP` bevatte,
+liep vast op de bevestiging voor destructieve statements. De demofunctie wordt
+nergens meer aangeroepen en niemand mag ze nog uitvoeren; ze weghalen kan met
+de hand in de SQL-editor van Supabase:
+`drop function public.seed_demo_data_for_firm(uuid, uuid);`

@@ -8785,4 +8785,64 @@ begin
   raise notice 'PASS 67.3: een vooruitschuivende taak schuift nog steeds vooruit';
 end $$;
 
+-- ============================================================
+-- Sectie 68 (0066): een nieuwe PB-klant krijgt de aangifte van het lopende
+-- seizoen.
+--
+-- Een klant aangemaakt op een dag na 1 juli: het terugkijkvenster is nul, en
+-- de motor bekeek dan alleen het lopende inkomstenjaar. De aangifte over
+-- vorig jaar, die nog tot 16 oktober loopt, ontbrak.
+--
+-- Datumvast: de test rekent de verwachting uit vandaag. Na 16 oktober is die
+-- aangifte voorbij en hoort ze er NIET te staan -- ook dat wordt getoetst.
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid; v_ot_pb uuid; v_klant uuid;
+  v_vorig int := extract(year from current_date)::int - 1;
+  v_deadline date := make_date(extract(year from current_date)::int, 10, 16);
+  v_n int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's68@test.local', now());
+  insert into public.firms (naam) values ('Sectie 68 kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S68 Beheerder', 's68@test.local', 'kantoorbeheerder', true, true)
+    returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+
+  select id into v_ot_pb from public.obligation_types where code = 'aangifte_pb';
+  insert into public.clients (firm_id, naam, klantsoort, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S68 Particulier', 'natuurlijk_persoon', 'Andere', 12, 31, 'geen', true)
+    returning id into v_klant;
+  -- Vandaag toegevoegd, zoals in het scherm: geldig vanaf vandaag.
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot_pb, true, current_date);
+
+  -- Zoals het opslaan van een klant: geen terugkijkvenster.
+  perform public.generate_task_instances_intern(v_firm, public.horizon_maanden(), 0, v_klant);
+
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_pb
+     and periode_label = v_vorig::text and status = 'open';
+
+  if v_deadline >= current_date and v_n <> 1 then
+    raise exception 'FAIL 68.1: de aangifte over inkomstenjaar % (deadline %) ontbreekt bij een klant van vandaag', v_vorig, v_deadline;
+  end if;
+  if v_deadline < current_date and v_n <> 0 then
+    raise exception 'FAIL 68.1: een aangifte met een voorbije deadline (%) werd toch aangemaakt', v_deadline;
+  end if;
+  raise notice 'PASS 68.1: inkomstenjaar % is er % (deadline %)', v_vorig,
+    case when v_n = 1 then 'wel' else 'niet, terecht' end, v_deadline;
+
+  -- 68.2 Niets ouder dan dat: inkomstenjaar J-2 heeft een voorbije deadline.
+  select count(*) into v_n from public.task_instances
+   where client_id = v_klant and obligation_type_id = v_ot_pb
+     and periode_label = (v_vorig - 1)::text;
+  if v_n <> 0 then
+    raise exception 'FAIL 68.2: er werd een aangifte over inkomstenjaar % aangemaakt', v_vorig - 1;
+  end if;
+  raise notice 'PASS 68.2: geen aangifte met een deadline in het verleden';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
