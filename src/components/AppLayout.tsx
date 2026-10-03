@@ -6,6 +6,7 @@ import { klokTijd, SESSIE_UREN } from '../lib/sessieduur'
 import { INGANGEN } from '../lib/werkstromen'
 import { useKleinScherm } from '../hooks/useKleinScherm'
 import { magOverzichtZien } from '../lib/overzicht'
+import { useTeKeuren } from '../hooks/useTeKeuren'
 
 interface NavItem {
   view: string
@@ -99,6 +100,53 @@ function huidigeTitel(activeView: string, activeParam: string | undefined, klein
   return activeView === 'klanten' ? 'Klanten' : 'Taskflow'
 }
 
+/** Wie er aangemeld is, de sessieknop en uitloggen.
+ *
+ *  Op een computer staat dit in een eigen balk bovenaan, los van de zijbalk.
+ *  Vroeger stond het onderaan de zijbalk, en die rekt mee met de pagina: op
+ *  een lange kalender zakte "uitloggen" daardoor tot helemaal onderaan, waar
+ *  je eerst naartoe moest scrollen. */
+function Gebruiker({ employee, inBalk = false }: { employee: Employee; inBalk?: boolean }) {
+  const { signOut } = useAuth()
+  const { langeSessie, zetLangeSessie, eindeSessie } = useSessiebediening()
+  const knop = 'block text-xs font-medium focus:outline-none focus-visible:underline'
+  return (
+    <div className={inBalk ? 'flex min-w-0 items-center gap-5' : ''}>
+      <div className={inBalk ? 'min-w-0 text-right' : ''}>
+        <p className="truncate text-sm font-medium text-slate-800">{employee.naam}</p>
+        <p className="truncate text-xs text-slate-400">
+          {employee.rol === 'kantoorbeheerder' ? 'Kantoorbeheerder' : 'Medewerker'}
+          {employee.mag_goedkeuren ? ' · mag goedkeuren' : ''}
+        </p>
+      </div>
+      {/* Normaal sluit het scherm zichzelf af na een half uur stilte.
+          Wie een dag lang met hetzelfde dossier bezig is, wil daar niet
+          telkens op klikken -- vandaar deze knop. De grens van twaalf uur
+          blijft staan, en de keuze verdwijnt bij het afmelden: ze geldt
+          voor deze aanmelding en niet langer. */}
+      <button
+        type="button"
+        onClick={() => zetLangeSessie(!langeSessie)}
+        aria-pressed={langeSessie}
+        className={`${inBalk ? 'shrink-0' : 'mt-2'} ${knop} ${
+          langeSessie ? 'text-amber-700 hover:text-amber-900' : 'text-slate-500 hover:text-slate-800'
+        }`}
+      >
+        {langeSessie
+          ? `Blijft open${eindeSessie ? ` tot ${klokTijd(eindeSessie)}` : ''} — zet uit`
+          : `Sessie ${SESSIE_UREN} uur openhouden`}
+      </button>
+      <button
+        type="button"
+        onClick={() => void signOut()}
+        className={`${inBalk ? 'shrink-0' : 'mt-2'} ${knop} text-slate-500 hover:text-slate-800`}
+      >
+        Uitloggen
+      </button>
+    </div>
+  )
+}
+
 export function AppLayout({
   employee,
   activeView,
@@ -112,8 +160,6 @@ export function AppLayout({
   navigate: (view: string, param?: string) => void
   children: ReactNode
 }) {
-  const { signOut } = useAuth()
-  const { langeSessie, zetLangeSessie, eindeSessie } = useSessiebediening()
   // Op een telefoon staat de zijbalk in de weg: 240 van de 390 pixels zijn
   // dan navigatie. Daarom schuift ze daar open en dicht. Vanaf lg (1024px)
   // bestaat deze schakelaar niet: daar staat de balk gewoon vast, zoals ze
@@ -121,6 +167,8 @@ export function AppLayout({
   const kleinScherm = useKleinScherm()
   const groepen = navGroepen(kleinScherm)
   const [menuOpen, setMenuOpen] = useState(false)
+  // Wie niet mag goedkeuren, ziet het menu-item niet en vraagt dus ook niets op.
+  const teKeuren = useTeKeuren(employee.mag_goedkeuren, `${activeView}/${activeParam ?? ''}`)
 
   // Terug naar het werk zodra je iets gekozen hebt. Een menu dat open blijft
   // staan over het scherm dat je net opvroeg is op een telefoon hinderlijk.
@@ -141,7 +189,7 @@ export function AppLayout({
   }, [menuOpen])
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-slate-50 lg:h-screen lg:min-h-0 lg:overflow-hidden">
       {/* De bovenbalk bestaat alleen op een klein scherm. Ze houdt twee dingen
           vast die je anders kwijt bent zodra de zijbalk dichtgaat: waar je
           bent, en hoe je ergens anders komt. */}
@@ -190,11 +238,12 @@ export function AppLayout({
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="border-b border-slate-200 px-4 py-4">
+        <div className="flex h-16 shrink-0 flex-col justify-center border-b border-slate-200 px-4">
           {/* Klein gehouden: in de zijbalk is de navigatie het onderwerp, niet
-              het merk. Het logo bevestigt alleen waar je zit. */}
-          <img src={`${import.meta.env.BASE_URL}rsm-logo.svg`} alt="RSM" className="h-6 w-auto" />
-          <span className="mt-2 block text-sm font-semibold text-slate-900">Taskflow</span>
+              het merk. Het logo bevestigt alleen waar je zit. Even hoog als de
+              balk ernaast, zodat de onderlijn doorloopt. */}
+          <img src={`${import.meta.env.BASE_URL}rsm-logo.svg`} alt="RSM" className="h-5 w-auto self-start" />
+          <span className="mt-1 block text-sm font-semibold text-slate-900">Taskflow</span>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
           {groepen.map((groep) => {
@@ -216,13 +265,30 @@ export function AppLayout({
                       key={`${item.view}/${item.param ?? ''}`}
                       type="button"
                       onClick={() => ga(item.view, item.param)}
+                      aria-label={
+                        item.view === 'goedkeuring' && teKeuren > 0
+                          ? `${item.label}, ${teKeuren > 99 ? 'meer dan 99' : teKeuren} te keuren`
+                          : undefined
+                      }
                       className={`block w-full rounded-md px-3 py-2 text-left text-sm font-medium transition ${
                         actief
                           ? 'bg-brand-50 text-brand-700'
                           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                       }`}
                     >
-                      {item.label}
+                      {item.view === 'goedkeuring' && teKeuren > 0 ? (
+                        <span className="flex items-center justify-between gap-2">
+                          {item.label}
+                          {/* Dezelfde amber als de statusbadge "wacht op
+                              goedkeuring": wie de kleur kent, leest het getal.
+                              Een schermlezer krijgt de zin via aria-label. */}
+                          <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-amber-800">
+                            {teKeuren > 99 ? '99+' : teKeuren}
+                          </span>
+                        </span>
+                      ) : (
+                        item.label
+                      )}
                     </button>
                   )
                 })}
@@ -230,40 +296,25 @@ export function AppLayout({
             )
           })}
         </nav>
-        <div className="border-t border-slate-200 p-3">
-          <p className="truncate text-sm font-medium text-slate-800">{employee.naam}</p>
-          <p className="truncate text-xs text-slate-400">
-            {employee.rol === 'kantoorbeheerder' ? 'Kantoorbeheerder' : 'Medewerker'}
-            {employee.mag_goedkeuren ? ' · mag goedkeuren' : ''}
-          </p>
-          {/* Normaal sluit het scherm zichzelf af na een half uur stilte.
-              Wie een dag lang met hetzelfde dossier bezig is, wil daar niet
-              telkens op klikken -- vandaar deze knop. De grens van twaalf uur
-              blijft staan, en de keuze verdwijnt bij het afmelden: ze geldt
-              voor deze aanmelding en niet langer. */}
-          <button
-            type="button"
-            onClick={() => zetLangeSessie(!langeSessie)}
-            aria-pressed={langeSessie}
-            className={`mt-2 block text-xs font-medium focus:outline-none focus-visible:underline ${
-              langeSessie ? 'text-amber-700 hover:text-amber-900' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            {langeSessie
-              ? `Blijft open${eindeSessie ? ` tot ${klokTijd(eindeSessie)}` : ''} — zet uit`
-              : `Sessie ${SESSIE_UREN} uur openhouden`}
-          </button>
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="mt-2 block text-xs font-medium text-slate-500 hover:text-slate-800 focus:outline-none focus-visible:underline"
-          >
-            Uitloggen
-          </button>
-        </div>
+        {/* Op een telefoon is er geen ruimte voor een tweede balk; daar staat
+            wie je bent onderaan het uitschuifmenu. */}
+        {kleinScherm && (
+          <div className="border-t border-slate-200 p-3">
+            <Gebruiker employee={employee} />
+          </div>
+        )}
       </aside>
-      {/* pt-14 laat de vaste bovenbalk vrij; vanaf lg is er geen balk. */}
-      <main className="min-w-0 flex-1 overflow-y-auto pt-14 lg:pt-0">{children}</main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Op een computer: een eigen balk bovenaan voor wie er aangemeld is.
+            Ze scrolt niet mee; alleen de inhoud eronder doet dat. */}
+        {!kleinScherm && (
+          <div className="flex h-16 shrink-0 items-center justify-end border-b border-slate-200 bg-white px-6">
+            <Gebruiker employee={employee} inBalk />
+          </div>
+        )}
+        {/* pt-14 laat de vaste telefoonbalk vrij; vanaf lg is er geen. */}
+        <main className="min-w-0 flex-1 overflow-y-auto pt-14 lg:pt-0">{children}</main>
+      </div>
     </div>
   )
 }

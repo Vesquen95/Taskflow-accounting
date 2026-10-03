@@ -21,6 +21,11 @@ vi.mock('../hooks/useSessie', () => ({
   }),
 }))
 
+let teKeuren = 0
+vi.mock('../hooks/useTeKeuren', () => ({
+  useTeKeuren: (actief: boolean) => (actief ? teKeuren : 0),
+}))
+
 const employee: Employee = {
   id: 'e1',
   firm_id: 'f1',
@@ -158,6 +163,57 @@ describe('AppLayout — het hoofdscherm heet op een telefoon anders', () => {
   })
 })
 
+
+describe('AppLayout — het getal naast Goedkeuren', () => {
+  afterEach(() => {
+    teKeuren = 0
+  })
+
+  it('toont hoeveel er op goedkeuring wacht', () => {
+    teKeuren = 3
+    toon()
+    const knop = screen.getByRole('button', { name: 'Goedkeuren, 3 te keuren' })
+    expect(knop).toHaveTextContent('3')
+  })
+
+  it('toont niets als er niets wacht', () => {
+    // Een "0" naast elk menu-item is ruis; het getal moet opvallen omdat het
+    // er meestal niet staat.
+    toon()
+    expect(screen.getByRole('button', { name: 'Goedkeuren' })).toHaveTextContent(/^Goedkeuren$/)
+  })
+
+  it('houdt het kort boven de honderd', () => {
+    teKeuren = 140
+    toon()
+    expect(screen.getByRole('button', { name: 'Goedkeuren, meer dan 99 te keuren' })).toHaveTextContent('99+')
+  })
+})
+
+describe('AppLayout — wie er aangemeld is', () => {
+  it('staat op een computer in een eigen balk, niet onderaan de zijbalk', () => {
+    // De zijbalk rekt mee met de pagina. Op een lange kalender zakte
+    // "Uitloggen" daardoor tot helemaal onderaan het scherm.
+    toon()
+    const zijbalk = screen.getByRole('complementary')
+    expect(zijbalk).not.toHaveTextContent('Jan Janssens')
+    expect(zijbalk).not.toContainElement(screen.getByRole('button', { name: 'Uitloggen' }))
+    expect(screen.getByRole('main')).not.toContainElement(screen.getByRole('button', { name: 'Uitloggen' }))
+  })
+
+  it('staat op een telefoon in het uitschuifmenu', () => {
+    // Daar is geen plaats voor een tweede balk.
+    const herstel = stelSchermIn(true)
+    try {
+      toon()
+      const zijbalk = screen.getByRole('complementary')
+      expect(zijbalk).toHaveTextContent('Jan Janssens')
+      expect(zijbalk).toContainElement(screen.getByRole('button', { name: 'Uitloggen' }))
+    } finally {
+      herstel()
+    }
+  })
+})
 
 describe('AppLayout — de sessie openhouden', () => {
   afterEach(() => {

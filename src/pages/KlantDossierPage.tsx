@@ -23,6 +23,7 @@ import { reportError } from '../lib/errorMessage'
 import { taakRegel } from '../lib/taakLabel'
 import { logWaarde, veldLabel } from '../lib/wijzigingslog'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
+import { meldStatusGewijzigd } from '../hooks/useTeKeuren'
 
 
 /** Klantdossier (§4 point 3): alle verplichtingen, status/historiek,
@@ -114,6 +115,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     const { error: err } = await supabase.from('task_instances').update({ status }).eq('id', taskId)
     if (err) throw err
     await reload()
+    meldStatusGewijzigd()
   }
 
   async function reassignTask(taskId: string, toegewezen_medewerker_id: string | null) {

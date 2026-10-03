@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
 import { reportError } from '../lib/errorMessage'
 import { voerBulkUit, type BulkResultaat } from '../lib/bulkActie'
+import { meldStatusGewijzigd } from './useTeKeuren'
 
 /** De velden die een bulkactie mag schrijven — één status of één toewijzing. */
 type TaakPatch = { status: TaskStatus } | { toegewezen_medewerker_id: string | null }
@@ -207,12 +208,14 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
     })
     if (err) throw err
     await load()
+    meldStatusGewijzigd()
   }
 
   async function updateStatus(taskId: string, status: TaskStatus) {
     const { error: err } = await supabase.from('task_instances').update({ status }).eq('id', taskId)
     if (err) throw err
     await load()
+    meldStatusGewijzigd()
   }
 
   async function reassign(taskId: string, toegewezen_medewerker_id: string | null) {
@@ -249,6 +252,7 @@ export function useTaskInstances(initialFilters: TaskInstanceFilters = {}) {
       async (id) => (await updateTaken([id], patch)).length > 0
     )
     await load()
+    meldStatusGewijzigd()
     return resultaat
   }
 
