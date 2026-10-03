@@ -1662,6 +1662,7 @@ aanmaakronde dus eerst kijken naar geannuleerde taken in het venster.
 
 **0062 staat in productie zonder de DROP.** Elke route die een `DROP` bevatte,
 liep vast op de bevestiging voor destructieve statements. De demofunctie wordt
-nergens meer aangeroepen en niemand mag ze nog uitvoeren; ze weghalen kan met
-de hand in de SQL-editor van Supabase:
-`drop function public.seed_demo_data_for_firm(uuid, uuid);`
+nergens meer aangeroepen en niemand mag ze nog uitvoeren. Op 03/10/2026 met
+de hand verwijderd in de SQL-editor van Supabase
+(`drop function public.seed_demo_data_for_firm(uuid, uuid);`), zodat
+productie nu gelijk is aan wat 0062 beschrijft.
