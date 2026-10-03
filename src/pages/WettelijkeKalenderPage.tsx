@@ -4,6 +4,7 @@ import { useObligationTypes } from '../hooks/useObligationTypes'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useEmployees } from '../hooks/useEmployees'
 import { ErrorState } from '../components/ErrorState'
+import { MailStand } from '../components/MailStand'
 import { Modal } from '../components/Modal'
 import { formatDate, formatDateTime } from '../lib/urgency'
 import { dekkingStatus } from '../lib/feestdagen'
@@ -156,11 +157,14 @@ export function WettelijkeKalenderPage() {
 
       <OnderhoudStand onderhoud={onderhoud} />
 
+      <MailStand />
+
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="mb-2 text-sm font-semibold text-slate-800">Taakgeneratie</h2>
         <p className="mb-3 text-xs text-slate-500">
-          Er is in deze build geen scheduler/cron actief — genereer nieuwe taakinstanties (rollende horizon van 3 maanden
-          vooruit, 6 maanden backfill) hier expliciet. Idempotent: veilig om herhaaldelijk te draaien.
+          Loopt ook vanzelf, elke maand (zie hierboven). Hier start je een ronde met de hand, bv. na het invoeren van
+          een uitstel. Veilig om herhaaldelijk te draaien — maar een taak die met de hand geannuleerd werd, kan zo
+          terugkomen. Wil je dat niet, zet ze dan op &quot;niet van toepassing&quot;.
         </p>
         <button
           type="button"

@@ -1666,3 +1666,45 @@ nergens meer aangeroepen en niemand mag ze nog uitvoeren. Op 03/10/2026 met
 de hand verwijderd in de SQL-editor van Supabase
 (`drop function public.seed_demo_data_for_firm(uuid, uuid);`), zodat
 productie nu gelijk is aan wat 0062 beschrijft.
+
+## §33 — Mails (03/10/2026)
+
+**Drie soorten, één weg naar buiten** (0067, 0068, Edge Function
+`mail-verzenden`):
+
+1. **Meldingen.** Een taak die een collega op jouw naam zet, een aangifte die
+   op je goedkeuring wacht, een aangifte die teruggestuurd werd. Een trigger
+   zet een regel in `mail_meldingen`; elke vijf minuten bundelt de functie
+   alles per ontvanger tot één mail (pas als een regel twee minuten oud is,
+   zodat een bulkactie in één mail landt). Niet gemaild: wat je zelf doet, en
+   wat de motor aanmaakt — daarvoor is de maandagmail. De teammuur geldt ook
+   hier.
+2. **De maandagmail** (0043). Maandag 05:00 UTC, alleen naar wie iets open
+   heeft, nooit twee keer op dezelfde dag (`mail_verzonden`).
+3. **Systeemberichten.** De maandelijkse fiscale controle levert haar rapport
+   in via `systeembericht_insturen()` (met een eigen sleutel, max. tien per
+   dag); de kantoorbeheerders krijgen het als mail. De meldingen van de
+   Routine zelf kwamen op 1 oktober niet aan.
+
+**Versturen via Gmail**, poort 465 (Supabase laat 25 en 587 niet toe). Het
+afzenderadres en een app-wachtwoord staan als geheimen bij de functie
+(`GMAIL_GEBRUIKER`, `GMAIL_APP_WACHTWOORD`), niet in de repo. Zolang ze
+ontbreken antwoordt de functie 503 en blijft alles wachten; de mailkaart op
+het scherm Wettelijke kalender zegt dat dan ook.
+
+**Testfase:** `mail_instellingen.omleiden_naar` staat in productie op het
+adres van de kantoorbeheerder. Elke mail gaat daarheen, met de echte
+ontvanger in het onderwerp. Uitzetten wanneer collega's echt mail mogen
+krijgen: `update public.mail_instellingen set omleiden_naar = null where id;`
+
+**Geen geheimen in de repo.** De twee sleutels (cron en systeemberichten)
+maakt de databank zelf aan in `intern.geheimen`, een schema dat de API niet
+openstelt. Het adres van de app en van de functie staan in
+`mail_instellingen`, in productie ingevuld.
+
+**De opmaak** (`src/lib/weekoverzicht.ts`, `src/lib/meldingMail.ts`) wordt
+getest in de app en als kopie meegeleverd aan de functie; een test bewaakt
+dat de kopie gelijk blijft.
+
+**Nog niet gebouwd:** een persoonlijke uitschakelaar per medewerker, en een
+melding bij goedkeuring ("je aangifte is goedgekeurd").

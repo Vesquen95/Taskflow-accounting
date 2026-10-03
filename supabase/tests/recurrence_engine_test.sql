@@ -8845,4 +8845,202 @@ begin
   raise notice 'PASS 68.2: geen aangifte met een deadline in het verleden';
 end $$;
 
+-- ============================================================
+-- Sectie 69 (0067): wie krijgt een mail van een taakwijziging?
+--
+-- 69.1 toegewezen door een collega -> de nieuwe eigenaar
+-- 69.2 jezelf toewijzen -> niemand
+-- 69.3 wat de motor toewijst -> niemand (daar is de maandagmail voor)
+-- 69.4 ter goedkeuring -> elke goedkeurder die het dossier mag zien,
+--      niet wie indiende, niet wie achter de teammuur zit
+-- 69.5 teruggestuurd -> wie indiende
+-- 69.6 de functie bundelt per ontvanger
+-- 69.7 systeemberichten: alleen met de juiste sleutel
+-- 69.8 de app kan niet aan de wachtrij
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_team_a uuid; v_team_b uuid;
+  v_admin uuid; v_admin_uid uuid := gen_random_uuid();
+  v_mw uuid; v_mw_uid uuid := gen_random_uuid();
+  v_partner uuid; v_partner_uid uuid := gen_random_uuid();
+  v_ander uuid; v_ander_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot uuid; v_taak uuid; v_taak2 uuid;
+  v_n int; v_sleutel text; v_ok boolean;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_admin_uid, 's69a@test.local', now()), (v_mw_uid, 's69m@test.local', now()),
+    (v_partner_uid, 's69p@test.local', now()), (v_ander_uid, 's69b@test.local', now());
+  insert into public.firms (naam) values ('S69 Kantoor') returning id into v_firm;
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S69A', 'S69 Team A', 'Aalst') returning id into v_team_a;
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S69B', 'S69 Team B', 'Gent') returning id into v_team_b;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_admin_uid, 'S69 Beheerder', 's69a@test.local', 'kantoorbeheerder', true, true) returning id into v_admin;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_mw_uid, 'S69 Medewerker', 's69m@test.local', 'medewerker', false, true) returning id into v_mw;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_partner_uid, 'S69 Partner', 's69p@test.local', 'medewerker', true, true) returning id into v_partner;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_ander_uid, 'S69 Ander team', 's69b@test.local', 'medewerker', true, true) returning id into v_ander;
+  insert into public.employee_teams (employee_id, team_id) values
+    (v_mw, v_team_a), (v_partner, v_team_a), (v_ander, v_team_b);
+
+  perform set_config('taskflow.test_uid', v_admin_uid::text, true);
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S69 Klant', 12, 31, 'geen', true, v_team_a) returning id into v_klant;
+  select id into v_ot from public.obligation_types where code = 'aangifte_venb_pb';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot, true, current_date);
+  perform public.generate_task_instances_intern(v_firm, public.horizon_maanden(), 0, v_klant);
+
+  -- 69.3 De motor maakte taken aan; niemand hoort daar iets van.
+  select count(*) into v_n from public.mail_meldingen m
+    join public.task_instances ti on ti.id = m.task_instance_id where ti.client_id = v_klant;
+  if v_n <> 0 then
+    raise exception 'FAIL 69.3: de motor leverde % melding(en) op', v_n;
+  end if;
+  raise notice 'PASS 69.3: wat de motor aanmaakt, mailt niet';
+
+  select id into v_taak from public.task_instances where client_id = v_klant and status = 'open'
+   order by due_date limit 1;
+
+  -- 69.1 De beheerder zet een taak op naam van de medewerker.
+  update public.task_instances set toegewezen_medewerker_id = v_mw where id = v_taak;
+  select count(*) into v_n from public.mail_meldingen
+   where task_instance_id = v_taak and employee_id = v_mw and soort = 'toegewezen' and door_employee_id = v_admin;
+  if v_n <> 1 then
+    raise exception 'FAIL 69.1: toegewezen door een collega gaf % melding(en) i.p.v. 1', v_n;
+  end if;
+  raise notice 'PASS 69.1: wie een taak van een collega krijgt, hoort het';
+
+  -- 69.2 Wat je zelf doet, mailt niet: een ad-hoc taak voor jezelf, en een
+  --      ad-hoc taak die je een collega geeft wél.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  insert into public.task_instances (
+    client_id, obligation_type_id, client_obligation_id, title, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (
+    v_klant, null, null, 'S69 voor mezelf', current_date + 3, current_date + 3,
+    'open', v_mw, 'handmatig_adhoc', false
+  ) returning id into v_taak2;
+  select count(*) into v_n from public.mail_meldingen where task_instance_id = v_taak2;
+  if v_n <> 0 then
+    raise exception 'FAIL 69.2: een taak voor jezelf aanmaken gaf % melding(en)', v_n;
+  end if;
+  insert into public.task_instances (
+    client_id, obligation_type_id, client_obligation_id, title, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring
+  ) values (
+    v_klant, null, null, 'S69 voor de partner', current_date + 3, current_date + 3,
+    'open', v_partner, 'handmatig_adhoc', false
+  ) returning id into v_taak2;
+  select count(*) into v_n from public.mail_meldingen
+   where task_instance_id = v_taak2 and employee_id = v_partner and soort = 'toegewezen';
+  if v_n <> 1 then
+    raise exception 'FAIL 69.2: een ad-hoc taak voor een collega gaf % melding(en) i.p.v. 1', v_n;
+  end if;
+  raise notice 'PASS 69.2: een taak voor jezelf mailt niet, een voor een collega wel';
+
+  -- 69.4 De medewerker dient in.
+  update public.task_instances set status = 'in_uitvoering' where id = v_taak;
+  update public.task_instances set status = 'wacht_op_goedkeuring' where id = v_taak;
+  select count(*) into v_n from public.mail_meldingen where task_instance_id = v_taak and soort = 'ter_goedkeuring';
+  if v_n <> 2
+     or not exists (select 1 from public.mail_meldingen where task_instance_id = v_taak and soort = 'ter_goedkeuring' and employee_id = v_admin)
+     or not exists (select 1 from public.mail_meldingen where task_instance_id = v_taak and soort = 'ter_goedkeuring' and employee_id = v_partner)
+  then
+    raise exception 'FAIL 69.4: ter goedkeuring ging naar % ontvanger(s), niet precies beheerder + partner', v_n;
+  end if;
+  if exists (select 1 from public.mail_meldingen where task_instance_id = v_taak and soort = 'ter_goedkeuring' and employee_id in (v_mw, v_ander)) then
+    raise exception 'FAIL 69.4: de indiener of iemand achter de teammuur kreeg een melding';
+  end if;
+  raise notice 'PASS 69.4: ter goedkeuring gaat naar wie mag goedkeuren én het dossier ziet';
+
+  -- 69.5 De partner stuurt terug.
+  perform set_config('taskflow.test_uid', v_partner_uid::text, true);
+  update public.task_instances set status = 'in_uitvoering' where id = v_taak;
+  select count(*) into v_n from public.mail_meldingen
+   where task_instance_id = v_taak and soort = 'teruggestuurd' and employee_id = v_mw and door_employee_id = v_partner;
+  if v_n <> 1 then
+    raise exception 'FAIL 69.5: teruggestuurd gaf % melding(en) aan de indiener i.p.v. 1', v_n;
+  end if;
+  raise notice 'PASS 69.5: wie terugstuurt, laat het de indiener weten';
+
+  -- 69.6 Gebundeld per ontvanger.
+  select count(*) into v_n from public.mail_meldingen_klaar(interval '0') where employee_id = v_mw;
+  if v_n <> 1 then
+    raise exception 'FAIL 69.6: de medewerker staat % keer in de bundel i.p.v. 1', v_n;
+  end if;
+  select jsonb_array_length(meldingen) into v_n from public.mail_meldingen_klaar(interval '0') where employee_id = v_mw;
+  if v_n <> 2 then
+    raise exception 'FAIL 69.6: de bundel van de medewerker telt % regels i.p.v. 2', v_n;
+  end if;
+  select count(*) into v_n from public.mail_meldingen_klaar(interval '1 hour');
+  if v_n <> 0 then
+    raise exception 'FAIL 69.6: wat net gebeurde, wachtte niet op de rustperiode';
+  end if;
+  raise notice 'PASS 69.6: één mail per ontvanger, pas na een rustige periode';
+
+  -- 69.7 Systeemberichten.
+  v_ok := false;
+  begin
+    perform public.systeembericht_insturen('fout', 'x', 'y');
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 69.7: een verkeerde sleutel werd aanvaard';
+  end if;
+  select waarde into v_sleutel from intern.geheimen where naam = 'systeembericht';
+  perform public.systeembericht_insturen(v_sleutel, 'Fiscale controle', 'Niets veranderd.');
+  if not exists (select 1 from public.systeemberichten_klaar() where onderwerp = 'Fiscale controle'
+                  and 's69a@test.local' = any(ontvangers) and not ('s69p@test.local' = any(ontvangers))) then
+    raise exception 'FAIL 69.7: het systeembericht staat niet klaar voor (enkel) de kantoorbeheerders';
+  end if;
+  raise notice 'PASS 69.7: een systeembericht komt alleen binnen met de juiste sleutel, en gaat naar de beheerders';
+end $$;
+
+-- 69.8 De app kan niet aan de wachtrij, de geheimen of de interne functies.
+-- Twee lagen: in productie neemt 0067 de tabelrechten af; deze harnas geeft ze
+-- hierboven (regel ~505) terug aan authenticated, zoals Supabase standaard
+-- doet. Dan moet RLS zonder policies het werk doen: niets zichtbaar.
+do $$
+declare v_n int;
+begin
+  -- Niemand aangemeld: een vorige sectie kan een sessiebrede gebruiker
+  -- hebben laten staan.
+  perform set_config('taskflow.test_uid', '', true);
+  set local role authenticated;
+  begin
+    select count(*) into v_n from public.mail_meldingen;
+    if v_n <> 0 then
+      raise exception 'FAIL 69.8: authenticated ziet % rij(en) in de wachtrij', v_n;
+    end if;
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    select count(*) into v_n from public.systeemberichten;
+    if v_n <> 0 then
+      raise exception 'FAIL 69.8: authenticated ziet % systeembericht(en)', v_n;
+    end if;
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform count(*) from intern.geheimen;
+    raise exception 'FAIL 69.8: authenticated kan de geheimen lezen';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.mail_meldingen_klaar(interval '0');
+    raise exception 'FAIL 69.8: authenticated kan de bundel opvragen';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.mail_status();
+    raise exception 'FAIL 69.8: mail_status() antwoordde zonder kantoorbeheerder';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  raise notice 'PASS 69.8: wachtrij, geheimen en interne functies zijn dicht voor de app';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
