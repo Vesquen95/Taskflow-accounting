@@ -1729,6 +1729,12 @@ worden; nog zonder bedragen, die komen later met de opdrachtbrief.
 - Lezen volgt de teammuur (`can_access_client`); schrijven kan alleen via de
   drie databankfuncties, die zelf stempelen.
 
+**Ook in het klantdossier** (09/10): een blok *Te factureren* onder de
+openstaande taken, met wat er voor die klant nog open staat, dezelfde knoppen
+als op het scherm, en een eigen "+ Post toevoegen" zonder klantkeuze. De
+historiek blijft op het scherm Te factureren. Een post die vanuit het
+taakvenster op de lijst komt, verschijnt meteen in het blok eronder.
+
 **Bewust niet automatisch:** een afgewerkte taak komt niet vanzelf op de
 lijst. Of een btw-aangifte apart aangerekend wordt of in een forfait zit,
 weet Taskflow pas met de opdrachtbrief.

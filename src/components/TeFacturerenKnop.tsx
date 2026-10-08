@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { reportError } from '../lib/errorMessage'
 import { formatDate } from '../lib/urgency'
 import { taakRegel } from '../lib/taakLabel'
+import { meldFactuurpostenGewijzigd, vandaag } from '../lib/facturatie'
 import type { TaskInstanceWithRelations } from '../types'
 
 interface OpenPost {
@@ -11,10 +12,6 @@ interface OpenPost {
   aangemaakt: { naam: string } | null
 }
 
-function vandaag(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 /**
  * "Op de lijst te factureren" vanuit een taak (migratie 0069).
@@ -65,6 +62,7 @@ export function TeFacturerenKnop({ task }: { task: TaskInstanceWithRelations }) 
       setFout(reportError(error, 'Op de lijst te factureren'))
       return
     }
+    meldFactuurpostenGewijzigd()
     await laad()
   }
 

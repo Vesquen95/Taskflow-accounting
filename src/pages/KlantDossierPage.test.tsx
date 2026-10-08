@@ -5,6 +5,7 @@ import type { Mock } from 'vitest'
 import { supabase } from '../lib/supabase'
 import { createSupabaseMock, type ChainState, type SupabaseHandlers } from '../test/supabaseMock'
 import { KlantDossierPage } from './KlantDossierPage'
+import { meldFactuurpostenGewijzigd } from '../lib/facturatie'
 
 vi.mock('../lib/supabase', () => ({
   supabase: { from: vi.fn(), rpc: vi.fn(), auth: {} },
@@ -227,5 +228,83 @@ describe('KlantDossierPage — de wijzigingshistoriek leesbaar', () => {
     expect(li).toHaveTextContent('6 openstaande taken stonden op Els Peeters')
     expect(li).toHaveTextContent('Rik Claes')
     expect(li.textContent).not.toMatch(/8f3c1a2b/)
+  })
+})
+
+describe('KlantDossierPage — te factureren', () => {
+  const openPost = {
+    id: 'p1',
+    client_id: 'c1',
+    task_instance_id: null,
+    omschrijving: 'Bijkomend advies',
+    uitgevoerd_op: '2026-10-01',
+    notitie: null,
+    status: 'te_factureren',
+    factuurreferentie: null,
+    aangemaakt_door: 'e1',
+    aangemaakt_op: '2026-10-01T10:00:00Z',
+    afgehandeld_door: null,
+    afgehandeld_op: null,
+    client: { id: 'c1', naam: 'Acme BV', vertrouwelijk: false, team_id: null },
+    aangemaakt: { id: 'e1', naam: 'Jan' },
+    afgehandeld: null,
+  }
+
+  it('toont wat er voor deze klant nog te factureren is, en alleen dat', async () => {
+    const gevraagd: ChainState[] = []
+    install({
+      ...handlers(),
+      factuurposten: (state) => {
+        gevraagd.push(state)
+        return { data: [openPost], error: null }
+      },
+    })
+    render(<KlantDossierPage clientId="c1" navigate={vi.fn()} />)
+
+    expect(await screen.findByRole('heading', { name: 'Te factureren (1)' })).toBeInTheDocument()
+    expect(screen.getByText('Bijkomend advies')).toBeInTheDocument()
+    expect(gevraagd[0].calls).toContainEqual({ method: 'eq', args: ['client_id', 'c1'] })
+    expect(gevraagd[0].calls).toContainEqual({ method: 'eq', args: ['status', 'te_factureren'] })
+  })
+
+  it('zet een post op de lijst voor deze klant, zonder klant te moeten kiezen', async () => {
+    const user = userEvent.setup()
+    install({ ...handlers(), factuurposten: () => ({ data: [], error: null }) })
+    render(<KlantDossierPage clientId="c1" navigate={vi.fn()} />)
+
+    expect(await screen.findByText('Niets te factureren voor deze klant.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '+ Post toevoegen' }))
+    const formulier = screen.getByRole('form', { name: 'Nieuwe post' })
+    expect(screen.queryByLabelText('Klant')).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Omschrijving'), 'Telefonisch advies')
+    await user.click(screen.getByRole('button', { name: 'Op de lijst zetten' }))
+
+    expect(supabase.rpc).toHaveBeenCalledWith(
+      'factuurpost_toevoegen',
+      expect.objectContaining({ p_client_id: 'c1', p_omschrijving: 'Telefonisch advies' })
+    )
+    await waitFor(() => expect(formulier).not.toBeInTheDocument())
+  })
+
+  it('brengt je naar het volledige overzicht', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    install({ ...handlers(), factuurposten: () => ({ data: [openPost], error: null }) })
+    render(<KlantDossierPage clientId="c1" navigate={navigate} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Alles bekijken' }))
+    expect(navigate).toHaveBeenCalledWith('facturatie')
+  })
+  it('werkt bij zodra ergens anders een post op de lijst komt', async () => {
+    // Het taakvenster ligt bovenop het dossier; "Op de lijst te factureren"
+    // daar hoort meteen zichtbaar te zijn in het blok eronder.
+    let antwoord: unknown[] = []
+    install({ ...handlers(), factuurposten: () => ({ data: antwoord, error: null }) })
+    render(<KlantDossierPage clientId="c1" navigate={vi.fn()} />)
+
+    expect(await screen.findByText('Niets te factureren voor deze klant.')).toBeInTheDocument()
+    antwoord = [openPost]
+    meldFactuurpostenGewijzigd()
+    expect(await screen.findByText('Bijkomend advies')).toBeInTheDocument()
   })
 })

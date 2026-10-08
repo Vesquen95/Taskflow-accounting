@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { reportError } from '../lib/errorMessage'
+import { FACTUURPOSTEN_GEWIJZIGD, meldFactuurpostenGewijzigd } from '../lib/facturatie'
 import type { FactuurpostMetRelaties, FactuurpostStatus } from '../types'
 
 const SELECT =
@@ -64,6 +65,14 @@ export function useFactuurposten(filters: FactuurpostFilters) {
     void load()
   }, [load])
 
+  // Vanuit een taak op de lijst gezet terwijl deze lijst openstaat (het
+  // klantdossier, met het taakvenster erboven): meteen tonen.
+  useEffect(() => {
+    const opWijziging = () => void load()
+    window.addEventListener(FACTUURPOSTEN_GEWIJZIGD, opWijziging)
+    return () => window.removeEventListener(FACTUURPOSTEN_GEWIJZIGD, opWijziging)
+  }, [load])
+
   async function toevoegen(post: NieuwePost) {
     const { error: err } = await supabase.rpc('factuurpost_toevoegen', {
       p_client_id: post.clientId,
@@ -73,7 +82,7 @@ export function useFactuurposten(filters: FactuurpostFilters) {
       p_notitie: post.notitie ?? null,
     })
     if (err) throw err
-    await load()
+    meldFactuurpostenGewijzigd()
   }
 
   async function wijzigen(id: string, omschrijving: string, uitgevoerdOp: string, notitie: string | null) {
@@ -84,7 +93,7 @@ export function useFactuurposten(filters: FactuurpostFilters) {
       p_notitie: notitie,
     })
     if (err) throw err
-    await load()
+    meldFactuurpostenGewijzigd()
   }
 
   async function afhandelen(ids: string[], nieuweStatus: FactuurpostStatus, factuurreferentie?: string) {
@@ -94,7 +103,7 @@ export function useFactuurposten(filters: FactuurpostFilters) {
       p_factuurreferentie: factuurreferentie ?? null,
     })
     if (err) throw err
-    await load()
+    meldFactuurpostenGewijzigd()
   }
 
   return { posten, loading, error, reload: load, toevoegen, wijzigen, afhandelen }

@@ -24,6 +24,7 @@ import { taakRegel } from '../lib/taakLabel'
 import { logWaarde, veldLabel } from '../lib/wijzigingslog'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
 import { meldStatusGewijzigd } from '../hooks/useTeKeuren'
+import { DossierTeFactureren } from '../components/DossierTeFactureren'
 
 
 /** Klantdossier (§4 point 3): alle verplichtingen, status/historiek,
@@ -385,6 +386,11 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           </table>
         </div>
       </section>
+
+      <DossierTeFactureren
+        klant={{ id: client.id, naam: client.naam, vertrouwelijk: client.vertrouwelijk, team_id: client.team_id }}
+        navigate={navigate}
+      />
 
       {history.length > 0 && (
         <section>
