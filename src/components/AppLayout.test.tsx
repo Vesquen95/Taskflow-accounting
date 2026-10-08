@@ -164,6 +164,20 @@ describe('AppLayout — het hoofdscherm heet op een telefoon anders', () => {
 })
 
 
+describe('AppLayout — Te factureren', () => {
+  it('staat in het menu voor iedereen, ook zonder goedkeuringsrecht', async () => {
+    // Wie het werk deed, zet het op de lijst; afvinken is een ander recht.
+    const navigate = vi.fn()
+    render(
+      <AppLayout employee={{ ...employee, rol: 'medewerker', mag_goedkeuren: false }} activeView="kalender" navigate={navigate}>
+        <p>inhoud</p>
+      </AppLayout>
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Te factureren' }))
+    expect(navigate).toHaveBeenCalledWith('facturatie', undefined)
+  })
+})
+
 describe('AppLayout — het getal naast Goedkeuren', () => {
   afterEach(() => {
     teKeuren = 0

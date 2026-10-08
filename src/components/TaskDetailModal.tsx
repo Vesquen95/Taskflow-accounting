@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
+import { TeFacturerenKnop } from './TeFacturerenKnop'
 import { StatusBadge } from './StatusBadge'
 import { WachtDuurBadge } from './WachtDuurBadge'
 import { UrgencyBadge } from './UrgencyBadge'
@@ -443,6 +444,11 @@ export function TaskDetailModal({
             />
           )}
         </div>
+
+        {/* Facturatie (0069): los van de status, want ook een taak die nog
+            loopt kan al gefactureerd worden (een voorschot), en niet elke
+            afgewerkte taak wordt apart aangerekend. */}
+        {task.status !== 'geannuleerd' && <TeFacturerenKnop task={task} />}
 
         <div>
           <h3 className="mb-1.5 text-xs font-medium uppercase text-slate-400">Historiek</h3>

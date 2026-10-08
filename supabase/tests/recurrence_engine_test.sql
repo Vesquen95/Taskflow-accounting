@@ -9043,4 +9043,178 @@ begin
   raise notice 'PASS 69.8: wachtrij, geheimen en interne functies zijn dicht voor de app';
 end $$;
 
+-- ============================================================
+-- Sectie 70 (0069): te factureren.
+--
+-- 70.1 een medewerker zet een taak op de lijst; de databank stempelt wie
+-- 70.2 dezelfde taak twee keer: geweigerd
+-- 70.3 een taak van een ander dossier: geweigerd
+-- 70.4 een medewerker zonder goedkeuringsrecht vinkt niet af
+-- 70.5 de partner vinkt af, met factuurnummer en stempel
+-- 70.6 terugzetten maakt de stempel leeg
+-- 70.7 achter de teammuur: niet zien, niet toevoegen, niet afvinken
+-- 70.8 rechtstreeks schrijven of wissen kan niet
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_team_a uuid; v_team_b uuid;
+  v_mw uuid; v_mw_uid uuid := gen_random_uuid();
+  v_partner uuid; v_partner_uid uuid := gen_random_uuid();
+  v_ander uuid; v_ander_uid uuid := gen_random_uuid();
+  v_klant uuid; v_klant2 uuid; v_taak uuid; v_taak2 uuid;
+  v_post uuid; v_post2 uuid; v_n int; v_ok boolean; v_r record;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_mw_uid, 's70m@test.local', now()), (v_partner_uid, 's70p@test.local', now()), (v_ander_uid, 's70b@test.local', now());
+  insert into public.firms (naam) values ('S70 Kantoor') returning id into v_firm;
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S70A', 'S70 Team A', 'Aalst') returning id into v_team_a;
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S70B', 'S70 Team B', 'Gent') returning id into v_team_b;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_mw_uid, 'S70 Medewerker', 's70m@test.local', 'medewerker', false, true) returning id into v_mw;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_partner_uid, 'S70 Partner', 's70p@test.local', 'medewerker', true, true) returning id into v_partner;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_ander_uid, 'S70 Ander team', 's70b@test.local', 'medewerker', true, true) returning id into v_ander;
+  insert into public.employee_teams (employee_id, team_id) values
+    (v_mw, v_team_a), (v_partner, v_team_a), (v_ander, v_team_b);
+
+  perform set_config('taskflow.test_uid', v_partner_uid::text, true);
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S70 Klant', 12, 31, 'geen', true, v_team_a) returning id into v_klant;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S70 Andere klant', 12, 31, 'geen', true, v_team_a) returning id into v_klant2;
+  insert into public.task_instances (client_id, obligation_type_id, client_obligation_id, title, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+  values (v_klant, null, null, 'S70 advies', current_date + 3, current_date + 3, 'open', v_mw, 'handmatig_adhoc', false)
+  returning id into v_taak;
+  insert into public.task_instances (client_id, obligation_type_id, client_obligation_id, title, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+  values (v_klant2, null, null, 'S70 ander dossier', current_date + 3, current_date + 3, 'open', v_mw, 'handmatig_adhoc', false)
+  returning id into v_taak2;
+
+  -- 70.1
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  v_post := public.factuurpost_toevoegen(v_klant, '  Advies herstructurering  ', current_date, v_taak, 'twee uur');
+  select * into v_r from public.factuurposten where id = v_post;
+  if v_r.aangemaakt_door <> v_mw or v_r.status <> 'te_factureren' or v_r.omschrijving <> 'Advies herstructurering' then
+    raise exception 'FAIL 70.1: de post werd niet correct aangemaakt (%, %, "%")', v_r.aangemaakt_door, v_r.status, v_r.omschrijving;
+  end if;
+  raise notice 'PASS 70.1: een medewerker zet een taak op de lijst, gestempeld met zijn naam';
+
+  -- 70.2
+  v_ok := false;
+  begin
+    perform public.factuurpost_toevoegen(v_klant, 'Nog eens', current_date, v_taak, null);
+  exception when unique_violation then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 70.2: dezelfde taak kwam twee keer open op de lijst';
+  end if;
+  raise notice 'PASS 70.2: een taak staat hoogstens één keer open op de lijst';
+
+  -- 70.3
+  v_ok := false;
+  begin
+    perform public.factuurpost_toevoegen(v_klant, 'Verkeerd gekoppeld', current_date, v_taak2, null);
+  exception when invalid_parameter_value then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 70.3: een taak van een ander dossier werd aanvaard';
+  end if;
+  raise notice 'PASS 70.3: een taak van een ander dossier wordt geweigerd';
+
+  -- 70.4
+  v_post2 := public.factuurpost_toevoegen(v_klant, 'Losse prestatie', current_date - 2, null, null);
+  v_ok := false;
+  begin
+    perform public.factuurposten_afhandelen(array[v_post], 'gefactureerd', 'F-1');
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 70.4: een medewerker zonder goedkeuringsrecht vinkte af';
+  end if;
+  raise notice 'PASS 70.4: afvinken mag alleen wie mag goedkeuren';
+
+  -- 70.5
+  perform set_config('taskflow.test_uid', v_partner_uid::text, true);
+  v_n := public.factuurposten_afhandelen(array[v_post, v_post2], 'gefactureerd', ' F-2026-0142 ');
+  select * into v_r from public.factuurposten where id = v_post;
+  if v_n <> 2 or v_r.status <> 'gefactureerd' or v_r.afgehandeld_door <> v_partner
+     or v_r.afgehandeld_op is null or v_r.factuurreferentie <> 'F-2026-0142' then
+    raise exception 'FAIL 70.5: afvinken gaf % / % / % / %', v_n, v_r.status, v_r.afgehandeld_door, v_r.factuurreferentie;
+  end if;
+  -- Na het factureren mag dezelfde taak opnieuw op de lijst (een tweede prestatie).
+  perform public.factuurpost_toevoegen(v_klant, 'Vervolg', current_date, v_taak, null);
+  raise notice 'PASS 70.5: de partner vinkt in één keer af, met factuurnummer, naam en tijdstip';
+
+  -- 70.6
+  v_n := public.factuurposten_afhandelen(array[v_post2], 'te_factureren');
+  select * into v_r from public.factuurposten where id = v_post2;
+  if v_n <> 1 or v_r.status <> 'te_factureren' or v_r.afgehandeld_door is not null or v_r.factuurreferentie is not null then
+    raise exception 'FAIL 70.6: terugzetten liet een stempel of referentie staan';
+  end if;
+  raise notice 'PASS 70.6: terugzetten maakt de post weer open en wist de stempel';
+
+  -- 70.7 De teammuur.
+  perform set_config('taskflow.test_uid', v_ander_uid::text, true);
+  v_ok := false;
+  begin
+    perform public.factuurpost_toevoegen(v_klant, 'Inbreuk', current_date, null, null);
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 70.7: iemand achter de teammuur zette een post op een vreemd dossier';
+  end if;
+  v_ok := false;
+  begin
+    perform public.factuurposten_afhandelen(array[v_post2], 'niet_factureren');
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 70.7: iemand achter de teammuur vinkte een post af';
+  end if;
+  raise notice 'PASS 70.7: achter de teammuur geen toevoegen en geen afvinken';
+end $$;
+
+-- 70.7b en 70.8 als de app zelf (rol authenticated).
+do $$
+declare v_n int; v_ok_n int; v_uid uuid; v_klant uuid;
+begin
+  select auth_user_id into v_uid from public.employees where email = 's70b@test.local';
+  select id into v_klant from public.clients where naam = 'S70 Klant';
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  set local role authenticated;
+  select count(*) into v_n from public.factuurposten where client_id = v_klant;
+  if v_n <> 0 then
+    raise exception 'FAIL 70.7: iemand achter de teammuur ziet % post(en)', v_n;
+  end if;
+
+  select auth_user_id into v_uid from public.employees where email = 's70p@test.local';
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select count(*) into v_n from public.factuurposten where client_id = v_klant;
+  if v_n < 3 then
+    raise exception 'FAIL 70.8: de partner ziet maar % post(en) van zijn eigen dossier', v_n;
+  end if;
+  -- In productie heeft authenticated geen schrijfrechten (0069); deze harnas
+  -- geeft ze terug (regel ~505), en dan moet RLS zonder schrijfbeleid zorgen
+  -- dat er niets verandert. Beide uitkomsten tellen als dicht.
+  begin
+    delete from public.factuurposten where client_id = v_klant;
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.factuurposten set omschrijving = 'S70 stiekem gewijzigd' where client_id = v_klant;
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  select count(*) into v_ok_n from public.factuurposten where client_id = v_klant;
+  if v_ok_n <> v_n then
+    raise exception 'FAIL 70.8: een post kon rechtstreeks gewist worden (% -> %)', v_n, v_ok_n;
+  end if;
+  if exists (select 1 from public.factuurposten where omschrijving = 'S70 stiekem gewijzigd') then
+    raise exception 'FAIL 70.8: een post kon rechtstreeks aangepast worden, buiten de functies om';
+  end if;
+  raise notice 'PASS 70.8: de partner ziet zijn posten; rechtstreeks wissen of aanpassen kan niet';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

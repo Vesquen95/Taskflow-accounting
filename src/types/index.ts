@@ -279,3 +279,30 @@ export interface OnderhoudLog {
    *  allebei nul taken; dit veld houdt ze uit elkaar. */
   fout: string | null
 }
+
+/** Waar een factuurpost staat (migratie 0069). Niet te factureren is een
+ *  status, geen verwijdering: de lijst moet achteraf na te kijken zijn. */
+export type FactuurpostStatus = 'te_factureren' | 'gefactureerd' | 'niet_factureren'
+
+/** Eén regel op de lijst "te factureren" (migratie 0069). Nog zonder bedrag;
+ *  dat komt later met de opdrachtbrief. */
+export interface Factuurpost {
+  id: string
+  client_id: string
+  task_instance_id: string | null
+  omschrijving: string
+  uitgevoerd_op: string
+  notitie: string | null
+  status: FactuurpostStatus
+  factuurreferentie: string | null
+  aangemaakt_door: string
+  aangemaakt_op: string
+  afgehandeld_door: string | null
+  afgehandeld_op: string | null
+}
+
+export interface FactuurpostMetRelaties extends Factuurpost {
+  client: Pick<Client, 'id' | 'naam' | 'vertrouwelijk' | 'team_id'>
+  aangemaakt: Pick<Employee, 'id' | 'naam'> | null
+  afgehandeld: Pick<Employee, 'id' | 'naam'> | null
+}

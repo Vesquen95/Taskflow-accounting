@@ -18,6 +18,7 @@ import { KlantDossierPage } from './pages/KlantDossierPage'
 import { WorkloadDashboardPage } from './pages/WorkloadDashboardPage'
 import { OverzichtPage } from './pages/OverzichtPage'
 import { GoedkeuringPage } from './pages/GoedkeuringPage'
+import { TeFacturerenPage } from './pages/TeFacturerenPage'
 import { WettelijkeKalenderPage } from './pages/WettelijkeKalenderPage'
 import { MedewerkersPage } from './pages/MedewerkersPage'
 import { magOverzichtZien } from './lib/overzicht'
@@ -85,6 +86,9 @@ function AuthenticatedApp({ onDeactivated }: { onDeactivated: () => void }) {
       // laat die stap niet toe (migratie 0011). Terug naar het hoofdscherm in
       // plaats van een lijst die je niets kunt aandoen.
       page = employee.mag_goedkeuren ? <GoedkeuringPage /> : naarHoofdscherm()
+      break
+    case 'facturatie':
+      page = <TeFacturerenPage navigate={navigate} />
       break
     case 'overzicht':
       // Vanaf supervisor (0056). De databank weigert het ook zelf; dit is de

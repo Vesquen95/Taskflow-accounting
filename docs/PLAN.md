@@ -1708,3 +1708,31 @@ dat de kopie gelijk blijft.
 
 **Nog niet gebouwd:** een persoonlijke uitschakelaar per medewerker, en een
 melding bij goedkeuring ("je aangifte is goedgekeurd").
+
+## §34 — Te factureren (08/10/2026)
+
+**Gevraagd:** een tabblad waar per klant de te factureren taken opgenomen
+worden; nog zonder bedragen, die komen later met de opdrachtbrief.
+
+**Gebouwd** (0069, scherm *Te factureren* onder Werk):
+- Een **factuurpost** is één regel: klant, omschrijving, datum van de
+  prestatie, optioneel een notitie en een gekoppelde taak, en wie hem opnam.
+- Op de lijst zetten: op het scherm zelf ("Post toevoegen", ook voor werk dat
+  geen taak is), of met één klik onderaan een taak ("Op de lijst te
+  factureren"). Een taak staat hoogstens één keer open op de lijst.
+- Per klant gegroepeerd. **Afvinken** — gefactureerd, of niet te factureren —
+  mag alleen wie mag goedkeuren of kantoorbeheerder is: per regel, per
+  selectie, of alles van een klant in één keer, met een optioneel
+  factuurnummer. Terugzetten kan.
+- Niets wordt gewist. "Niet te factureren" is een status met wie en wanneer;
+  de tabbladen *Gefactureerd* en *Niet te factureren* zijn de historiek.
+- Lezen volgt de teammuur (`can_access_client`); schrijven kan alleen via de
+  drie databankfuncties, die zelf stempelen.
+
+**Bewust niet automatisch:** een afgewerkte taak komt niet vanzelf op de
+lijst. Of een btw-aangifte apart aangerekend wordt of in een forfait zit,
+weet Taskflow pas met de opdrachtbrief.
+
+**Later, met de opdrachtbrief:** bedrag of tarief per post, en per klant welke
+verplichtingen apart gefactureerd worden — dan kan een afgewerkte taak wél
+vanzelf op de lijst komen. De tabel is daarop voorzien.

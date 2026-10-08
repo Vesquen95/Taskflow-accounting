@@ -71,6 +71,9 @@ function navGroepen(kleinScherm: boolean): NavGroep[] {
       // item niet -- een menu-item dat je aanklikt om te horen dat het niet
       // voor jou is, is erger dan geen menu-item.
       { view: 'goedkeuring', label: 'Goedkeuren', vereist: 'goedkeuringsrecht' as const },
+      // Na het werk en het goedkeuren: het aanrekenen. Voor iedereen, want wie
+      // het werk deed, zet het op de lijst (0069).
+      { view: 'facturatie', label: 'Te factureren' },
     ],
   },
   {
