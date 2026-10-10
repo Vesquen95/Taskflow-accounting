@@ -14,7 +14,7 @@ vi.mock('../lib/supabase', () => ({
 vi.mock('../hooks/useCurrentEmployee', () => ({
   useCurrentEmployee: () => ({
     employee: {
-      id: 'e1', firm_id: 'f1', auth_user_id: 'a1', naam: 'Jan', email: 'jan@rsm.be',
+      id: 'e1', firm_id: 'f1', auth_user_id: 'a1', naam: 'Jan', email: 'jan@voorbeeld.be',
       rol: 'medewerker', niveau: 'senior', mag_goedkeuren: false, actief: true,
       created_at: '2026-01-01T00:00:00Z',
     },
@@ -26,7 +26,7 @@ vi.mock('../hooks/useCurrentEmployee', () => ({
 
 const employees: Employee[] = [
   {
-    id: 'e1', firm_id: 'f1', auth_user_id: 'a1', naam: 'Jan', email: 'jan@rsm.be',
+    id: 'e1', firm_id: 'f1', auth_user_id: 'a1', naam: 'Jan', email: 'jan@voorbeeld.be',
     rol: 'medewerker', niveau: 'senior', mag_goedkeuren: false, actief: true,
     created_at: '2026-01-01T00:00:00Z',
   },

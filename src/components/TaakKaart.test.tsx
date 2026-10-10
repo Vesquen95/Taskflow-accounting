@@ -9,7 +9,7 @@ const medewerker: Employee = {
   firm_id: 'f1',
   auth_user_id: 'auth-1',
   naam: 'Jan',
-  email: 'jan@rsm.be',
+  email: 'jan@voorbeeld.be',
   rol: 'medewerker',
   niveau: null,
   mag_goedkeuren: false,

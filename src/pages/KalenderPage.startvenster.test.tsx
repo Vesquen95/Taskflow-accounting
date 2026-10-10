@@ -34,7 +34,7 @@ function medewerker(over: Partial<Employee> = {}): Employee {
     firm_id: 'f1',
     auth_user_id: 'auth-1',
     naam: 'Jan Janssens',
-    email: 'jan@rsm.be',
+    email: 'jan@voorbeeld.be',
     rol: 'medewerker',
     niveau: 'junior',
     mag_goedkeuren: false,

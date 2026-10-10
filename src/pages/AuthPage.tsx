@@ -43,11 +43,8 @@ export function AuthPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        {/* Dit is het eerste dat je ziet, dus staat het merk hier ruim en
-            alleen. Taskflow zelf is een gereedschap, geen merk: de naam mag
-            eronder in het klein. */}
         <div className="mb-8">
-          <img src={`${import.meta.env.BASE_URL}rsm-logo.svg`} alt="RSM" className="h-9 w-auto" />
+          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" className="h-9 w-9" />
           <h1 className="mt-3 text-lg font-semibold text-slate-900">Taskflow</h1>
           <p className="text-sm text-slate-500">Opvolging van termijnen en verplichtingen.</p>
         </div>

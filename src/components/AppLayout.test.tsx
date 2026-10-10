@@ -31,7 +31,7 @@ const employee: Employee = {
   firm_id: 'f1',
   auth_user_id: 'auth-1',
   naam: 'Jan Janssens',
-  email: 'jan@rsm.be',
+  email: 'jan@voorbeeld.be',
   rol: 'kantoorbeheerder',
   niveau: null,
   mag_goedkeuren: true,

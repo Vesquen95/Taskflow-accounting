@@ -1104,7 +1104,7 @@ geen bruikbaar label.
 De inhoud is gebouwd en getest (`weekoverzicht_voor`, de vier blokken, de
 HTML-renderer in `src/lib/weekoverzicht.ts`). Er is geen `supabase/functions/`
 — er is dus letterlijk niets dat hem verstuurt. Nodig: een edge function, een
-Resend-sleutel en het RSM-afzenderadres.
+Resend-sleutel en een afzenderadres van het kantoor.
 
 Sinds §19 weegt dit zwaarder dan het leek: voor de partner, die zelden en kort
 kijkt, is deze mail het enige realistische aanraakpunt met het systeem.
@@ -1742,3 +1742,15 @@ weet Taskflow pas met de opdrachtbrief.
 **Later, met de opdrachtbrief:** bedrag of tarief per post, en per klant welke
 verplichtingen apart gefactureerd worden — dan kan een afgewerkte taak wél
 vanzelf op de lijst komen. De tabel is daarop voorzien.
+
+## §35 — Geen RSM meer (10/10/2026)
+
+Op vraag is alles van RSM weg uit de app: het logo (nu een neutraal
+Taskflow-icoon, `public/logo.svg`, ook als favicon), de huiskleuren (de
+accentkleur `brand` is een gewoon blauw), de voorbeeldadressen in de tests en
+de vermeldingen in de commentaar. In de databank heet het kantoor nu "Mijn
+kantoor". De teams (Aalst, Zaventem 1-3, Antwerpen, Gosselies) blijven, op
+vraag.
+
+De git-geschiedenis van deze openbare repo bevat het oude logo en de oude
+teksten nog. Dat herschrijven vraagt een force-push en is niet gedaan.

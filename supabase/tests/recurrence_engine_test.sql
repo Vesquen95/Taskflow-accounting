@@ -5364,7 +5364,7 @@ end $$;
 -- ============================================================
 -- Sectie 43 (0038/0039): de teammuur.
 --
--- RSM werkt in teams: Aalst, drie in Zaventem, Antwerpen, Gosselies. Een
+-- Het kantoor werkt in teams: Aalst, drie in Zaventem, Antwerpen, Gosselies. Een
 -- dossier hoort bij één team en de rest van het kantoor hoort er niet in te
 -- kunnen kijken. De afscherming loopt PER TEAM: dat ZAV1 en ZAV2 op hetzelfde
 -- adres zitten geeft ze geen toegang tot elkaars dossiers.

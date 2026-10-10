@@ -15,7 +15,7 @@ const ingelogd = {
   firm_id: 'f1',
   auth_user_id: 'auth-1',
   naam: 'Wibren',
-  email: 'wibren@rsm.be',
+  email: 'wibren@voorbeeld.be',
   rol: 'medewerker',
   niveau: 'partner',
   mag_goedkeuren: true,

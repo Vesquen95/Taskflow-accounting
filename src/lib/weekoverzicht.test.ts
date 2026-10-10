@@ -23,7 +23,7 @@ function taak(overrides: Partial<WeekoverzichtTaak> = {}): WeekoverzichtTaak {
 
 function overzicht(blokken: Weekoverzicht['blokken']): Weekoverzicht {
   return {
-    medewerker: { id: 'e1', naam: 'Wibren Patteaux', email: 'w@rsm.be' },
+    medewerker: { id: 'e1', naam: 'Wibren Patteaux', email: 'w@voorbeeld.be' },
     vandaag: '2026-09-07',
     blokken,
     iets_te_melden: Object.keys(blokken).length > 0,

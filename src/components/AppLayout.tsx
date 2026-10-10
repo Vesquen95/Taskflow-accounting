@@ -216,11 +216,7 @@ export function AppLayout({
         <span className="truncate text-sm font-semibold text-slate-900">
           {huidigeTitel(activeView, activeParam, kleinScherm)}
         </span>
-        <img
-          src={`${import.meta.env.BASE_URL}rsm-logo.svg`}
-          alt="RSM"
-          className="ml-auto h-5 w-auto"
-        />
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Taskflow" className="ml-auto h-6 w-6" />
       </header>
 
       {/* De achtergrond vangt de tik naast het menu op. Alleen zichtbaar
@@ -241,12 +237,12 @@ export function AppLayout({
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-16 shrink-0 flex-col justify-center border-b border-slate-200 px-4">
+        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 px-4">
           {/* Klein gehouden: in de zijbalk is de navigatie het onderwerp, niet
-              het merk. Het logo bevestigt alleen waar je zit. Even hoog als de
-              balk ernaast, zodat de onderlijn doorloopt. */}
-          <img src={`${import.meta.env.BASE_URL}rsm-logo.svg`} alt="RSM" className="h-5 w-auto self-start" />
-          <span className="mt-1 block text-sm font-semibold text-slate-900">Taskflow</span>
+              het merk. Even hoog als de balk ernaast, zodat de onderlijn
+              doorloopt. */}
+          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" className="h-6 w-6" />
+          <span className="text-sm font-semibold text-slate-900">Taskflow</span>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
           {groepen.map((groep) => {

@@ -1,8 +1,8 @@
 -- ============================================================
 -- 0038 — Teams
 --
--- RSM werkt in teams, niet in één pot. Aalst (AAL), drie teams in Zaventem
--- (ZAV1, ZAV2, ZAV3), Antwerpen (ANT) en Gosselies (GOS). Een dossier hoort
+-- Het kantoor werkt in teams, niet in één pot. Aalst (AAL), drie teams in
+-- Zaventem (ZAV1, ZAV2, ZAV3), Antwerpen (ANT) en Gosselies (GOS). Een dossier hoort
 -- bij een team, en een team hoort niet in andermans dossiers te kijken.
 --
 -- Deze migratie zet alleen de structuur neer. De afscherming zelf komt in
@@ -203,7 +203,7 @@ grant insert, update on public.teams to authenticated;
 grant select, insert, delete on public.employee_teams to authenticated;
 
 -- ------------------------------------------------------------
--- De teams van RSM InterFiduciaire
+-- De teams van het kantoor
 --
 -- Per kantoor aangemaakt en niet hardgecodeerd op één firm_id: er is vandaag
 -- één kantoor, maar een migratie die op een uuid staat te wachten is een
