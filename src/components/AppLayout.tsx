@@ -75,6 +75,8 @@ function navGroepen(kleinScherm: boolean): NavGroep[] {
       // Na het werk en het goedkeuren: het aanrekenen. Voor iedereen, want wie
       // het werk deed, zet het op de lijst (0069).
       { view: 'facturatie', label: 'Te factureren' },
+      // Om een vergissing terug te draaien: wat te snel afgevinkt werd (0070).
+      { view: 'afgerond', label: 'Afgerond' },
     ],
   },
   {

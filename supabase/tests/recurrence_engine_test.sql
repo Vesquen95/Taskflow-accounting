@@ -9217,4 +9217,153 @@ begin
   raise notice 'PASS 70.8: de partner ziet zijn posten; rechtstreeks wissen of aanpassen kan niet';
 end $$;
 
+-- ============================================================
+-- Sectie 71 (0070): een afgeronde taak heropenen.
+--
+-- 71.1 rechtstreeks terugzetten blijft onmogelijk, ook voor wie mag goedkeuren
+-- 71.2 zonder reden: geweigerd
+-- 71.3 de indiener heropent geen goedgekeurde aangifte
+-- 71.4 wie mag goedkeuren, heropent: in uitvoering, stempels weg, reden in de historiek
+-- 71.5 wie heropent, laat opnieuw goedkeuren; de nieuwe goedkeuring telt
+-- 71.6 de verantwoordelijke heropent zijn eigen taak zonder goedkeuring
+-- 71.7 de toestemming lekt niet naar een andere taak in dezelfde transactie
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_team uuid;
+  v_mw uuid; v_mw_uid uuid := gen_random_uuid();
+  v_partner uuid; v_partner_uid uuid := gen_random_uuid();
+  v_klant uuid; v_ot uuid; v_taak uuid; v_adhoc uuid; v_ander uuid;
+  v_ok boolean; v_r record; v_n int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_mw_uid, 's71m@test.local', now()), (v_partner_uid, 's71p@test.local', now());
+  insert into public.firms (naam) values ('S71 Kantoor') returning id into v_firm;
+  insert into public.teams (firm_id, code, naam, vestiging) values (v_firm, 'S71', 'S71 Team', 'Aalst') returning id into v_team;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_mw_uid, 'S71 Medewerker', 's71m@test.local', 'medewerker', false, true) returning id into v_mw;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_partner_uid, 'S71 Partner', 's71p@test.local', 'medewerker', true, true) returning id into v_partner;
+  insert into public.employee_teams (employee_id, team_id) values (v_mw, v_team), (v_partner, v_team);
+
+  perform set_config('taskflow.test_uid', v_partner_uid::text, true);
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief, team_id)
+    values (v_firm, 'S71 Klant', 12, 31, 'geen', true, v_team) returning id into v_klant;
+  select id into v_ot from public.obligation_types where code = 'aangifte_venb_pb';
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot, true, current_date);
+  perform public.generate_task_instances_intern(v_firm, public.horizon_maanden(), 0, v_klant);
+  select id into v_taak from public.task_instances where client_id = v_klant and status = 'open' order by due_date limit 1;
+  update public.task_instances set toegewezen_medewerker_id = v_mw where id = v_taak;
+
+  -- De medewerker dient in, de partner keurt goed.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  update public.task_instances set status = 'in_uitvoering' where id = v_taak;
+  update public.task_instances set status = 'wacht_op_goedkeuring' where id = v_taak;
+  perform set_config('taskflow.test_uid', v_partner_uid::text, true);
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_taak;
+
+  -- 71.1
+  v_ok := false;
+  begin
+    update public.task_instances set status = 'in_uitvoering' where id = v_taak;
+  exception when check_violation then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 71.1: een afgeronde taak kon rechtstreeks teruggezet worden';
+  end if;
+  raise notice 'PASS 71.1: rechtstreeks terugzetten blijft onmogelijk';
+
+  -- 71.2
+  v_ok := false;
+  begin
+    perform public.taak_heropenen(v_taak, '  ');
+  exception when invalid_parameter_value then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 71.2: heropenen zonder reden werd aanvaard';
+  end if;
+  raise notice 'PASS 71.2: heropenen vraagt een reden';
+
+  -- 71.3
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  v_ok := false;
+  begin
+    perform public.taak_heropenen(v_taak, 'Te vroeg ingediend');
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 71.3: de indiener heropende een goedgekeurde aangifte';
+  end if;
+  raise notice 'PASS 71.3: een goedgekeurde aangifte heropent alleen wie mag goedkeuren';
+
+  -- 71.4
+  perform set_config('taskflow.test_uid', v_partner_uid::text, true);
+  perform public.taak_heropenen(v_taak, 'Verkeerde aanslagjaarcode');
+  select status, afgerond_op, goedgekeurd_door, goedgekeurd_op into v_r from public.task_instances where id = v_taak;
+  if v_r.status <> 'in_uitvoering' or v_r.afgerond_op is not null or v_r.goedgekeurd_door is not null or v_r.goedgekeurd_op is not null then
+    raise exception 'FAIL 71.4: na heropenen: %, %, %, %', v_r.status, v_r.afgerond_op, v_r.goedgekeurd_door, v_r.goedgekeurd_op;
+  end if;
+  if not exists (
+    select 1 from public.task_status_log
+    where task_instance_id = v_taak and event_type = 'status_wijziging'
+      and oud_status = 'ingediend_afgerond' and nieuw_status = 'in_uitvoering'
+      and actor_employee_id = v_partner and notitie like '%Verkeerde aanslagjaarcode%'
+  ) then
+    raise exception 'FAIL 71.4: de historiek noemt niet wie heropende en waarom';
+  end if;
+  raise notice 'PASS 71.4: heropend naar in uitvoering, stempels weg, reden en naam in de historiek';
+
+  -- 71.5 Opnieuw indienen vraagt opnieuw goedkeuring.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  v_ok := false;
+  begin
+    update public.task_instances set status = 'ingediend_afgerond' where id = v_taak;
+  exception when check_violation then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 71.5: na heropenen kon de indiener zonder goedkeuring afronden';
+  end if;
+  update public.task_instances set status = 'wacht_op_goedkeuring' where id = v_taak;
+  perform set_config('taskflow.test_uid', v_partner_uid::text, true);
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_taak;
+  select goedgekeurd_door, goedgekeurd_op into v_r from public.task_instances where id = v_taak;
+  if v_r.goedgekeurd_door <> v_partner or v_r.goedgekeurd_op is null then
+    raise exception 'FAIL 71.5: de nieuwe goedkeuring werd niet gestempeld';
+  end if;
+  raise notice 'PASS 71.5: wie heropent, laat opnieuw goedkeuren';
+
+  -- 71.6 Een taak zonder goedkeuring: de verantwoordelijke haalt ze zelf terug.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  insert into public.task_instances (client_id, obligation_type_id, client_obligation_id, title, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+  values (v_klant, null, null, 'S71 eigen taak', current_date + 3, current_date + 3, 'open', v_mw, 'handmatig_adhoc', false)
+  returning id into v_adhoc;
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_adhoc;
+  perform public.taak_heropenen(v_adhoc, 'Per ongeluk afgevinkt');
+  select status into v_r from public.task_instances where id = v_adhoc;
+  if v_r.status <> 'in_uitvoering' then
+    raise exception 'FAIL 71.6: de verantwoordelijke kon zijn eigen taak niet heropenen (%)', v_r.status;
+  end if;
+  raise notice 'PASS 71.6: de verantwoordelijke heropent zijn eigen taak zonder goedkeuring';
+
+  -- 71.7 De toestemming geldt voor die ene taak, en is daarna weg.
+  insert into public.task_instances (client_id, obligation_type_id, client_obligation_id, title, due_date, due_date_wettelijk,
+    status, toegewezen_medewerker_id, bron_type, vereist_goedkeuring)
+  values (v_klant, null, null, 'S71 andere taak', current_date + 3, current_date + 3, 'open', v_mw, 'handmatig_adhoc', false)
+  returning id into v_ander;
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_ander;
+  update public.task_instances set status = 'ingediend_afgerond' where id = v_adhoc;
+  perform public.taak_heropenen(v_adhoc, 'Nog eens');
+  v_ok := false;
+  begin
+    update public.task_instances set status = 'in_uitvoering' where id = v_ander;
+  exception when check_violation then v_ok := true;
+  end;
+  if not v_ok then
+    raise exception 'FAIL 71.7: na een heropening kon een andere afgeronde taak rechtstreeks terug';
+  end if;
+  raise notice 'PASS 71.7: de toestemming lekt niet naar een andere taak';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

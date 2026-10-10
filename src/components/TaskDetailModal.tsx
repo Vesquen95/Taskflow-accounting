@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { TeFacturerenKnop } from './TeFacturerenKnop'
+import { HeropenFormulier } from './HeropenFormulier'
+import { heropenTaak, magHeropenen } from '../lib/heropenen'
 import { StatusBadge } from './StatusBadge'
 import { WachtDuurBadge } from './WachtDuurBadge'
 import { UrgencyBadge } from './UrgencyBadge'
@@ -42,6 +44,9 @@ interface TaskDetailModalProps {
   /** Optioneel: "niet van toepassing voor deze periode" (migratie 0058).
    *  Zonder handler blijft de knop weg. */
   onNietVanToepassing?: (taskId: string, reden: string) => Promise<void>
+  /** Optioneel: na het heropenen van een afgeronde taak (0070) de lijst
+   *  eronder opnieuw laden. Het venster sluit zichzelf. */
+  onHeropend?: () => void | Promise<void>
 }
 
 const EVENT_LABEL: Record<string, string> = {
@@ -87,6 +92,7 @@ export function TaskDetailModal({
   onMarkReviewHandled,
   onDueDateChange,
   onNietVanToepassing,
+  onHeropend,
 }: TaskDetailModalProps) {
   const { employee } = useCurrentEmployee()
   const { leden } = useTeams()
@@ -98,6 +104,7 @@ export function TaskDetailModal({
   // null, zodat de keuzelijst er gewoon een optie van kan maken.
   const [reassignTo, setReassignTo] = useState(task.toegewezen_medewerker_id ?? '')
   const [nieuweDeadline, setNieuweDeadline] = useState(task.due_date)
+  const [heropenOpen, setHeropenOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -444,6 +451,28 @@ export function TaskDetailModal({
             />
           )}
         </div>
+
+        {/* 0070: een afgeronde taak terughalen, met een reden. */}
+        {magHeropenen(task, employee) &&
+          (heropenOpen ? (
+            <HeropenFormulier
+              vereistGoedkeuring={task.vereist_goedkeuring}
+              onAnnuleer={() => setHeropenOpen(false)}
+              onBevestig={async (reden) => {
+                await heropenTaak(task.id, reden)
+                await onHeropend?.()
+                onClose()
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setHeropenOpen(true)}
+              className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100"
+            >
+              Heropenen
+            </button>
+          ))}
 
         {/* Facturatie (0069): los van de status, want ook een taak die nog
             loopt kan al gefactureerd worden (een voorschot), en niet elke

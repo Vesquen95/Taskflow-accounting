@@ -19,6 +19,7 @@ import { WorkloadDashboardPage } from './pages/WorkloadDashboardPage'
 import { OverzichtPage } from './pages/OverzichtPage'
 import { GoedkeuringPage } from './pages/GoedkeuringPage'
 import { TeFacturerenPage } from './pages/TeFacturerenPage'
+import { AfgerondPage } from './pages/AfgerondPage'
 import { WettelijkeKalenderPage } from './pages/WettelijkeKalenderPage'
 import { MedewerkersPage } from './pages/MedewerkersPage'
 import { magOverzichtZien } from './lib/overzicht'
@@ -89,6 +90,9 @@ function AuthenticatedApp({ onDeactivated }: { onDeactivated: () => void }) {
       break
     case 'facturatie':
       page = <TeFacturerenPage navigate={navigate} />
+      break
+    case 'afgerond':
+      page = <AfgerondPage navigate={navigate} />
       break
     case 'overzicht':
       // Vanaf supervisor (0056). De databank weigert het ook zelf; dit is de

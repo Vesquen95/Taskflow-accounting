@@ -447,6 +447,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           onReassign={reassignTask}
           onMarkReviewHandled={markReviewHandled}
           onDueDateChange={updateTaskDueDate}
+          onHeropend={reload}
         />
       )}
       {showArchive && (

@@ -756,3 +756,48 @@ describe('TaskDetailModal — welke voorafbetaling is dit?', () => {
     expect(screen.queryByText(/van 4 — boekjaar/)).not.toBeInTheDocument()
   })
 })
+
+describe('TaskDetailModal — heropenen (0070)', () => {
+  it('heropent een afgeronde taak met een reden, en sluit dan', async () => {
+    const user = userEvent.setup()
+    mockEmployee.mockReturnValue(employee({ id: 'e2', mag_goedkeuren: true }))
+    installSupabase()
+    const rpc = vi.fn().mockResolvedValue({ data: null, error: null })
+    ;(supabase.rpc as unknown as Mock).mockImplementation(rpc)
+    const onHeropend = vi.fn()
+    render(
+      <TaskDetailModal
+        task={task({ status: 'ingediend_afgerond' })}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+        onHeropend={onHeropend}
+      />
+    )
+    await user.click(screen.getByRole('button', { name: 'Heropenen' }))
+    await user.type(screen.getByLabelText('Waarom wordt deze taak heropend?'), 'Per ongeluk afgevinkt')
+    await user.click(screen.getByRole('button', { name: 'Heropenen' }))
+    expect(rpc).toHaveBeenCalledWith('taak_heropenen', { p_task_id: 't1', p_reden: 'Per ongeluk afgevinkt' })
+    expect(onHeropend).toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('toont de knop niet aan wie een goedgekeurde aangifte niet mag heropenen', () => {
+    mockEmployee.mockReturnValue(employee({ id: 'e1', mag_goedkeuren: false }))
+    installSupabase()
+    render(
+      <TaskDetailModal
+        task={task({ status: 'ingediend_afgerond' })}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'Heropenen' })).not.toBeInTheDocument()
+  })
+})
+

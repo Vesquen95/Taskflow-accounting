@@ -1759,3 +1759,28 @@ vraag.
 
 De git-geschiedenis van deze openbare repo bevat het oude logo en de oude
 teksten nog. Dat herschrijven vraagt een force-push en is niet gedaan.
+
+## §36 — Afgerond, en heropenen (10/10/2026)
+
+**Gevraagd:** een lijst met afgeronde taken, zodat wie te snel was een taak
+makkelijk terughaalt.
+
+**Gebouwd:**
+- Scherm *Afgerond* onder Werk: wat in de laatste 7, 30 of 90 dagen afgerond
+  werd, het recentste eerst, met wie verantwoordelijk was en wie goedkeurde.
+  Filter op team en verantwoordelijke, zoeken op klant of verplichting.
+- **Heropenen** (0070): op dat scherm, en in het taakvenster van een afgeronde
+  taak. De taak gaat terug naar *in uitvoering*. Een reden is verplicht; ze
+  komt met je naam in de historiek. De stempels (afgerond op, goedgekeurd
+  door/op) vervallen: wie opnieuw indient, laat opnieuw goedkeuren.
+- **Wie mag het:** wie mag goedkeuren en de kantoorbeheerder altijd; de
+  verantwoordelijke zelf alleen bij een taak zonder goedkeuring. Een
+  goedgekeurde aangifte terugdraaien is een beslissing van wie goedkeurt.
+- Rechtstreeks de status terugzetten blijft onmogelijk. De transitietrigger
+  laat de overgang alleen toe wanneer `taak_heropenen()` haar voor precies die
+  taak aankondigt, transactie-lokaal (zoals 0058).
+
+**Niet gedaan:** een geannuleerde taak terughalen kan een kantoorbeheerder al
+sinds 0011; dat staat niet op dit scherm, want annuleren is geen
+"te snel afgevinkt". Vervolgtaken die bij het afronden ontstonden (bv. de
+neerlegging na de AV) blijven staan bij het heropenen.
