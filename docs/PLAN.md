@@ -1735,6 +1735,11 @@ als op het scherm, en een eigen "+ Post toevoegen" zonder klantkeuze. De
 historiek blijft op het scherm Te factureren. Een post die vanuit het
 taakvenster op de lijst komt, verschijnt meteen in het blok eronder.
 
+**Het getal in het menu** (10/10): naast "Te factureren" staat hoeveel posten
+er nog openstaan, zoals bij "Goedkeuren", in grijs (werk dat wacht, geen
+alarm). Het telt wat jij mag zien, en telt meteen opnieuw wanneer ergens een
+post bijkomt of afgevinkt wordt.
+
 **Bewust niet automatisch:** een afgewerkte taak komt niet vanzelf op de
 lijst. Of een btw-aangifte apart aangerekend wordt of in een forfait zit,
 weet Taskflow pas met de opdrachtbrief.

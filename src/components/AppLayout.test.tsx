@@ -26,6 +26,11 @@ vi.mock('../hooks/useTeKeuren', () => ({
   useTeKeuren: (actief: boolean) => (actief ? teKeuren : 0),
 }))
 
+let teFactureren = 0
+vi.mock('../hooks/useTeFactureren', () => ({
+  useTeFactureren: () => teFactureren,
+}))
+
 const employee: Employee = {
   id: 'e1',
   firm_id: 'f1',
@@ -165,6 +170,21 @@ describe('AppLayout — het hoofdscherm heet op een telefoon anders', () => {
 
 
 describe('AppLayout — Te factureren', () => {
+  afterEach(() => {
+    teFactureren = 0
+  })
+
+  it('toont hoeveel posten er nog te factureren zijn', () => {
+    teFactureren = 4
+    toon()
+    expect(screen.getByRole('button', { name: 'Te factureren, 4 te factureren' })).toHaveTextContent('4')
+  })
+
+  it('toont geen getal als er niets openstaat', () => {
+    toon()
+    expect(screen.getByRole('button', { name: 'Te factureren' })).toHaveTextContent(/^Te factureren$/)
+  })
+
   it('staat in het menu voor iedereen, ook zonder goedkeuringsrecht', async () => {
     // Wie het werk deed, zet het op de lijst; afvinken is een ander recht.
     const navigate = vi.fn()

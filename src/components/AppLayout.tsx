@@ -7,6 +7,7 @@ import { INGANGEN } from '../lib/werkstromen'
 import { useKleinScherm } from '../hooks/useKleinScherm'
 import { magOverzichtZien } from '../lib/overzicht'
 import { useTeKeuren } from '../hooks/useTeKeuren'
+import { useTeFactureren } from '../hooks/useTeFactureren'
 
 interface NavItem {
   view: string
@@ -172,6 +173,23 @@ export function AppLayout({
   const [menuOpen, setMenuOpen] = useState(false)
   // Wie niet mag goedkeuren, ziet het menu-item niet en vraagt dus ook niets op.
   const teKeuren = useTeKeuren(employee.mag_goedkeuren, `${activeView}/${activeParam ?? ''}`)
+  const teFactureren = useTeFactureren(`${activeView}/${activeParam ?? ''}`)
+  // Het getal naast een menu-item: hoeveel, wat het betekent voor een
+  // schermlezer, en in welke kleur. Amber is de kleur van "wacht op
+  // goedkeuring" in de statusbadge; te factureren is werk dat wacht, geen
+  // alarm, en krijgt daarom grijs.
+  const tellers: Record<string, { aantal: number; zin: string; kleur: string }> = {
+    goedkeuring: {
+      aantal: teKeuren,
+      zin: 'te keuren',
+      kleur: 'border-amber-300 bg-amber-100 text-amber-800',
+    },
+    facturatie: {
+      aantal: teFactureren,
+      zin: 'te factureren',
+      kleur: 'border-slate-300 bg-slate-100 text-slate-700',
+    },
+  }
 
   // Terug naar het werk zodra je iets gekozen hebt. Een menu dat open blijft
   // staan over het scherm dat je net opvroeg is op een telefoon hinderlijk.
@@ -259,14 +277,15 @@ export function AppLayout({
                   const actief =
                     activeView === item.view &&
                     (item.param === undefined || activeParam === item.param)
+                  const teller = item.param === undefined ? tellers[item.view] : undefined
                   return (
                     <button
                       key={`${item.view}/${item.param ?? ''}`}
                       type="button"
                       onClick={() => ga(item.view, item.param)}
                       aria-label={
-                        item.view === 'goedkeuring' && teKeuren > 0
-                          ? `${item.label}, ${teKeuren > 99 ? 'meer dan 99' : teKeuren} te keuren`
+                        teller && teller.aantal > 0
+                          ? `${item.label}, ${teller.aantal > 99 ? 'meer dan 99' : teller.aantal} ${teller.zin}`
                           : undefined
                       }
                       className={`block w-full rounded-md px-3 py-2 text-left text-sm font-medium transition ${
@@ -275,14 +294,14 @@ export function AppLayout({
                           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                       }`}
                     >
-                      {item.view === 'goedkeuring' && teKeuren > 0 ? (
+                      {teller && teller.aantal > 0 ? (
                         <span className="flex items-center justify-between gap-2">
                           {item.label}
-                          {/* Dezelfde amber als de statusbadge "wacht op
-                              goedkeuring": wie de kleur kent, leest het getal.
-                              Een schermlezer krijgt de zin via aria-label. */}
-                          <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-semibold tabular-nums text-amber-800">
-                            {teKeuren > 99 ? '99+' : teKeuren}
+                          {/* Een schermlezer krijgt de zin via aria-label. */}
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums ${teller.kleur}`}
+                          >
+                            {teller.aantal > 99 ? '99+' : teller.aantal}
                           </span>
                         </span>
                       ) : (
