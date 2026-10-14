@@ -10,12 +10,27 @@ export default {
         // (2026-Q3) en datums leest, is dat geen smaak maar een vereiste.
         // Zelf gehost (npm), niet van Google: geen IP-adressen naar derden.
         sans: ['"Atkinson Hyperlegible Next Variable"', 'system-ui', 'sans-serif'],
+        // Alleen op het inlogscherm: de opstartreeks en de uitlezingen.
+        mono: ['"Atkinson Hyperlegible Mono Variable"', 'ui-monospace', 'monospace'],
       },
       fontWeight: {
         // Atkinson is van zichzelf stevig: op 500 leest gewone tekst al als
         // vet, en dan valt de nadruk die echt vet is weg. 450 houdt menu's
         // en tabellen rustig.
         medium: '450',
+      },
+      // Het inlogscherm (AuthPage): één opstartmoment, daarna rust. Alles
+      // staat achter motion-safe:, dus wie minder beweging vraagt, krijgt
+      // een stilstaand scherm.
+      keyframes: {
+        draai: { to: { transform: 'rotate(360deg)' } },
+        knipper: { '50%': { opacity: '0' } },
+        opstart: { from: { opacity: '0', transform: 'translateY(4px)' }, to: { opacity: '1', transform: 'none' } },
+      },
+      animation: {
+        draai: 'draai 180s linear infinite',
+        knipper: 'knipper 1s steps(1) infinite',
+        opstart: 'opstart 0.4s ease-out both',
       },
       colors: {
         // Het neutraal van Taskflow: grijs met een zweem groen, de kleur van

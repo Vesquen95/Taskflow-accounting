@@ -1858,3 +1858,25 @@ Al het andere is rustig.
   aangever, per kwartaal") in plaats van de interne code.
 - **Dossier:** de knop "Dit dossier is in vereffening…" las als een
   vaststelling bij elke klant; hij heet nu "Ontbinding registreren…".
+
+## §40 — Het inlogscherm: het jaar als wijzerplaat (14/10/2026)
+
+**Gevraagd:** de inlogpagina "mega futuristisch". Uit drie voorstellen
+(Horizon, Chronometer, Holo-terminal) koos het kantoor de combinatie van de
+laatste twee.
+
+**Gebouwd:** een donker scherm met het jaar als lichtgevende wijzerplaat.
+Twaalf maanden op de ring, de huidige maand opgelicht, en een gloeiende boog
+van vandaag naar de volgende btw-kwartaaltermijn. Het formulier staat in het
+midden. Linksboven een korte opstartreeks, rechtsonder de uitlezingen
+(vandaag, week, dagen tot de btw-termijn), hoekmarkeringen en scanlijnen.
+
+**Wat de pagina zegt, klopt:** vóór het inloggen leest ze niets uit de
+databank, dus rekent ze zelf (`src/lib/inlogscherm.ts`): de datum, het
+ISO-weeknummer, en de wettelijke btw-kwartaaltermijn -- de 25ste van de maand
+na het kwartaal, zonder uitstel (zie 0048). De opstartreeks beweert alleen
+wat waar is.
+
+**Ongewijzigd:** het formulier (één knop erin, registreren erbuiten), de
+meldingen, de uitleg na een automatische afmelding. Alle beweging staat
+achter `motion-safe:`; de decoratie is verborgen voor schermlezers.

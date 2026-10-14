@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthPage } from './AuthPage'
 
 const signIn = vi.fn()
@@ -18,8 +18,8 @@ beforeEach(() => {
   signUp.mockResolvedValue({ error: null })
 })
 
-/** The "Inloggen"/"Registreren" tab buttons share an accessible name with
- * the submit button in sign-in mode, so submit-related queries are scoped
+/** The mode switch outside the form can share its name with the submit
+ * button ("Inloggen" in sign-up mode), so submit-related queries are scoped
  * to the <form> to stay unambiguous. */
 function getForm() {
   return screen.getByLabelText('E-mailadres').closest('form')!
@@ -167,5 +167,24 @@ describe('AuthPage: uitleg na een automatische afmelding', () => {
   it('zegt niets als je gewoon zelf uitlogde', () => {
     render(<AuthPage />)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+})
+
+describe('AuthPage: de wijzerplaat', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('toont de volgende btw-kwartaaltermijn, uitgerekend zonder databank', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-14T09:00:00'))
+    render(<AuthPage />)
+
+    expect(screen.getByText('Btw Q3 2026 over 11 dagen')).toBeInTheDocument()
+    expect(screen.getByText('Week').nextElementSibling).toHaveTextContent('42')
+  })
+
+  it('houdt de decoratie stil voor een schermlezer: alleen meldingen zijn een status', () => {
+    render(<AuthPage />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(document.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
   })
 })
