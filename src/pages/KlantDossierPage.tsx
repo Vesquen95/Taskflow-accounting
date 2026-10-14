@@ -13,6 +13,7 @@ import { saveClientObligations, loadClientObligations, type ObligationSelection 
 import { ClientObligationFormModal } from '../components/ClientObligationFormModal'
 import { AdhocTaskFormModal } from '../components/AdhocTaskFormModal'
 import { ClientArchiveModal } from '../components/ClientArchiveModal'
+import { KlantWissenModal } from '../components/KlantWissenModal'
 import { BoekjaarWijzigingPaneel } from '../components/BoekjaarWijzigingPaneel'
 import { VereffeningPaneel } from '../components/VereffeningPaneel'
 import { vereffeningStand, VEREFFENING_LABEL } from '../lib/vereffening'
@@ -26,6 +27,7 @@ import type { TaskInstanceWithRelations, TaskStatus } from '../types'
 import { meldStatusGewijzigd } from '../hooks/useTeKeuren'
 import { DossierTeFactureren } from '../components/DossierTeFactureren'
 import { isoDatum } from '../lib/werkstromen'
+import { meldFactuurpostenGewijzigd } from '../lib/facturatie'
 
 
 /** Klantdossier (§4 point 3): alle verplichtingen, status/historiek,
@@ -66,6 +68,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
   const [showArchive, setShowArchive] = useState(false)
   const [archiveError, setArchiveError] = useState<string | null>(null)
   const [heractiveren, setHeractiveren] = useState(false)
+  const [showWissen, setShowWissen] = useState(false)
 
   async function handleEdit(values: ClientFormValues) {
     const { error: err } = await supabase
@@ -106,6 +109,16 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     } finally {
       setHeractiveren(false)
     }
+  }
+
+  /** Definitief wissen (0072). De databank bewaakt de sloten: kantoorbeheerder,
+   *  gearchiveerd, en de naam exact overgetypt. */
+  async function wisKlant(naam: string) {
+    const { error: err } = await supabase.rpc('klant_wissen', { p_client_id: clientId, p_naam: naam })
+    if (err) throw err
+    meldStatusGewijzigd()
+    meldFactuurpostenGewijzigd()
+    navigate('klanten')
   }
 
   async function openEdit() {
@@ -275,6 +288,15 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
               </button>
             )}
           </div>
+          {!client.actief && employee?.rol === 'kantoorbeheerder' && (
+            <button
+              type="button"
+              onClick={() => setShowWissen(true)}
+              className="text-xs font-medium text-slate-400 underline underline-offset-2 hover:text-red-600"
+            >
+              Definitief wissen
+            </button>
+          )}
           {archiveError && (
             <p role="alert" className="max-w-xs rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
               {archiveError}
@@ -467,6 +489,14 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           openstaandeTaken={teAnnuleren}
           onClose={() => setShowArchive(false)}
           onConfirm={archiveClient}
+        />
+      )}
+      {showWissen && (
+        <KlantWissenModal
+          clientNaam={client.naam}
+          aantalTaken={tasks.length}
+          onClose={() => setShowWissen(false)}
+          onConfirm={wisKlant}
         />
       )}
       {showEdit && (

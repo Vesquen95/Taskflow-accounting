@@ -1808,3 +1808,17 @@ Een volledige doorlichting (Ponytail-audit). Wat gevonden en hersteld werd:
   soort fout zien.
 - **Toewijzen vanuit het dossier** toonde alle medewerkers in plaats van het
   team van de klant: het dossier haalde `team_id` van de klant niet op.
+
+## §38 — Een klant definitief wissen (14/10/2026)
+
+**Gevraagd:** klanten wissen vanuit de website (aanleiding: zeven testklanten).
+
+**Gebouwd (0072):** in het dossier van een *gearchiveerde* klant staat voor
+een kantoorbeheerder "Definitief wissen". Je typt de naam van de klant over;
+pas dan werkt de knop. De klant gaat weg met zijn taken, verplichtingen,
+historiek en factuurposten. Wat blijft: één regel in `klanten_gewist` (naam,
+ondernemingsnummer, aantal taken, wie en wanneer).
+
+**Sloten, in de databank (`klant_wissen`):** alleen een kantoorbeheerder van
+hetzelfde kantoor, alleen een gearchiveerde klant, en de naam moet kloppen.
+Archiveren blijft de gewone weg: dat is omkeerbaar, wissen niet.

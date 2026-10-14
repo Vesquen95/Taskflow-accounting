@@ -9366,4 +9366,126 @@ begin
   raise notice 'PASS 71.7: de toestemming lekt niet naar een andere taak';
 end $$;
 
+-- ============================================================
+-- Section 72: een klant definitief wissen (0072)
+-- 72.1 een gewone medewerker wist niets
+-- 72.2 een actieve klant wis je niet: eerst archiveren
+-- 72.3 een verkeerd overgetypte naam wist niets
+-- 72.4 de kantoorbeheerder wist: klant, taken, verplichtingen en historiek weg, spoor blijft
+-- 72.5 een kantoorbeheerder van een ander kantoor wist niets
+-- 72.6 de andere klanten blijven onaangeroerd
+-- ============================================================
+do $$
+declare
+  v_firm uuid; v_firm2 uuid;
+  v_mw uuid; v_mw_uid uuid := gen_random_uuid();
+  v_kb uuid; v_kb_uid uuid := gen_random_uuid();
+  v_kb2_uid uuid := gen_random_uuid();
+  v_klant uuid; v_blijft uuid; v_ot uuid;
+  v_ok boolean; v_n int; v_taken int; v_blijft_taken int;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values
+    (v_mw_uid, 's72m@test.local', now()), (v_kb_uid, 's72k@test.local', now()), (v_kb2_uid, 's72x@test.local', now());
+  insert into public.firms (naam) values ('S72 Kantoor') returning id into v_firm;
+  insert into public.firms (naam) values ('S72 Ander kantoor') returning id into v_firm2;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_mw_uid, 'S72 Medewerker', 's72m@test.local', 'medewerker', true, true) returning id into v_mw;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm, v_kb_uid, 'S72 Beheerder', 's72k@test.local', 'kantoorbeheerder', true, true) returning id into v_kb;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief) values
+    (v_firm2, v_kb2_uid, 'S72 Andere beheerder', 's72x@test.local', 'kantoorbeheerder', true, true);
+
+  perform set_config('taskflow.test_uid', v_kb_uid::text, true);
+  select id into v_ot from public.obligation_types where code = 'aangifte_venb_pb';
+  insert into public.clients (firm_id, naam, ondernemingsnummer, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S72 Testklant', 'BE0999.999.999', 12, 31, 'geen', true) returning id into v_klant;
+  insert into public.clients (firm_id, naam, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S72 Blijft', 12, 31, 'geen', true) returning id into v_blijft;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_klant, v_ot, true, current_date), (v_blijft, v_ot, true, current_date);
+  perform public.generate_task_instances_intern(v_firm, public.horizon_maanden(), 0, v_klant);
+  perform public.generate_task_instances_intern(v_firm, public.horizon_maanden(), 0, v_blijft);
+  select count(*) into v_taken from public.task_instances where client_id = v_klant;
+  select count(*) into v_blijft_taken from public.task_instances where client_id = v_blijft;
+  if v_taken = 0 or v_blijft_taken = 0 then
+    raise exception 'FAIL 72: opzet zonder taken (% / %)', v_taken, v_blijft_taken;
+  end if;
+
+  -- 72.2 Nog actief.
+  v_ok := false;
+  begin
+    perform public.klant_wissen(v_klant, 'S72 Testklant');
+  exception when invalid_parameter_value then v_ok := true;
+  end;
+  if not v_ok or not exists (select 1 from public.clients where id = v_klant) then
+    raise exception 'FAIL 72.2: een actieve klant werd gewist';
+  end if;
+  raise notice 'PASS 72.2: een actieve klant wis je niet';
+
+  update public.clients set actief = false where id = v_klant;
+
+  -- 72.1 Een medewerker, ook een die mag goedkeuren.
+  perform set_config('taskflow.test_uid', v_mw_uid::text, true);
+  v_ok := false;
+  begin
+    perform public.klant_wissen(v_klant, 'S72 Testklant');
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok or not exists (select 1 from public.clients where id = v_klant) then
+    raise exception 'FAIL 72.1: een medewerker kon een klant wissen';
+  end if;
+  raise notice 'PASS 72.1: een gewone medewerker wist niets';
+
+  -- 72.5 Een beheerder van een ander kantoor.
+  perform set_config('taskflow.test_uid', v_kb2_uid::text, true);
+  v_ok := false;
+  begin
+    perform public.klant_wissen(v_klant, 'S72 Testklant');
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok or not exists (select 1 from public.clients where id = v_klant) then
+    raise exception 'FAIL 72.5: een ander kantoor kon deze klant wissen';
+  end if;
+  raise notice 'PASS 72.5: een ander kantoor wist niets';
+
+  -- 72.3 Verkeerde naam.
+  perform set_config('taskflow.test_uid', v_kb_uid::text, true);
+  v_ok := false;
+  begin
+    perform public.klant_wissen(v_klant, 'S72 Testklan');
+  exception when invalid_parameter_value then v_ok := true;
+  end;
+  if not v_ok or (select count(*) from public.task_instances where client_id = v_klant) <> v_taken then
+    raise exception 'FAIL 72.3: een verkeerde naam wiste toch iets';
+  end if;
+  raise notice 'PASS 72.3: een verkeerd overgetypte naam wist niets';
+
+  -- 72.4
+  v_n := public.klant_wissen(v_klant, '  S72 Testklant ');
+  if v_n <> v_taken then
+    raise exception 'FAIL 72.4: % taken gemeld, % verwacht', v_n, v_taken;
+  end if;
+  if exists (select 1 from public.clients where id = v_klant)
+     or exists (select 1 from public.task_instances where client_id = v_klant)
+     or exists (select 1 from public.client_obligations where client_id = v_klant)
+     or exists (select 1 from public.client_change_log where client_id = v_klant) then
+    raise exception 'FAIL 72.4: er bleef iets van de gewiste klant achter';
+  end if;
+  if not exists (
+    select 1 from public.klanten_gewist
+    where firm_id = v_firm and naam = 'S72 Testklant' and ondernemingsnummer = 'BE0999.999.999'
+      and aantal_taken = v_taken and gewist_door = v_kb
+  ) then
+    raise exception 'FAIL 72.4: geen spoor van wie wat wiste';
+  end if;
+  raise notice 'PASS 72.4: klant met alles erop en eraan weg, spoor in klanten_gewist';
+
+  -- 72.6
+  if (select count(*) from public.task_instances where client_id = v_blijft) <> v_blijft_taken
+     or not exists (select 1 from public.clients where id = v_blijft and actief) then
+    raise exception 'FAIL 72.6: een andere klant werd geraakt';
+  end if;
+  raise notice 'PASS 72.6: de andere klanten blijven onaangeroerd';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

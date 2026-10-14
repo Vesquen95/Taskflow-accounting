@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
@@ -336,5 +336,36 @@ describe('KlantDossierPage — niet van toepassing', () => {
     await waitFor(() =>
       expect(supabase.rpc).toHaveBeenCalledWith('taak_niet_van_toepassing', { p_task_id: 't1', p_reden: 'Geen omzet' })
     )
+  })
+})
+
+describe('KlantDossierPage — definitief wissen', () => {
+  it('wist een gearchiveerde klant pas wanneer de naam overgetypt is, en gaat terug naar de lijst', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    install({ ...handlers({ actief: false }), factuurposten: () => ({ data: [], error: null }) })
+    render(<KlantDossierPage clientId="c1" navigate={navigate} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Definitief wissen' }))
+    const dialoog = await screen.findByRole('dialog')
+    expect(dialoog).toHaveTextContent('4 taken')
+    const knop = within(dialoog).getByRole('button', { name: 'Definitief wissen' })
+    expect(knop).toBeDisabled()
+
+    await user.type(within(dialoog).getByLabelText(/Typ de naam van de klant over/), 'Acme')
+    expect(knop).toBeDisabled()
+    await user.type(within(dialoog).getByLabelText(/Typ de naam van de klant over/), ' BV')
+    await user.click(knop)
+
+    expect(supabase.rpc).toHaveBeenCalledWith('klant_wissen', { p_client_id: 'c1', p_naam: 'Acme BV' })
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('klanten'))
+  })
+
+  it('biedt wissen niet aan bij een actieve klant: eerst archiveren', async () => {
+    install({ ...handlers(), factuurposten: () => ({ data: [], error: null }) })
+    render(<KlantDossierPage clientId="c1" navigate={vi.fn()} />)
+
+    expect(await screen.findByRole('button', { name: 'Archiveren' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Definitief wissen' })).not.toBeInTheDocument()
   })
 })
