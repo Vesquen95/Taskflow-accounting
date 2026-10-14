@@ -82,7 +82,7 @@ export function BoekjaarWijzigingPaneel({
 
       {herzetbaar.length > 0 && (
         <>
-          <h3 className="mt-3 text-xs font-medium uppercase tracking-wide text-amber-800">
+          <h3 className="mt-3 text-xs font-semibold text-amber-800">
             Wordt herrekend ({herzetbaar.length})
           </h3>
           <ul className="mt-1 space-y-1 text-sm text-amber-900">
@@ -99,7 +99,7 @@ export function BoekjaarWijzigingPaneel({
 
       {blijftStaan.length > 0 && (
         <>
-          <h3 className="mt-3 text-xs font-medium uppercase tracking-wide text-amber-800">
+          <h3 className="mt-3 text-xs font-semibold text-amber-800">
             Blijft staan ({blijftStaan.length})
           </h3>
           <ul className="mt-1 space-y-1 text-sm text-amber-900">

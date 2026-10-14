@@ -5,8 +5,7 @@ import { HeropenFormulier } from './HeropenFormulier'
 import { heropenTaak, magHeropenen } from '../lib/heropenen'
 import { StatusBadge } from './StatusBadge'
 import { WachtDuurBadge } from './WachtDuurBadge'
-import { UrgencyBadge } from './UrgencyBadge'
-import { dagenVerschil, formatDate, formatDateTime } from '../lib/urgency'
+import { dagenVerschil, formatDate, formatDateTime, getUrgencyBand, relatieveDag, urgentieTekst } from '../lib/urgency'
 import { supabase } from '../lib/supabase'
 import { isAfgesloten } from '../lib/klantArchief'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
@@ -105,6 +104,9 @@ export function TaskDetailModal({
   const [reassignTo, setReassignTo] = useState(task.toegewezen_medewerker_id ?? '')
   const [nieuweDeadline, setNieuweDeadline] = useState(task.due_date)
   const [heropenOpen, setHeropenOpen] = useState(false)
+  // Verzetten is een uitzondering, geen dagelijkse handeling: het formulier
+  // met zijn waarschuwing staat pas open wanneer iemand erom vraagt.
+  const [verzettenOpen, setVerzettenOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -198,6 +200,7 @@ export function TaskDetailModal({
   }
 
   const regel = taakRegel(task)
+  const urgentie = getUrgencyBand(task.due_date, task.status, task.obligation_type?.categorie)
   // De vier voorafbetalingen heten in de databank allemaal hetzelfde. Welke
   // van de vier het is staat nu in de titel; wat ze waard is, hieronder.
   const va = leesVoorafbetaling(task.obligation_type?.code, task.periode_label)
@@ -205,10 +208,15 @@ export function TaskDetailModal({
   return (
     <Modal title={regel.naam} onClose={onClose}>
       <div className="space-y-4 text-sm">
+        {/* Voor wie het is, eerst: de titel zegt welke verplichting, en die
+            komt bij tientallen klanten terug. */}
+        <p className="-mt-2 text-base font-semibold text-slate-900">
+          {task.client?.vertrouwelijk && <span aria-label="Vertrouwelijk">🔒 </span>}
+          {task.client?.naam ?? '—'}
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={task.status} />
           <WachtDuurBadge sinds={task.wacht_op_klant_sinds} />
-          <UrgencyBadge dueDate={task.due_date} status={task.status} categorie={task.obligation_type?.categorie} />
           {task.review_vereist && (
             <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
               Review vereist
@@ -236,20 +244,20 @@ export function TaskDetailModal({
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
           <div>
-            <dt className="text-xs font-medium uppercase text-slate-400">Klant</dt>
-            <dd className="text-slate-800">
-              {task.client?.vertrouwelijk && <span aria-label="Vertrouwelijk">🔒 </span>}
-              {task.client?.naam ?? '—'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium uppercase text-slate-400">Periode</dt>
+            <dt className="text-xs text-slate-500">Periode</dt>
             <dd className="text-slate-800">{regel.periode ?? '—'}</dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-slate-400">Deadline</dt>
+            <dt className="text-xs text-slate-500">Deadline</dt>
             <dd className="text-slate-800">
               {formatDate(task.due_date)}
+              {/* Geen apart urgentielabel meer: "morgen" in de kleur van de
+                  urgentie zegt hetzelfde, op de plek waar je de datum leest. */}
+              {urgentie && (
+                <span className={`ml-1 font-semibold ${urgentieTekst[urgentie]}`}>
+                  ({relatieveDag(task.due_date).toLowerCase()})
+                </span>
+              )}
               {task.due_date_verschoven && !handmatigVerzet && (
                 <span className="ml-1 text-xs text-slate-400">
                   (wettelijk: {formatDate(task.due_date_wettelijk)}, verschoven door weekend/feestdag)
@@ -266,7 +274,7 @@ export function TaskDetailModal({
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-slate-400">Herkomst</dt>
+            <dt className="text-xs text-slate-500">Herkomst</dt>
             <dd className="text-slate-800">{task.bron_type === 'automatisch_gegenereerd' ? 'Automatisch gegenereerd' : 'Ad-hoc'}</dd>
           </div>
         </dl>
@@ -284,7 +292,7 @@ export function TaskDetailModal({
         )}
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium uppercase text-slate-400">Verantwoordelijke</label>
+          <label className="text-xs text-slate-500">Verantwoordelijke</label>
 
           {/* Ligt de taak nog in de bak van het team, dan is "ik doe dit" de
               handeling die je hier komt doen. Eén knop in plaats van jezelf
@@ -325,9 +333,18 @@ export function TaskDetailModal({
           </div>
         </div>
 
-        {magVerzetten && (
+        {magVerzetten && !verzettenOpen && (
+          <button
+            type="button"
+            onClick={() => setVerzettenOpen(true)}
+            className="text-sm font-medium text-brand-700 underline underline-offset-2 hover:text-brand-800"
+          >
+            Andere deadline afspreken…
+          </button>
+        )}
+        {magVerzetten && verzettenOpen && (
           <div className="space-y-1.5 rounded-md border border-slate-200 p-3">
-            <label htmlFor="nieuwe-deadline" className="text-xs font-medium uppercase text-slate-400">
+            <label htmlFor="nieuwe-deadline" className="text-xs text-slate-500">
               Nieuwe deadline
             </label>
             <div className="flex gap-2">
@@ -398,7 +415,7 @@ export function TaskDetailModal({
 
         {volgendeStappen.length > 0 && (
           <div className="space-y-1.5">
-            <label className="text-xs font-medium uppercase text-slate-400">Status wijzigen</label>
+            <label className="text-xs text-slate-500">Status wijzigen</label>
             <div className="flex flex-wrap gap-2">
               {volgendeStappen.map((actie) => (
                 <button
@@ -489,7 +506,7 @@ export function TaskDetailModal({
         {task.status !== 'geannuleerd' && <TeFacturerenKnop task={task} />}
 
         <div>
-          <h3 className="mb-1.5 text-xs font-medium uppercase text-slate-400">Historiek</h3>
+          <h3 className="mb-1.5 text-xs text-slate-500">Historiek</h3>
           {logLoading ? (
             <p className="text-xs text-slate-400">Laden…</p>
           ) : log.length === 0 ? (

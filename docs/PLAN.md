@@ -1822,3 +1822,39 @@ ondernemingsnummer, aantal taken, wie en wanneer).
 **Sloten, in de databank (`klant_wissen`):** alleen een kantoorbeheerder van
 hetzelfde kantoor, alleen een gearchiveerde klant, en de naam moet kloppen.
 Archiveren blijft de gewone weg: dat is omkeerbaar, wissen niet.
+
+## §39 — Gebruiksvriendelijker ontwerp (14/10/2026)
+
+**Gevraagd:** "doe iets met de frontend-design skill; maak het zo
+gebruiksvriendelijk mogelijk."
+
+**Uitgangspunt:** een werkinstrument dat medewerkers de hele dag gebruiken.
+De vraag die het hoofdscherm beantwoordt: wat vervalt wanneer, en bij wie.
+Al het andere is rustig.
+
+**Wat veranderde:**
+- **Kalender per vervaldag.** Elke dag krijgt een kalenderblaadje (weekdag
+  en dag), gekleurd naar hoe dringend hij is: rood te laat, oranje deze
+  week, petrol binnenkort. Daarnaast in woorden: "Morgen", "Over 9 dagen",
+  "3 dagen te laat". Elke taak toont de verantwoordelijke (of "Nog
+  niemand"). Het urgentielabel per regel verviel: de dag zegt het al.
+- **Elke taak is een knop.** Vroeger opende een taak in de kalender alleen
+  met de muis; nu ook met het toetsenbord.
+- **Lettertype: Atkinson Hyperlegible**, ontworpen om tekens die op elkaar
+  lijken uit elkaar te houden (0/O, 1/l/I) -- ondernemingsnummers, periodes,
+  datums. Zelf gehost, cijfers even breed zodat datums recht onder elkaar
+  staan.
+- **Kleur.** Neutraal met een zweem groen (kasboekpapier) en petrol als
+  accent in plaats van standaardblauw. Gedempte tekst is donkerder en haalt
+  nu overal WCAG AA (4,5:1); vroeger zakte grijze tekst tot 2,6:1.
+- **Geen hoofdletterkopjes meer.** Kopjes, tabelhoofden en veldlabels in
+  gewone zinsbouw; sectiekopjes zijn echte, leesbare kopjes.
+- **Taakvenster:** de klant staat bovenaan, de deadline zegt "(morgen)" in de
+  kleur van de urgentie, en "Andere deadline afspreken" staat dicht tot je
+  het nodig hebt. "Geannuleerd" als knop heet nu "Taak annuleren".
+- **Telefoon:** "Morgen, 15 okt" in plaats van een datum plus een label dat
+  hetzelfde zei.
+- **Klantenlijst en dossier** tonen het btw-regime in woorden ("Periodieke
+  aangever, per kwartaal") in plaats van de interne code.
+- **Dossier:** de knop "Dit dossier is in vereffening…" las als een
+  vaststelling bij elke klant; hij heet nu "Ontbinding registreren…".

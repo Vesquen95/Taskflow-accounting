@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { daysUntil, formatDate, getUrgencyBand, wachtDuur, wachtTeLang } from './urgency'
+import { daysUntil, dringendsteBand, formatDate, getUrgencyBand, relatieveDag, wachtDuur, wachtTeLang } from './urgency'
 
 const today = new Date('2026-06-15T12:00:00')
 
@@ -173,5 +173,30 @@ describe('wachtTeLang — vanaf wanneer verdient het aandacht', () => {
 
   it('zegt nee wanneer er niet gewacht wordt', () => {
     expect(wachtTeLang(null, nu)).toBe(false)
+  })
+})
+
+describe('relatieveDag', () => {
+  const vandaag = new Date('2026-10-14T09:00:00')
+  it.each([
+    ['2026-10-14', 'Vandaag'],
+    ['2026-10-15', 'Morgen'],
+    ['2026-10-13', 'Gisteren, 1 dag te laat'],
+    ['2026-10-07', '7 dagen te laat'],
+    ['2026-10-23', 'Over 9 dagen'],
+    ['2026-10-31', 'Over 2 weken'],
+    ['2027-04-30', 'Over 6 maanden'],
+  ])('%s heet "%s"', (datum, verwacht) => {
+    expect(relatieveDag(datum, vandaag)).toBe(verwacht)
+  })
+})
+
+describe('dringendsteBand', () => {
+  it('kleurt een dag naar de strengste taak', () => {
+    expect(dringendsteBand(['later', 'deze_week', null])).toBe('deze_week')
+    expect(dringendsteBand(['binnenkort', 'te_laat'])).toBe('te_laat')
+  })
+  it('valt terug op later wanneer niets dringt', () => {
+    expect(dringendsteBand([null])).toBe('later')
   })
 })

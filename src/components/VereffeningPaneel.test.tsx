@@ -21,7 +21,7 @@ describe('VereffeningPaneel', () => {
   it('houdt zich stil bij een gewoon dossier', () => {
     toon(null, null)
     expect(screen.queryByRole('heading')).toBeNull()
-    expect(screen.getByRole('button', { name: /in vereffening/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Ontbinding registreren/i })).toBeInTheDocument()
   })
 
   it('zegt bij een lopende vereffening dat alles doorloopt', () => {

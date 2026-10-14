@@ -9,6 +9,7 @@ import { useObligationTypes } from '../hooks/useObligationTypes'
 import { saveClientObligations, syncClientTasks } from '../lib/clientObligations'
 import { metStandaardParameters } from '../lib/obligationParameters'
 import type { NieuweKlant, VerplichtingKeuze } from '../lib/klantImport'
+import { REGIME_LABELS } from '../lib/btwRegime'
 import { reportError } from '../lib/errorMessage'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
@@ -258,7 +259,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-600">
               <tr>
                 <th className="px-3 py-2">Naam</th>
                 <th className="px-3 py-2">Team</th>
@@ -297,7 +298,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
                       ''
                     )}
                   </td>
-                  <td className="px-3 py-2 text-slate-600">{client.btw_regime}</td>
+                  <td className="px-3 py-2 text-slate-600">{REGIME_LABELS[client.btw_regime] ?? client.btw_regime}</td>
                   <td className="px-3 py-2 text-slate-600">{client.mandataris ? 'Ja' : 'Nee'}</td>
                   <td className="px-3 py-2 text-slate-600">
                     {employees.find((e) => e.id === client.standaard_verantwoordelijke_id)?.naam ?? '—'}

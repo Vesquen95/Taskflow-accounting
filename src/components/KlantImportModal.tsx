@@ -87,7 +87,7 @@ function VoorbeeldTabel({ rijen }: { rijen: ImportRij[] }) {
   return (
     <div className="max-h-[45vh] overflow-auto rounded-lg border border-slate-200">
       <table className="min-w-full divide-y divide-slate-200 text-xs">
-        <thead className="sticky top-0 bg-slate-50 text-left font-semibold uppercase tracking-wide text-slate-500">
+        <thead className="sticky top-0 bg-slate-50 text-left font-semibold text-slate-600">
           <tr>
             <th className="px-2 py-1.5">Rij</th>
             <th className="px-2 py-1.5">Naam</th>

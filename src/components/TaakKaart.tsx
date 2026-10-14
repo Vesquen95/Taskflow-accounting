@@ -1,8 +1,8 @@
 import type { Employee, TaskInstanceWithRelations, TaskStatus } from '../types'
 import { TaskStatusControl } from './TaskStatusControl'
 import { WachtDuurBadge } from './WachtDuurBadge'
-import { UrgencyBadge } from './UrgencyBadge'
-import { formatDate } from '../lib/urgency'
+import { getUrgencyBand, relatieveDag, urgentieTekst } from '../lib/urgency'
+import { isAfgesloten } from '../lib/klantArchief'
 import { taakRegel } from '../lib/taakLabel'
 
 interface TaakKaartProps {
@@ -31,6 +31,9 @@ interface TaakKaartProps {
  */
 export function TaakKaart({ task, onOpen, currentEmployee, onStatusChange, onStatusFout }: TaakKaartProps) {
   const regel = taakRegel(task)
+  // Geen urgentielabel meer naast de naam: de groep ("Deze week") en
+  // "Morgen" zeiden het al. De kleur van "Morgen" draagt de urgentie.
+  const band = getUrgencyBand(task.due_date, task.status, task.obligation_type?.categorie)
   return (
     <li className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <button
@@ -47,11 +50,6 @@ export function TaakKaart({ task, onOpen, currentEmployee, onStatusChange, onSta
             )}
             {task.client?.naam ?? '—'}
           </span>
-          <UrgencyBadge
-            dueDate={task.due_date}
-            status={task.status}
-            categorie={task.obligation_type?.categorie}
-          />
         </span>
 
         <span className="mt-0.5 block truncate text-sm text-slate-600">
@@ -67,7 +65,14 @@ export function TaakKaart({ task, onOpen, currentEmployee, onStatusChange, onSta
 
       <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-2">
         <span className="min-w-0 truncate text-sm text-slate-700">
-          {formatDate(task.due_date)}
+          {/* "Morgen" zegt meer dan een datum; de datum zelf blijft erbij,
+              want daar spreek je de klant op aan. */}
+          {!isAfgesloten(task.status) && <span className={`font-semibold ${band ? urgentieTekst[band] : ''}`}>{relatieveDag(task.due_date)}, </span>}
+          {new Date(`${task.due_date}T00:00:00`).toLocaleDateString('nl-BE', {
+            day: 'numeric',
+            month: 'short',
+            ...(task.due_date.slice(0, 4) !== String(new Date().getFullYear()) && { year: 'numeric' }),
+          })}
           {task.due_date_verschoven && (
             <span
               title="Verschoven t.o.v. de wettelijke datum door weekend of feestdag"

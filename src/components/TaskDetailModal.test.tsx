@@ -182,7 +182,7 @@ describe('TaskDetailModal — approval gating (mag_goedkeuren, §5)', () => {
     expect(screen.queryByRole('button', { name: 'Terugsturen (afkeuren)' })).not.toBeInTheDocument()
     expect(screen.getByText(/Enkel medewerkers met goedkeuringsrecht/)).toBeInTheDocument()
     // Cancelling is still allowed regardless of approval rights.
-    expect(screen.getByRole('button', { name: 'Geannuleerd' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Taak annuleren' })).toBeInTheDocument()
   })
 
   it('shows Goedkeuren/Terugsturen for an employee with mag_goedkeuren', async () => {
@@ -541,10 +541,30 @@ describe('TaskDetailModal — deadline handmatig verzetten (bevinding L)', () =>
     )
   }
 
+  /** Verzetten staat dicht tot iemand erom vraagt. */
+  async function openVerzetten() {
+    await userEvent.setup().click(await screen.findByRole('button', { name: /Andere deadline afspreken/ }))
+  }
+
+  it('houdt het verzetten dicht tot iemand erom vraagt', async () => {
+    toon({ due_date: '2026-09-20', due_date_wettelijk: '2026-09-20' })
+
+    await openVerzetten()
+    expect(screen.getByLabelText(/Nieuwe deadline/i)).toBeInTheDocument()
+  })
+
+  it('toont het formulier niet bij het openen van de taak', async () => {
+    toon({ due_date: '2026-09-20', due_date_wettelijk: '2026-09-20' })
+
+    expect(await screen.findByRole('button', { name: /Andere deadline afspreken/ })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Nieuwe deadline/i)).not.toBeInTheDocument()
+  })
+
   it('stuurt enkel de nieuwe effectieve deadline door', async () => {
     const user = userEvent.setup()
     toon({ due_date: '2026-09-20', due_date_wettelijk: '2026-09-20' })
 
+    await openVerzetten()
     const veld = await screen.findByLabelText(/Nieuwe deadline/i)
     expect(veld).toHaveValue('2026-09-20')
     await user.clear(veld)
@@ -557,12 +577,14 @@ describe('TaskDetailModal — deadline handmatig verzetten (bevinding L)', () =>
   it('houdt de wettelijke datum zichtbaar, zodat de afwijking te zien is', async () => {
     toon({ due_date: '2026-09-20', due_date_wettelijk: '2026-09-20' })
 
+    await openVerzetten()
     expect(await screen.findByText(/wettelijke datum blijft 20 sep 2026/i)).toBeInTheDocument()
   })
 
   it('zegt bij een wettelijke verplichting dat dit een besluit is, met gevolgen', async () => {
     toon({ obligation_type: { id: 'ot1', code: 'btw_aangifte', naam: 'BTW-aangifte', categorie: 'wettelijk', werkstroom: 'btw' } })
 
+    await openVerzetten()
     expect(await screen.findByText(/verschuift de wettelijke deadline niet/i)).toBeInTheDocument()
     expect(screen.getByText(/boete/i)).toBeInTheDocument()
   })
@@ -571,6 +593,7 @@ describe('TaskDetailModal — deadline handmatig verzetten (bevinding L)', () =>
     const user = userEvent.setup()
     toon({ due_date: '2026-09-20', due_date_wettelijk: '2026-09-20' })
 
+    await openVerzetten()
     const veld = await screen.findByLabelText(/Nieuwe deadline/i)
     expect(screen.queryByRole('alert', { name: /na de wettelijke deadline/i })).not.toBeInTheDocument()
 
@@ -590,6 +613,7 @@ describe('TaskDetailModal — deadline handmatig verzetten (bevinding L)', () =>
       obligation_type: { id: 'ot9', code: 'rapportering', naam: 'Kwartaalrapport', categorie: 'service', werkstroom: 'rapportering' },
     })
 
+    await openVerzetten()
     const veld = await screen.findByLabelText(/Nieuwe deadline/i)
     await user.clear(veld)
     await user.type(veld, '2026-10-05')
@@ -630,6 +654,7 @@ describe('TaskDetailModal — deadline handmatig verzetten (bevinding L)', () =>
     )
     toon({ due_date: '2026-09-20', due_date_wettelijk: '2026-09-20' })
 
+    await openVerzetten()
     const veld = await screen.findByLabelText(/Nieuwe deadline/i)
     await user.clear(veld)
     await user.type(veld, '2026-10-05')

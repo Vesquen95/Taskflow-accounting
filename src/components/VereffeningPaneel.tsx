@@ -75,7 +75,7 @@ export function VereffeningPaneel({
             onClick={() => setOpenen(true)}
             className="text-xs text-slate-500 hover:text-slate-800"
           >
-            Dit dossier is in vereffening…
+            Ontbinding registreren…
           </button>
         )}
       </div>

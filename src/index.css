@@ -10,7 +10,16 @@
   }
 
   body {
-    @apply bg-slate-50 text-slate-900;
+    @apply bg-slate-50 font-sans text-slate-900 antialiased;
+    /* Cijfers even breed: datums en periodes staan dan recht onder elkaar. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Vinkjes en keuzerondjes in de kleur van het huis, niet in het blauw
+     van de browser. */
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: theme('colors.brand.600');
   }
 
   :focus-visible {

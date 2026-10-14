@@ -271,7 +271,7 @@ export function AppLayout({
             return (
               <div key={groep.id} className="space-y-0.5">
                 {groep.titel && (
-                  <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="px-3 pb-1 text-xs font-semibold text-slate-500">
                     {groep.titel}
                   </p>
                 )}

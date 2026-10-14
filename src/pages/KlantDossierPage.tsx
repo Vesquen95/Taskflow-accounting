@@ -27,6 +27,7 @@ import type { TaskInstanceWithRelations, TaskStatus } from '../types'
 import { meldStatusGewijzigd } from '../hooks/useTeKeuren'
 import { DossierTeFactureren } from '../components/DossierTeFactureren'
 import { isoDatum } from '../lib/werkstromen'
+import { REGIME_LABELS } from '../lib/btwRegime'
 import { meldFactuurpostenGewijzigd } from '../lib/facturatie'
 
 
@@ -227,32 +228,32 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           </h1>
           <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-600 sm:grid-cols-4">
             <div>
-              <dt className="text-xs uppercase text-slate-400">Ondernemingsnr.</dt>
+              <dt className="text-xs text-slate-500">Ondernemingsnr.</dt>
               <dd>{client.ondernemingsnummer ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase text-slate-400">Rechtsvorm</dt>
+              <dt className="text-xs text-slate-500">Rechtsvorm</dt>
               <dd>{client.rechtsvorm ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase text-slate-400">Boekjaareinde</dt>
+              <dt className="text-xs text-slate-500">Boekjaareinde</dt>
               <dd>
                 {client.boekjaar_einde_dag}/{client.boekjaar_einde_maand}
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase text-slate-400">BTW-regime</dt>
+              <dt className="text-xs text-slate-500">BTW-regime</dt>
               <dd>
-                {client.btw_regime}
-                {client.btw_aangifte_frequentie ? ` (${client.btw_aangifte_frequentie})` : ''}
+                {REGIME_LABELS[client.btw_regime] ?? client.btw_regime}
+                {client.btw_aangifte_frequentie ? `, per ${client.btw_aangifte_frequentie}` : ''}
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase text-slate-400">Fiscaal mandaat</dt>
+              <dt className="text-xs text-slate-500">Fiscaal mandaat</dt>
               <dd>{client.mandataris ? 'Ja' : 'Nee'}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase text-slate-400">Standaard verantwoordelijke</dt>
+              <dt className="text-xs text-slate-500">Standaard verantwoordelijke</dt>
               <dd>{employees.find((e) => e.id === client.standaard_verantwoordelijke_id)?.naam ?? '—'}</dd>
             </div>
           </dl>
@@ -307,14 +308,14 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
 
       <section className="mb-6">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Verplichtingen</h2>
+          <h2 className="text-base font-semibold text-slate-900">Verplichtingen</h2>
           <button type="button" onClick={() => setShowAddObligation(true)} className="text-sm font-medium text-brand-600 hover:text-brand-700">
             + Verplichting toevoegen
           </button>
         </div>
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-600">
               <tr>
                 <th className="px-3 py-2">Type</th>
                 <th className="px-3 py-2">Geldig vanaf</th>
@@ -373,14 +374,14 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
 
       <section className="mb-6">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Openstaande taken</h2>
+          <h2 className="text-base font-semibold text-slate-900">Openstaande taken</h2>
           <button type="button" onClick={() => setShowAdhoc(true)} className="text-sm font-medium text-brand-600 hover:text-brand-700">
             + Ad-hoc taak
           </button>
         </div>
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-600">
               <tr>
                 <th className="px-3 py-2">Verplichting</th>
                 <th className="px-3 py-2">Periode</th>
@@ -425,7 +426,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
 
       {history.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Historiek</h2>
+          <h2 className="mb-2 text-base font-semibold text-slate-900">Historiek</h2>
           <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <tbody className="divide-y divide-slate-100">

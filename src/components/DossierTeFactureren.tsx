@@ -41,7 +41,7 @@ export function DossierTeFactureren({
   return (
     <section className="mb-6" aria-labelledby="dossier-te-factureren">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 id="dossier-te-factureren" className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <h2 id="dossier-te-factureren" className="text-base font-semibold text-slate-900">
           Te factureren{posten.length > 0 && ` (${posten.length})`}
         </h2>
         <div className="flex items-center gap-4">

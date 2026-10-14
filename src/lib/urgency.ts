@@ -141,3 +141,40 @@ export function wachtTeLang(sinds: string | null | undefined, nu: Date = new Dat
   const dagen = Math.round((startOfDay(nu).getTime() - begin.getTime()) / (1000 * 60 * 60 * 24))
   return dagen >= WACHT_LANG_VANAF_DAGEN
 }
+
+/**
+ * Hoe ver een vervaldag van vandaag ligt, in woorden: "morgen", "over 9
+ * dagen", "2 dagen te laat". Een datum alleen laat je zelf rekenen, en wie
+ * honderd regels overloopt, rekent niet.
+ */
+export function relatieveDag(datum: string, today: Date = new Date()): string {
+  const d = daysUntil(datum, today)
+  if (d === 0) return 'Vandaag'
+  if (d === 1) return 'Morgen'
+  if (d === -1) return 'Gisteren, 1 dag te laat'
+  if (d < 0) return `${-d} dagen te laat`
+  if (d < 14) return `Over ${d} dagen`
+  // Afgerond naar beneden: bij een deadline liever "over 6 maanden" voor
+  // zes en een halve dan een maand die er niet is.
+  if (d < 63) return `Over ${Math.floor(d / 7)} weken`
+  return `Over ${Math.floor(d / 30.4)} maanden`
+}
+
+const ERNST: readonly Exclude<UrgencyBand, null>[] = ['te_laat', 'vandaag', 'deze_week', 'binnenkort', 'later']
+
+/** De dringendste band van een reeks: één vervaldag kan wettelijke en
+ *  service-taken bundelen, en de dag kleurt naar de strengste. */
+export function dringendsteBand(banden: UrgencyBand[]): Exclude<UrgencyBand, null> {
+  for (const b of ERNST) if (banden.includes(b)) return b
+  return 'later'
+}
+
+/** De tekstkleur van "morgen", "3 dagen te laat": dezelfde taal als het
+ *  kalenderblaadje, zodat een te late dag overal rood leest. */
+export const urgentieTekst: Record<Exclude<UrgencyBand, null>, string> = {
+  te_laat: 'text-red-700',
+  vandaag: 'text-orange-700',
+  deze_week: 'text-orange-700',
+  binnenkort: 'text-brand-700',
+  later: 'text-slate-800',
+}

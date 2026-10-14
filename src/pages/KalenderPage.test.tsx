@@ -167,7 +167,7 @@ describe('KalenderPage — de te late taken uit het verleden', () => {
     await screen.findByText('Klant 1')
 
     const melding = await screen.findByRole('status', { name: /verborgen achterstand/i })
-    expect(within(melding).getByText(/12 te late taken verborgen/)).toBeInTheDocument()
+    expect(within(melding).getByText(/12 taken te laat, niet in deze lijst/)).toBeInTheDocument()
   })
 
   it('haalt de achterstand er weer bij zodra je het vinkje uitzet', async () => {
@@ -232,5 +232,24 @@ describe('KalenderPage — de lijst krimpt onder je voeten', () => {
     await waitFor(() => expect(lijstQueries).toHaveLength(3))
     expect(lijstQueries[2].calls).toContainEqual({ method: 'range', args: [0, 49] })
     expect(await screen.findByText('Klant 1')).toBeInTheDocument()
+  })
+})
+
+describe('KalenderPage — per vervaldag', () => {
+  it('groepeert per dag en zegt hoe ver die dag ligt', async () => {
+    install({ totaal: 50 })
+    render(<KalenderPage />)
+    await screen.findByText('Klant 1')
+
+    // 2029-03-01 valt op een donderdag, ver na vandaag.
+    expect(screen.getByRole('heading', { level: 3, name: /donderdag 1 maart/ })).toHaveTextContent(/^Over \d+ maanden/)
+  })
+
+  it('maakt van elke taak een knop, zodat ze ook met het toetsenbord opengaat', async () => {
+    install({ totaal: 50 })
+    render(<KalenderPage />)
+    await screen.findByText('Klant 1')
+
+    expect(screen.getByText('Klant 1').closest('button')).toHaveAttribute('type', 'button')
   })
 })

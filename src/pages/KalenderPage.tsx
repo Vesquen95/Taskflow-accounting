@@ -6,11 +6,11 @@ import { useTeams } from '../hooks/useTeams'
 import { teamLabel } from '../lib/teams'
 import { TaskDetailModal } from '../components/TaskDetailModal'
 import { StatusBadge } from '../components/StatusBadge'
-import { UrgencyBadge } from '../components/UrgencyBadge'
+import { DagBlad } from '../components/DagBlad'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { Paginering } from '../components/Paginering'
-import { formatDate } from '../lib/urgency'
+import { dringendsteBand, getUrgencyBand, relatieveDag, urgentieTekst } from '../lib/urgency'
 import { isoDatum } from '../lib/werkstromen'
 import { eindeVanDeWeek, startfiltersVoor } from '../lib/startvenster'
 import type { TaskInstanceWithRelations } from '../types'
@@ -148,6 +148,14 @@ export function KalenderPage() {
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
   }, [tasks])
 
+  /** Binnen een maand per vervaldag: wat op dezelfde dag vervalt, hoort bij
+   *  elkaar, en de dag zelf zegt al hoe dringend het is. */
+  function perDag(maandTaken: TaskInstanceWithRelations[]): [string, TaskInstanceWithRelations[]][] {
+    const map = new Map<string, TaskInstanceWithRelations[]>()
+    for (const t of maandTaken) map.set(t.due_date, [...(map.get(t.due_date) ?? []), t])
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b))
+  }
+
   // Een maandblok mag over een paginagrens vallen. Het eerste en het laatste
   // blok van een pagina kunnen dus doorlopen; hun teller gaat enkel over deze
   // pagina en moet dat ook zeggen.
@@ -161,11 +169,12 @@ export function KalenderPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Kalender</h1>
           <p className="text-sm text-slate-500">
-            {periode === 'week'
-              ? 'Wat er deze week vervalt.'
-              : 'Deadline-dichtheid per maand, kantoorbreed of per medewerker.'}
+            {periode === 'week' ? 'Wat er deze week vervalt.' : 'Wat er wanneer vervalt, per dag.'}
           </p>
-          {achterstand > 0 && (
+          {/* Staat de achterstand verborgen, dan meldt de balk eronder het
+              aantal al; twee keer hetzelfde rode zinnetje leert je het ene
+              te negeren. */}
+          {achterstand > 0 && !achterstandVerborgen && (
             <p className="mt-1 text-sm font-semibold text-red-700">
               {achterstand} {taakWoord(achterstand)} te laat
             </p>
@@ -179,7 +188,7 @@ export function KalenderPage() {
               onChange={(e) => zetAchterstandVerborgen(e.target.checked)}
               className="h-4 w-4 rounded border-slate-300"
             />
-            Te late taken uit het verleden verbergen
+            Te late taken verbergen
           </label>
           <select
             aria-label="Periode"
@@ -188,7 +197,7 @@ export function KalenderPage() {
             className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
           >
             <option value="week">Deze week</option>
-            <option value="alles">Alles</option>
+            <option value="alles">Alle deadlines</option>
           </select>
           <select
             aria-label="Team"
@@ -209,7 +218,7 @@ export function KalenderPage() {
             onChange={(e) => setFilters((f) => ({ ...f, toegewezenAan: e.target.value, pagina: 1 }))}
             className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
           >
-            <option value="alle">Kantoorbreed</option>
+            <option value="alle">Alle medewerkers</option>
             <option value={TEAMBAK}>Nog niemand</option>
             {employees.map((emp) => (
               <option key={emp.id} value={emp.id}>
@@ -229,14 +238,14 @@ export function KalenderPage() {
           className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2"
         >
           <span className="text-sm font-medium text-red-800">
-            {achterstand} te late {taakWoord(achterstand)} verborgen
+            {achterstand} {taakWoord(achterstand)} te laat, niet in deze lijst
           </span>
           <button
             type="button"
             onClick={() => zetAchterstandVerborgen(false)}
             className="rounded-md border border-red-300 bg-white px-3 py-1 text-sm font-medium text-red-700 hover:bg-red-100"
           >
-            Toon ze weer
+            Toon ze
           </button>
         </div>
       )}
@@ -284,32 +293,68 @@ export function KalenderPage() {
           />
           <div className="space-y-4">
             {grouped.map(([month, monthTasks], index) => (
-              <div key={month} className="rounded-lg border border-slate-200 bg-white">
-                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2">
-                  <h2 className="text-sm font-semibold text-slate-800">
+              <section key={month} aria-labelledby={`maand-${month}`} className="rounded-lg border border-slate-200 bg-white">
+                <div className="flex items-baseline justify-between border-b border-slate-200 px-4 py-2.5">
+                  <h2 id={`maand-${month}`} className="text-base font-semibold capitalize text-slate-900">
                     {new Date(`${month}-01T00:00:00`).toLocaleDateString('nl-BE', { month: 'long', year: 'numeric' })}
                   </h2>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                  <span className="text-xs font-medium text-slate-500">
                     {monthTasks.length} {taakWoord(monthTasks.length)}
                     {blokLooptDoor(index) ? ' op deze pagina' : ''}
                   </span>
                 </div>
-                <ul className="divide-y divide-slate-100">
-                  {monthTasks.map((t) => (
-                    <li key={t.id} className="flex cursor-pointer items-center justify-between gap-3 px-4 py-2 text-sm hover:bg-slate-50" onClick={() => setOpenTask(t)}>
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="w-16 shrink-0 text-slate-400">{formatDate(t.due_date)}</span>
-                        <span className="truncate font-medium text-slate-800">{t.client?.naam}</span>
-                        <span className="truncate text-slate-500">{t.obligation_type?.naam ?? t.title}</span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <UrgencyBadge dueDate={t.due_date} status={t.status} categorie={t.obligation_type?.categorie} />
-                        <StatusBadge status={t.status} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                <ol className="divide-y divide-slate-100">
+                  {perDag(monthTasks).map(([datum, dagTaken]) => {
+                    const band = dringendsteBand(
+                      dagTaken.map((t) => getUrgencyBand(t.due_date, t.status, t.obligation_type?.categorie))
+                    )
+                    const volledig = new Date(`${datum}T00:00:00`).toLocaleDateString('nl-BE', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                    })
+                    return (
+                      <li key={datum} className="flex gap-4 px-4 py-3">
+                        <DagBlad datum={datum} band={band} />
+                        <div className="min-w-0 flex-1">
+                          <h3 className="mb-1 text-sm">
+                            <span className={`font-semibold ${urgentieTekst[band]}`}>{relatieveDag(datum)}</span>
+                            <span className="text-slate-500">, {volledig}</span>
+                          </h3>
+                          <ul className="-mx-2">
+                            {dagTaken.map((t) => (
+                              <li key={t.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenTask(t)}
+                                  className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-50"
+                                >
+                                  <span className="min-w-0 flex-1 truncate">
+                                    <span className="font-semibold text-slate-900">{t.client?.naam}</span>
+                                    <span className="text-slate-600">
+                                      {' '}
+                                      {t.obligation_type?.naam ?? t.title}
+                                      {t.periode_label ? ` ${t.periode_label}` : ''}
+                                    </span>
+                                  </span>
+                                  <span
+                                    className={`w-36 shrink-0 truncate text-xs ${t.toegewezen_medewerker ? 'text-slate-500' : 'font-medium text-amber-800'}`}
+                                  >
+                                    {t.toegewezen_medewerker?.naam ?? 'Nog niemand'}
+                                  </span>
+                                  <span className="flex w-44 shrink-0 justify-end">
+                                    <StatusBadge status={t.status} />
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ol>
+              </section>
             ))}
           </div>
         </>

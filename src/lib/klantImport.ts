@@ -1,5 +1,6 @@
 import type { BtwFrequentie, BtwRegime } from '../types'
 import { heeftUboVerplichting, kanPatrimoniumtaksHebben } from './rechtsvorm'
+import { REGIME_LABELS } from './btwRegime'
 
 /**
  * Klanten inlezen uit een Excel-bestand — de pure kant.
@@ -119,12 +120,6 @@ export interface Kolom {
   synoniemen: string[]
   /** Breedte van de kolom in het sjabloon. */
   breedte: number
-}
-
-const REGIME_LABELS: Record<BtwRegime, string> = {
-  geen: 'Geen',
-  periodieke_aangever: 'Periodieke aangever',
-  vrijgesteld_kleine_onderneming: 'Vrijgesteld (kleine onderneming)',
 }
 
 const FREQUENTIE_LABELS: Record<BtwFrequentie, string> = {

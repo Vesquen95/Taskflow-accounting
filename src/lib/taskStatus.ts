@@ -155,6 +155,9 @@ function voortgangsLabel(van: TaskStatus, naar: TaskStatus): string {
   if (van === 'wacht_op_goedkeuring' && naar === 'in_uitvoering') return 'Terugsturen (afkeuren)'
   if (van === 'wacht_op_goedkeuring' && naar === 'ingediend_afgerond') return 'Goedkeuren'
   if (naar === 'ingediend_afgerond') return 'Afronden'
+  // Een knop zegt wat hij doet: "Geannuleerd" leest als een toestand, niet
+  // als de handeling die de taak afbreekt.
+  if (naar === 'geannuleerd') return 'Taak annuleren'
   return STATUS_LABEL[naar]
 }
 

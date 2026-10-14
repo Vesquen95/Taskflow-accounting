@@ -108,7 +108,7 @@ describe('beschikbareStatusActies — het scherm belooft niets wat de databank w
 
   it('geeft de goedkeurder wél goedkeuren en terugsturen, met sprekende labels', () => {
     const acties = beschikbareStatusActies(ctx({ status: 'wacht_op_goedkeuring', magGoedkeuren: true }))
-    expect(acties.map((a) => a.label)).toEqual(['Terugsturen (afkeuren)', 'Goedkeuren', 'Geannuleerd'])
+    expect(acties.map((a) => a.label)).toEqual(['Terugsturen (afkeuren)', 'Goedkeuren', 'Taak annuleren'])
     expect(wachtOpGoedkeurder(ctx({ status: 'wacht_op_goedkeuring', magGoedkeuren: true }))).toBe(false)
   })
 

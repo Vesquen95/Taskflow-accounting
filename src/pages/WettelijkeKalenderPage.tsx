@@ -195,7 +195,7 @@ export function WettelijkeKalenderPage() {
       )}
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Campagnedata (legal_calendar)</h2>
+        <h2 className="mb-2 text-base font-semibold text-slate-900">Campagnedata (legal_calendar)</h2>
         <form onSubmit={handleAddEntry} className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">Type</label>
@@ -262,7 +262,7 @@ export function WettelijkeKalenderPage() {
         ) : (
           <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-600">
                 <tr>
                   <th className="px-3 py-2">Type</th>
                   <th className="px-3 py-2">Boekjaar</th>
@@ -303,7 +303,7 @@ export function WettelijkeKalenderPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Feestdagen (public_holidays)</h2>
+        <h2 className="mb-2 text-base font-semibold text-slate-900">Feestdagen (public_holidays)</h2>
 
         <FeestdagenDekking
           holidays={holidays}
@@ -355,7 +355,7 @@ export function WettelijkeKalenderPage() {
         </p>
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-left text-xs font-semibold text-slate-600">
               <tr>
                 <th className="px-3 py-2">Datum</th>
                 <th className="px-3 py-2">Omschrijving</th>
