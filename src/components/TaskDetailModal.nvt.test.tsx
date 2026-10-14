@@ -132,4 +132,20 @@ describe('TaskDetailModal — niet van toepassing', () => {
     await screen.findByText('Acme BV')
     expect(screen.queryByRole('button', { name: KNOP })).toBeNull()
   })
+
+  // De PATO-val: een geannuleerde automatische taak bezet haar periode niet,
+  // dus de volgende generatie zet ze stil terug.
+  const TERUG = /bij de volgende generatie komt ze terug/
+
+  it('waarschuwt naast Annuleren dat een automatische taak terugkomt', async () => {
+    toon()
+    expect(await screen.findByText(TERUG)).toBeInTheDocument()
+  })
+
+  it('waarschuwt niet bij een losse taak: die komt niet terug', async () => {
+    toon({ obligation_type_id: null, periode_label: null, title: 'Los klusje',
+           bron_type: 'handmatig_adhoc', vereist_goedkeuring: false })
+    await screen.findByText('Acme BV')
+    expect(screen.queryByText(TERUG)).toBeNull()
+  })
 })

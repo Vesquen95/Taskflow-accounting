@@ -1784,3 +1784,27 @@ makkelijk terughaalt.
 sinds 0011; dat staat niet op dit scherm, want annuleren is geen
 "te snel afgevinkt". Vervolgtaken die bij het afronden ontstonden (bv. de
 neerlegging na de AV) blijven staan bij het heropenen.
+
+## §37 — Nazicht van de hele code (14/10/2026)
+
+Een volledige doorlichting (Ponytail-audit). Wat gevonden en hersteld werd:
+
+- **Mail: wachtrij liep leeg bij een Gmail-storing.** Weigerde Gmail de
+  aanmelding (bv. na het vervangen van het app-wachtwoord), dan telde elke
+  melding een mislukte poging en was ze na vijf rondes (~25 minuten) voorgoed
+  weg. Nu meldt de functie zich eerst aan (`transport.verify()`); lukt dat
+  niet, dan antwoordt ze 502 en blijft de wachtrij onaangeroerd.
+- **Maandagmail: één kans per week** (0071). Nu elk uur van 05:00 tot 10:00
+  UTC op maandag; wie al een weekoverzicht kreeg, wordt overgeslagen.
+- **Geannuleerde automatische taak kwam stil terug.** Een geannuleerde rij
+  bezet haar periode niet, dus de volgende generatie maakte ze opnieuw aan.
+  Het dossier bood "Niet van toepassing voor deze periode" niet aan; nu wel.
+  Naast *Annuleren* staat nu waarom dat de verkeerde knop is als er deze
+  periode niets te doen valt.
+- **Tijdzone.** "Deze week" verloor in België haar laatste dag, en "vandaag"
+  was tussen 00:00 en 02:00 nog gisteren: datums werden via UTC
+  (`toISOString`) berekend. Overal vervangen door de lokale datum
+  (`isoDatum`). De tests draaien voortaan in Europe/Brussels, zodat ze dit
+  soort fout zien.
+- **Toewijzen vanuit het dossier** toonde alle medewerkers in plaats van het
+  team van de klant: het dossier haalde `team_id` van de klant niet op.

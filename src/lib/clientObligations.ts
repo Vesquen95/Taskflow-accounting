@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { ObligationType } from '../types'
+import { isoDatum } from './werkstromen'
 
 /** Wat het kantoor per verplichting kiest bij het opslaan van een klant.
  *  Alles wordt in één keer ingevuld — zie docs/PLAN.md §10. */
@@ -62,7 +63,7 @@ export async function saveClientObligations(
   if (error) throw error
 
   const bestaand = (data ?? []) as BestaandeVerplichting[]
-  const vandaag = new Date().toISOString().slice(0, 10)
+  const vandaag = isoDatum(new Date())
 
   const loopt = (r: BestaandeVerplichting) =>
     r.actief && (r.geldig_tot === null || r.geldig_tot >= vandaag)
@@ -144,7 +145,7 @@ export async function loadClientObligations(clientId: string): Promise<Obligatio
     .eq('client_id', clientId)
   if (error) throw error
 
-  const vandaag = new Date().toISOString().slice(0, 10)
+  const vandaag = isoDatum(new Date())
   return ((data ?? []) as BestaandeVerplichting[])
     .filter((r) => r.actief && (r.geldig_tot === null || r.geldig_tot >= vandaag))
     .map((r) => ({

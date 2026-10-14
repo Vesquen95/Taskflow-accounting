@@ -18,11 +18,6 @@ export function perKlant(posten: FactuurpostMetRelaties[]): { klant: Factuurpost
   return [...groepen.values()].sort((a, b) => a.klant.naam.localeCompare(b.klant.naam, 'nl'))
 }
 
-/** Vandaag als ISO-datum, in de tijdzone van wie het scherm gebruikt. */
-export function vandaag(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 /** Iets op de lijst gezet of afgevinkt, ergens in de app: wie de lijst toont, laadt opnieuw. */
 export const FACTUURPOSTEN_GEWIJZIGD = 'taskflow:factuurposten-gewijzigd'

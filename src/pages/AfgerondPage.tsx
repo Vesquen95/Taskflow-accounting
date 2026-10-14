@@ -10,6 +10,7 @@ import { heropenTaak, magHeropenen } from '../lib/heropenen'
 import { HeropenFormulier } from '../components/HeropenFormulier'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
+import { isoDatum } from '../lib/werkstromen'
 
 /**
  * Afgerond: wat de laatste tijd afgevinkt werd (0070).
@@ -28,7 +29,7 @@ const PERIODES = [
 function dagenGeleden(dagen: number): string {
   const d = new Date()
   d.setDate(d.getDate() - dagen)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return isoDatum(d)
 }
 
 export function AfgerondPage({ navigate }: { navigate: (view: string, param?: string) => void }) {

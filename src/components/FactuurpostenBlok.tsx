@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { useClients } from '../hooks/useClients'
 import { formatDate, formatDateTime } from '../lib/urgency'
-import { vandaag } from '../lib/facturatie'
 import type { FactuurpostMetRelaties, FactuurpostStatus } from '../types'
+import { isoDatum } from '../lib/werkstromen'
 
 /**
  * De bouwstenen van "te factureren" (migratie 0069): het blok met de posten
@@ -257,7 +257,7 @@ export function NieuwePostFormulier({
 }) {
   const [clientId, setClientId] = useState(vasteKlant ?? '')
   const [omschrijving, setOmschrijving] = useState('')
-  const [uitgevoerdOp, setUitgevoerdOp] = useState(vandaag())
+  const [uitgevoerdOp, setUitgevoerdOp] = useState(isoDatum(new Date()))
   const [notitie, setNotitie] = useState('')
   const [bezig, setBezig] = useState(false)
 

@@ -1,4 +1,5 @@
 import type { Employee, MedewerkerNiveau } from '../types'
+import { isoDatum } from './werkstromen'
 
 /**
  * "Deze week" is vandaag plus zes dagen.
@@ -29,7 +30,7 @@ export function begintOpEigenWeek(niveau: MedewerkerNiveau | null): boolean {
 export function eindeVanDeWeek(vandaag: string): string {
   const d = new Date(`${vandaag}T00:00:00`)
   d.setDate(d.getDate() + WEEK_DAGEN)
-  return d.toISOString().slice(0, 10)
+  return isoDatum(d)
 }
 
 export interface Startfilters {

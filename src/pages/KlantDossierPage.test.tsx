@@ -308,3 +308,33 @@ describe('KlantDossierPage — te factureren', () => {
     expect(await screen.findByText('Bijkomend advies')).toBeInTheDocument()
   })
 })
+
+describe('KlantDossierPage — niet van toepassing', () => {
+  it('biedt "niet van toepassing" ook vanuit het dossier aan, zodat een periode niet stil terugkomt', async () => {
+    // Zonder deze knop bleef in het dossier alleen Annuleren over, en een
+    // geannuleerde automatische taak maakt de volgende generatie opnieuw aan.
+    const user = userEvent.setup()
+    const taak = { ...task('t1', 'open'), client: { id: 'c1', naam: 'Acme BV', vertrouwelijk: false, actief: true, team_id: null } }
+    install({
+      ...handlers({}, [taak]),
+      // De lijst in het dossier krijgt een lege lijst; de knop in het
+      // taakvenster vraagt één post op (maybeSingle) en krijgt er geen.
+      factuurposten: (state) =>
+        state.calls.some((c) => c.args[0] === 'task_instance_id') ? { data: null, error: null } : { data: [], error: null },
+      teams: () => ({ data: [], error: null }),
+      team_leden: () => ({ data: [], error: null }),
+      boekjaar_wijzigingen: () => ({ data: null, error: null }),
+      task_status_log: () => ({ data: [], error: null }),
+    })
+    render(<KlantDossierPage clientId="c1" navigate={vi.fn()} />)
+
+    await user.click((await screen.findAllByText(/BTW-aangifte/))[0])
+    await user.click(await screen.findByRole('button', { name: /Niet van toepassing voor deze periode/ }))
+    await user.type(screen.getByLabelText(/Waarom was er deze periode niets/), 'Geen omzet')
+    await user.click(screen.getByRole('button', { name: 'Markeren' }))
+
+    await waitFor(() =>
+      expect(supabase.rpc).toHaveBeenCalledWith('taak_niet_van_toepassing', { p_task_id: 't1', p_reden: 'Geen omzet' })
+    )
+  })
+})

@@ -451,6 +451,15 @@ export function TaskDetailModal({
             />
           )}
         </div>
+        {/* Een geannuleerde rij bezet haar periode niet: de volgende generatie
+            maakt ze opnieuw aan. Wie "deze periode niet" bedoelt, moet dat weten
+            voor hij klikt. */}
+        {annuleren && onNietVanToepassing && task.bron_type === 'automatisch_gegenereerd' && task.periode_label && (
+          <p className="-mt-2 text-[11px] text-slate-500">
+            Annuleren haalt deze taak maar tijdelijk weg: bij de volgende generatie komt ze terug. Is er deze
+            periode niets te doen, kies dan "Niet van toepassing voor deze periode".
+          </p>
+        )}
 
         {/* 0070: een afgeronde taak terughalen, met een reden. */}
         {magHeropenen(task, employee) &&

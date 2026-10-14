@@ -3,8 +3,9 @@ import { supabase } from '../lib/supabase'
 import { reportError } from '../lib/errorMessage'
 import { formatDate } from '../lib/urgency'
 import { taakRegel } from '../lib/taakLabel'
-import { meldFactuurpostenGewijzigd, vandaag } from '../lib/facturatie'
+import { meldFactuurpostenGewijzigd } from '../lib/facturatie'
 import type { TaskInstanceWithRelations } from '../types'
+import { isoDatum } from '../lib/werkstromen'
 
 interface OpenPost {
   id: string
@@ -53,7 +54,7 @@ export function TeFacturerenKnop({ task }: { task: TaskInstanceWithRelations }) 
     const { error } = await supabase.rpc('factuurpost_toevoegen', {
       p_client_id: task.client_id,
       p_omschrijving: regel.periode ? `${regel.naam} — ${regel.periode}` : regel.naam,
-      p_uitgevoerd_op: vandaag(),
+      p_uitgevoerd_op: isoDatum(new Date()),
       p_task_instance_id: task.id,
       p_notitie: null,
     })

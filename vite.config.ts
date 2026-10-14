@@ -20,5 +20,9 @@ export default defineConfig(({ mode }) => ({
     // Playwright-imports.
     exclude: ['node_modules', 'dist', 'e2e/**'],
     css: false,
+    // De tests rekenen in de tijdzone van het kantoor. In UTC, de standaard
+    // op een server, bleef een datumfout van een dag onzichtbaar (zie
+    // isoDatum() in src/lib/werkstromen.ts).
+    env: { TZ: 'Europe/Brussels' },
   },
 }))

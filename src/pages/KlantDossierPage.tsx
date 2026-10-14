@@ -25,6 +25,7 @@ import { logWaarde, veldLabel } from '../lib/wijzigingslog'
 import type { TaskInstanceWithRelations, TaskStatus } from '../types'
 import { meldStatusGewijzigd } from '../hooks/useTeKeuren'
 import { DossierTeFactureren } from '../components/DossierTeFactureren'
+import { isoDatum } from '../lib/werkstromen'
 
 
 /** Klantdossier (§4 point 3): alle verplichtingen, status/historiek,
@@ -119,6 +120,14 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
     meldStatusGewijzigd()
   }
 
+  /** Zie useTaskInstances.markeerNietVanToepassing (migratie 0058). */
+  async function markeerNietVanToepassing(taskId: string, reden: string) {
+    const { error: err } = await supabase.rpc('taak_niet_van_toepassing', { p_task_id: taskId, p_reden: reden })
+    if (err) throw err
+    await reload()
+    meldStatusGewijzigd()
+  }
+
   async function reassignTask(taskId: string, toegewezen_medewerker_id: string | null) {
     const { error: err } = await supabase.from('task_instances').update({ toegewezen_medewerker_id }).eq('id', taskId)
     if (err) throw err
@@ -154,7 +163,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
   // Een einddatum in de toekomst betekent dat de verplichting nog LOOPT: ze
   // levert nog taken op, tot en met de laatste periode die op of vóór die
   // datum eindigt (migratie 0053). Alleen wat echt voorbij is, is historiek.
-  const vandaag = new Date().toISOString().slice(0, 10)
+  const vandaag = isoDatum(new Date())
   const looptNog = (o: (typeof obligations)[number]) =>
     o.actief && (!o.geldig_tot || o.geldig_tot >= vandaag)
   const activeObligations = obligations.filter(looptNog)
@@ -447,6 +456,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
           onReassign={reassignTask}
           onMarkReviewHandled={markReviewHandled}
           onDueDateChange={updateTaskDueDate}
+          onNietVanToepassing={markeerNietVanToepassing}
           onHeropend={reload}
         />
       )}

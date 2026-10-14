@@ -90,6 +90,17 @@ Deno.serve(async (req) => {
     secure: true,
     auth: { user: gebruiker, pass: wachtwoord },
   })
+  // Eerst aanmelden bij Gmail. Lukt dat niet (verkeerd of ingetrokken
+  // app-wachtwoord, Gmail even onbereikbaar), dan raken we de wachtrij niet
+  // aan: anders telt elke melding een mislukte poging en is ze na vijf keer
+  // voorgoed weg, terwijl er aan de melding zelf niets scheelde.
+  try {
+    await transport.verify()
+  } catch (e) {
+    const fout = e instanceof Error ? e.message : String(e)
+    console.error('mail-verzenden: aanmelden bij Gmail mislukt', fout)
+    return antwoord(502, { fout: `Aanmelden bij Gmail mislukt: ${fout}` })
+  }
   const appUrl = inst.app_url ?? undefined
 
   // Eén plek waar mail de deur uitgaat, zodat de omleiding nooit vergeten wordt.

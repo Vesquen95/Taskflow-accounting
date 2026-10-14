@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Modal } from './Modal'
 import type { Employee } from '../types'
 import { reportError } from '../lib/errorMessage'
+import { isoDatum } from '../lib/werkstromen'
 import {
   buitenlandseBtwDeadline,
   buitenlandseBtwJaren,
@@ -21,7 +22,7 @@ export function AdhocTaskFormModal({
 }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10))
+  const [dueDate, setDueDate] = useState(isoDatum(new Date()))
   const [assignee, setAssignee] = useState(defaultAssigneeId ?? employees[0]?.id ?? '')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)

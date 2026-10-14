@@ -8,6 +8,7 @@ import type {
   TaskInstanceWithRelations,
 } from '../types'
 import { reportError } from '../lib/errorMessage'
+import { isoDatum } from '../lib/werkstromen'
 
 export interface ClientObligationWithType extends ClientObligation {
   obligation_type: ObligationType
@@ -46,7 +47,7 @@ export function useClientDetail(clientId: string | null) {
         supabase
           .from('task_instances')
           .select(
-            '*, client:clients(id,naam,vertrouwelijk,actief), obligation_type:obligation_types(id,code,naam,categorie,werkstroom), toegewezen_medewerker:employees!task_instances_toegewezen_medewerker_id_fkey(id,naam)'
+            '*, client:clients(id,naam,vertrouwelijk,actief,team_id), obligation_type:obligation_types(id,code,naam,categorie,werkstroom), toegewezen_medewerker:employees!task_instances_toegewezen_medewerker_id_fkey(id,naam)'
           )
           .eq('client_id', clientId)
           .order('due_date', { ascending: false }),
@@ -90,7 +91,7 @@ export function useClientDetail(clientId: string | null) {
     newAssignee: string | null
   ) {
     if (!clientId) return
-    const today = new Date().toISOString().slice(0, 10)
+    const today = isoDatum(new Date())
     const { error: closeErr } = await supabase
       .from('client_obligations')
       .update({ actief: false, geldig_tot: today })
@@ -119,7 +120,7 @@ export function useClientDetail(clientId: string | null) {
       client_id: clientId,
       obligation_type_id: input.obligation_type_id,
       actief: true,
-      geldig_vanaf: new Date().toISOString().slice(0, 10),
+      geldig_vanaf: isoDatum(new Date()),
       parameters: input.parameters,
       standaard_toegewezen_medewerker_id: input.standaard_toegewezen_medewerker_id,
     })
@@ -184,7 +185,7 @@ export function useClientDetail(clientId: string | null) {
   async function deactivateObligation(obligationRowId: string) {
     const { error: err } = await supabase
       .from('client_obligations')
-      .update({ actief: false, geldig_tot: new Date().toISOString().slice(0, 10) })
+      .update({ actief: false, geldig_tot: isoDatum(new Date()) })
       .eq('id', obligationRowId)
     if (err) throw err
     await load()
