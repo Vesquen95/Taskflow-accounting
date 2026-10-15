@@ -204,6 +204,11 @@ export function AuthPage() {
           <Wijzerplaat nu={nu} />
 
           <div className="absolute inset-x-[17%] inset-y-[14%] flex flex-col items-stretch justify-center text-center md:inset-[23%]">
+            <img
+              src={`${import.meta.env.BASE_URL}pato-logo.svg`}
+              alt="PATO Accountancy"
+              className="mx-auto mb-3 h-12 w-auto md:mb-4 md:h-16"
+            />
             <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-[#8FA39D]">
               {nu.toLocaleDateString('nl-BE', { weekday: 'long' })}{' '}
               {nu.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')}

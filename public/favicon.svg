@@ -1,5 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Taskflow">
-  <title>Taskflow</title>
-  <rect x="1" y="1" width="30" height="30" rx="7" fill="#0E6E64"/>
-  <path d="M9 16.5l4.5 4.5L23 11" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PATO" viewBox="0 0 168 168" width="32" height="32"><title>PATO</title><rect width="168" height="168" rx="36" fill="#05070D"/><path d="M40 116 L84 36 L128 116" fill="none" stroke="#3EF0D2" stroke-width="16"/><rect x="40" y="128" width="54" height="8" fill="#3EF0D2"/><rect x="100" y="128" width="28" height="8" fill="#B57BFF"/></svg>

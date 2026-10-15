@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 // op de node-types voor iets wat verder nergens in de app nodig is.
 import logoBron from '../../public/logo.svg?raw'
 import faviconBron from '../../public/favicon.svg?raw'
+import woordmerkBron from '../../public/pato-logo.svg?raw'
 
 /**
  * De SVG's in public/ worden met een img-tag geladen, en dan geldt strikte
@@ -20,6 +21,7 @@ import faviconBron from '../../public/favicon.svg?raw'
 const BESTANDEN: [naam: string, bron: string][] = [
   ['logo.svg', logoBron],
   ['favicon.svg', faviconBron],
+  ['pato-logo.svg', woordmerkBron],
 ]
 
 describe('SVG-bestanden in public/', () => {

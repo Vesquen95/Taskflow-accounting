@@ -272,7 +272,7 @@ export function AppLayout({
         <span className="truncate text-sm font-semibold text-[#EDF7F4]">
           {huidigeTitel(activeView, activeParam, kleinScherm)}
         </span>
-        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Taskflow" className="ml-auto h-6 w-6" />
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="PATO" className="ml-auto h-6 w-6" />
       </header>
 
       {/* De achtergrond vangt de tik naast het menu op. Alleen zichtbaar
