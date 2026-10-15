@@ -171,7 +171,7 @@ export function AuthPage() {
   }
 
   const veld =
-    'w-full rounded-full border border-[#2A3A37] bg-[#0A1211]/90 px-5 py-2.5 text-center text-[15px] text-white placeholder:text-[#5C7A73] focus:border-[#3EF0D2] focus:outline-none focus-visible:shadow-[0_0_18px_rgba(62,240,210,0.35)]'
+    'w-full rounded-full border border-[#2A3A37] bg-[#0A1211]/90 px-5 py-2.5 text-center text-[15px] text-[#FFFFFF] placeholder:text-[#5C7A73] focus:border-[#3EF0D2] focus:outline-none focus-visible:shadow-[0_0_18px_rgba(62,240,210,0.35)]'
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden xl:h-screen xl:min-h-[640px] bg-[#070C0B] text-[#C9D6D2] [background-image:radial-gradient(circle_at_50%_45%,#0F1C1A_0%,#070C0B_60%)]">
@@ -208,7 +208,7 @@ export function AuthPage() {
               {nu.toLocaleDateString('nl-BE', { weekday: 'long' })}{' '}
               {nu.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')}
             </p>
-            <h1 className="mt-1 text-4xl font-light tracking-[0.06em] text-white md:text-5xl">Taskflow</h1>
+            <h1 className="mt-1 text-4xl font-light tracking-[0.06em] text-[#FFFFFF] md:text-5xl">Taskflow</h1>
             <p className="mb-4 mt-1 text-sm text-[#FFB547] md:mb-5">
               Btw {termijn.kwartaal} {termijnTekst}
             </p>
@@ -286,13 +286,13 @@ export function AuthPage() {
       <dl className="relative z-10 mx-auto mb-8 grid w-full max-w-md grid-cols-3 gap-2 px-4 font-mono xl:absolute xl:bottom-10 xl:right-10 xl:mb-0 xl:w-52 xl:grid-cols-1 xl:gap-3 xl:px-0">
         <div className="border border-[#16302C] bg-[#0A1211]/70 px-3 py-2 md:px-4 md:py-3">
           <dt className="text-[10px] uppercase tracking-[0.2em] text-[#8FA39D]">Vandaag</dt>
-          <dd className="mt-1 text-base text-white md:text-xl">
+          <dd className="mt-1 text-base text-[#FFFFFF] md:text-xl">
             {nu.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit' }).replace(/\//g, '.')}
           </dd>
         </div>
         <div className="border border-[#16302C] bg-[#0A1211]/70 px-3 py-2 md:px-4 md:py-3">
           <dt className="text-[10px] uppercase tracking-[0.2em] text-[#8FA39D]">Week</dt>
-          <dd className="mt-1 text-base text-white md:text-xl">{isoWeek(nu)}</dd>
+          <dd className="mt-1 text-base text-[#FFFFFF] md:text-xl">{isoWeek(nu)}</dd>
         </div>
         <div className="border border-[#16302C] bg-[#0A1211]/70 px-3 py-2 md:px-4 md:py-3">
           <dt className="text-[10px] uppercase tracking-[0.2em] text-[#8FA39D]">Btw {termijn.kwartaal}</dt>

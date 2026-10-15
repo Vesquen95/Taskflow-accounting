@@ -273,3 +273,46 @@ describe('AppLayout — de sessie openhouden', () => {
     expect(zetLangeSessie).toHaveBeenCalledWith(false)
   })
 })
+
+describe('AppLayout — de nachtmodus', () => {
+  afterEach(() => {
+    window.localStorage.clear()
+    delete document.documentElement.dataset.modus
+  })
+
+  it('zet de hele app donker en onthoudt dat voor de volgende keer', async () => {
+    toon()
+    const knop = screen.getByRole('button', { name: 'Nachtmodus' })
+    expect(knop).toHaveAttribute('aria-pressed', 'false')
+
+    await userEvent.click(knop)
+    expect(document.documentElement.dataset.modus).toBe('nacht')
+    expect(window.localStorage.getItem('taskflow.weergave.nachtmodus')).toBe('aan')
+    expect(knop).toHaveAttribute('aria-pressed', 'true')
+
+    await userEvent.click(knop)
+    expect(document.documentElement.dataset.modus).toBeUndefined()
+    expect(window.localStorage.getItem('taskflow.weergave.nachtmodus')).toBeNull()
+  })
+
+  it('begint in de nachtmodus wie ze de vorige keer aanzette', () => {
+    window.localStorage.setItem('taskflow.weergave.nachtmodus', 'aan')
+    toon()
+    expect(screen.getByRole('button', { name: 'Nachtmodus' })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+describe('AppLayout — de uitlezingen', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('toont vandaag, de week en de dagen tot de btw-termijn', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-15T09:00:00'))
+    toon()
+    const lezingen = screen.getByLabelText('Vandaag en de volgende btw-termijn')
+    expect(lezingen).toHaveTextContent('15.10')
+    expect(lezingen).toHaveTextContent('42')
+    expect(lezingen).toHaveTextContent('Btw Q3 2026')
+    expect(lezingen).toHaveTextContent('10 d')
+  })
+})

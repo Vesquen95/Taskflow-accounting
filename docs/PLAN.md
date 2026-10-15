@@ -1880,3 +1880,26 @@ wat waar is.
 **Ongewijzigd:** het formulier (één knop erin, registreren erbuiten), de
 meldingen, de uitleg na een automatische afmelding. Alle beweging staat
 achter `motion-safe:`; de decoratie is verborgen voor schermlezers.
+
+## §41 — De cockpit, en een nachtmodus (15/10/2026)
+
+**Gevraagd:** het design van het inlogscherm doortrekken naar de schermen na
+het inloggen. Uit drie voorstellen (Nacht, Cockpit, Accenten) koos het kantoor
+de cockpit, met een knop voor de nachtmodus.
+
+**Cockpit (standaard):** de zijbalk en de bovenbalk zijn donker, zoals het
+inlogscherm. Bovenaan staan dezelfde uitlezingen: vandaag, de week, en de
+dagen tot de volgende btw-kwartaaltermijn. Het actieve scherm in het menu
+krijgt een lichtgevend streepje. Het werkblad blijft licht: wie de hele dag
+lijsten leest, leest donker op licht het rustigst.
+
+**Nachtmodus:** de knop "Nachtmodus" naast "Uitloggen" (op de telefoon in het
+menu) zet de hele app donker. Een persoonlijke keuze, bewaard in de browser
+en gedeeld tussen tabbladen; ze staat al juist vóór het eerste beeld.
+
+**Hoe:** alle kleuren lopen via CSS-variabelen (tailwind.config.js). Overdag
+gelden de gewone waarden; met `data-modus="nacht"` op `<html>` worden ze uit
+dezelfde bron afgeleid -- lichte vullingen worden donkere tinten van hun eigen
+kleur, donkere tekst wordt licht. Geen enkel scherm hoeft ervan te weten. Een
+nieuwe kleurfamilie in een component moet wel in de lijst in de configuratie,
+anders schakelt ze niet mee.

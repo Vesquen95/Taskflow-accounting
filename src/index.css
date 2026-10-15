@@ -15,6 +15,14 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Velden en keuzelijsten in de kleur van het blad, ook 's nachts; anders
+     kiest de browser zijn eigen grijs. Een klasse op het veld zelf wint. */
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    @apply bg-white;
+  }
+
   /* Vinkjes en keuzerondjes in de kleur van het huis, niet in het blauw
      van de browser. */
   input[type='checkbox'],
@@ -26,4 +34,15 @@
     outline: 2px solid theme('colors.brand.500');
     outline-offset: 2px;
   }
+}
+
+/* De nachtmodus (zie lib/nachtmodus.ts): een vleug scanlijnen, zoals op het
+   inlogscherm. Zo zwak dat ze tekst niet hindert, en ze bewegen niet. */
+:root[data-modus='nacht'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  background: repeating-linear-gradient(to bottom, rgb(62 240 210 / 0.02) 0 1px, transparent 1px 3px);
 }

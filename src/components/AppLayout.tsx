@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Employee } from '../types'
 import { useAuth } from '../hooks/useAuth'
 import { useSessiebediening } from '../hooks/useSessie'
@@ -8,6 +8,8 @@ import { useKleinScherm } from '../hooks/useKleinScherm'
 import { magOverzichtZien } from '../lib/overzicht'
 import { useTeKeuren } from '../hooks/useTeKeuren'
 import { useTeFactureren } from '../hooks/useTeFactureren'
+import { useNachtmodus } from '../hooks/useNachtmodus'
+import { isoWeek, volgendeBtwKwartaal } from '../lib/inlogscherm'
 
 interface NavItem {
   view: string
@@ -115,12 +117,13 @@ function huidigeTitel(activeView: string, activeParam: string | undefined, klein
 function Gebruiker({ employee, inBalk = false }: { employee: Employee; inBalk?: boolean }) {
   const { signOut } = useAuth()
   const { langeSessie, zetLangeSessie, eindeSessie } = useSessiebediening()
+  const [nacht, zetNacht] = useNachtmodus()
   const knop = 'block text-xs font-medium focus:outline-none focus-visible:underline'
   return (
     <div className={inBalk ? 'flex min-w-0 items-center gap-5' : ''}>
       <div className={inBalk ? 'min-w-0 text-right' : ''}>
-        <p className="truncate text-sm font-medium text-slate-800">{employee.naam}</p>
-        <p className="truncate text-xs text-slate-400">
+        <p className="truncate text-sm font-medium text-[#EDF7F4]">{employee.naam}</p>
+        <p className="truncate text-xs text-[#9DB0AA]">
           {employee.rol === 'kantoorbeheerder' ? 'Kantoorbeheerder' : 'Medewerker'}
           {employee.mag_goedkeuren ? ' · mag goedkeuren' : ''}
         </p>
@@ -135,21 +138,54 @@ function Gebruiker({ employee, inBalk = false }: { employee: Employee; inBalk?: 
         onClick={() => zetLangeSessie(!langeSessie)}
         aria-pressed={langeSessie}
         className={`${inBalk ? 'shrink-0' : 'mt-2'} ${knop} ${
-          langeSessie ? 'text-amber-700 hover:text-amber-900' : 'text-slate-500 hover:text-slate-800'
+          langeSessie ? 'text-[#FFC56B] hover:text-[#FFE0A8]' : 'text-[#9DB0AA] hover:text-[#EDF7F4]'
         }`}
       >
         {langeSessie
           ? `Blijft open${eindeSessie ? ` tot ${klokTijd(eindeSessie)}` : ''} — zet uit`
           : `Sessie ${SESSIE_UREN} uur openhouden`}
       </button>
+      {/* Overdag een licht werkblad in een donker kader; 's nachts alles
+          donker, zoals het inlogscherm. Een persoonlijke keuze, per browser. */}
+      <button
+        type="button"
+        onClick={() => zetNacht(!nacht)}
+        aria-pressed={nacht}
+        className={`${inBalk ? 'shrink-0' : 'mt-2'} ${knop} ${
+          nacht ? 'text-[#3EF0D2] hover:text-[#9EF8E8]' : 'text-[#9DB0AA] hover:text-[#EDF7F4]'
+        }`}
+      >
+        Nachtmodus
+      </button>
       <button
         type="button"
         onClick={() => void signOut()}
-        className={`${inBalk ? 'shrink-0' : 'mt-2'} ${knop} text-slate-500 hover:text-slate-800`}
+        className={`${inBalk ? 'shrink-0' : 'mt-2'} ${knop} text-[#9DB0AA] hover:text-[#EDF7F4]`}
       >
         Uitloggen
       </button>
     </div>
+  )
+}
+
+/** De uitlezingen uit het inlogscherm, in de cockpit: vandaag, de week, en
+ *  hoe ver de volgende btw-kwartaaltermijn nog ligt (de wettelijke datum, zie
+ *  lib/inlogscherm). Eén keer per bezoek berekend. */
+function Uitlezingen() {
+  const nu = useMemo(() => new Date(), [])
+  const termijn = useMemo(() => volgendeBtwKwartaal(nu), [nu])
+  const lezing = (label: string, waarde: string, accent = false) => (
+    <div className="flex flex-col leading-tight">
+      <dt className="text-[9px] uppercase tracking-[0.2em] text-[#86A098]">{label}</dt>
+      <dd className={`text-[15px] ${accent ? 'text-[#FFB547]' : 'text-[#EDF7F4]'}`}>{waarde}</dd>
+    </div>
+  )
+  return (
+    <dl className="flex shrink-0 gap-7 font-mono" aria-label="Vandaag en de volgende btw-termijn">
+      {lezing('Vandaag', nu.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit' }).replace(/\//g, '.'))}
+      {lezing('Week', String(isoWeek(nu)))}
+      {lezing(`Btw ${termijn.kwartaal}`, termijn.dagen === 0 ? 'vandaag' : `${termijn.dagen} d`, true)}
+    </dl>
   )
 }
 
@@ -184,12 +220,12 @@ export function AppLayout({
     goedkeuring: {
       aantal: teKeuren,
       zin: 'te keuren',
-      kleur: 'border-amber-300 bg-amber-100 text-amber-800',
+      kleur: 'border-[#FFB547]/50 bg-[#FFB547]/10 text-[#FFC56B]',
     },
     facturatie: {
       aantal: teFactureren,
       zin: 'te factureren',
-      kleur: 'border-slate-300 bg-slate-100 text-slate-700',
+      kleur: 'border-[#2A4943] bg-[#13221F] text-[#CAD7D3]',
     },
   }
 
@@ -216,13 +252,13 @@ export function AppLayout({
       {/* De bovenbalk bestaat alleen op een klein scherm. Ze houdt twee dingen
           vast die je anders kwijt bent zodra de zijbalk dichtgaat: waar je
           bent, en hoe je ergens anders komt. */}
-      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4 lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-[#16302C] bg-[#070C0B] px-4 lg:hidden">
         <button
           type="button"
           onClick={() => setMenuOpen((open) => !open)}
           aria-expanded={menuOpen}
           aria-controls="hoofdnavigatie"
-          className="-ml-2 rounded-md p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          className="-ml-2 rounded-md p-2 text-[#9DB0AA] hover:bg-[#13221F] hover:text-[#EDF7F4]"
         >
           <span className="sr-only">{menuOpen ? 'Menu sluiten' : 'Menu openen'}</span>
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-5 w-5" aria-hidden="true">
@@ -233,7 +269,7 @@ export function AppLayout({
             )}
           </svg>
         </button>
-        <span className="truncate text-sm font-semibold text-slate-900">
+        <span className="truncate text-sm font-semibold text-[#EDF7F4]">
           {huidigeTitel(activeView, activeParam, kleinScherm)}
         </span>
         <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Taskflow" className="ml-auto h-6 w-6" />
@@ -247,22 +283,22 @@ export function AppLayout({
           aria-hidden="true"
           tabIndex={-1}
           onClick={() => setMenuOpen(false)}
-          className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
         />
       )}
 
       <aside
         id="hoofdnavigatie"
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 lg:transition-none ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-[#16302C] bg-[#070C0B] transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 lg:transition-none ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200 px-4">
+        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-[#16302C] px-4">
           {/* Klein gehouden: in de zijbalk is de navigatie het onderwerp, niet
               het merk. Even hoog als de balk ernaast, zodat de onderlijn
               doorloopt. */}
           <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" className="h-6 w-6" />
-          <span className="text-sm font-semibold text-slate-900">Taskflow</span>
+          <span className="text-sm font-light tracking-[0.06em] text-[#EDF7F4]">Taskflow</span>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
           {groepen.map((groep) => {
@@ -271,7 +307,7 @@ export function AppLayout({
             return (
               <div key={groep.id} className="space-y-0.5">
                 {groep.titel && (
-                  <p className="px-3 pb-1 text-xs font-semibold text-slate-500">
+                  <p className="px-3 pb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-[#86A098]">
                     {groep.titel}
                   </p>
                 )}
@@ -292,8 +328,8 @@ export function AppLayout({
                       }
                       className={`block w-full rounded-md px-3 py-2 text-left text-sm font-medium transition ${
                         actief
-                          ? 'bg-brand-50 text-brand-700'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-[#3EF0D2]/10 text-[#3EF0D2] shadow-[inset_2px_0_0_#3EF0D2]'
+                          : 'text-[#B3C3BE] hover:bg-[#13221F] hover:text-[#EDF7F4]'
                       }`}
                     >
                       {teller && teller.aantal > 0 ? (
@@ -319,7 +355,7 @@ export function AppLayout({
         {/* Op een telefoon is er geen ruimte voor een tweede balk; daar staat
             wie je bent onderaan het uitschuifmenu. */}
         {kleinScherm && (
-          <div className="border-t border-slate-200 p-3">
+          <div className="border-t border-[#16302C] p-3">
             <Gebruiker employee={employee} />
           </div>
         )}
@@ -328,7 +364,8 @@ export function AppLayout({
         {/* Op een computer: een eigen balk bovenaan voor wie er aangemeld is.
             Ze scrolt niet mee; alleen de inhoud eronder doet dat. */}
         {!kleinScherm && (
-          <div className="flex h-16 shrink-0 items-center justify-end border-b border-slate-200 bg-white px-6">
+          <div className="flex h-16 shrink-0 items-center justify-between gap-6 border-b border-[#16302C] bg-[#070C0B] px-6">
+            <Uitlezingen />
             <Gebruiker employee={employee} inBalk />
           </div>
         )}

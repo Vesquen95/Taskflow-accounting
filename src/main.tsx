@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/atkinson-hyperlegible-next'
 import App from './App.tsx'
 import './index.css'
+import { leesNachtmodus, pasNachtmodusToe } from './lib/nachtmodus'
+
+// Vóór de eerste render: wie de nachtmodus aan had, ziet geen witte flits.
+pasNachtmodusToe(leesNachtmodus())
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
