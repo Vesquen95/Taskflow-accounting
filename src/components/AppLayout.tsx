@@ -10,6 +10,7 @@ import { useTeKeuren } from '../hooks/useTeKeuren'
 import { useTeFactureren } from '../hooks/useTeFactureren'
 import { useNachtmodus } from '../hooks/useNachtmodus'
 import { isoWeek, volgendeBtwKwartaal } from '../lib/inlogscherm'
+import { PatoTeken } from './PatoTeken'
 
 interface NavItem {
   view: string
@@ -272,7 +273,7 @@ export function AppLayout({
         <span className="truncate text-sm font-semibold text-[#EDF7F4]">
           {huidigeTitel(activeView, activeParam, kleinScherm)}
         </span>
-        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="PATO" className="ml-auto h-6 w-6" />
+        <PatoTeken grootte={26} className="ml-auto" />
       </header>
 
       {/* De achtergrond vangt de tik naast het menu op. Alleen zichtbaar
@@ -297,8 +298,11 @@ export function AppLayout({
           {/* Klein gehouden: in de zijbalk is de navigatie het onderwerp, niet
               het merk. Even hoog als de balk ernaast, zodat de onderlijn
               doorloopt. */}
-          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" className="h-6 w-6" />
-          <span className="text-sm font-light tracking-[0.06em] text-[#EDF7F4]">Taskflow</span>
+          <PatoTeken grootte={30} />
+          <span className="flex flex-col leading-tight">
+            <span className="text-base font-light tracking-[0.08em] text-[#EDF7F4]">Taskflow</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.25em] text-[#86A098]">PATO Accountancy</span>
+          </span>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
           {groepen.map((groep) => {

@@ -16,10 +16,11 @@
   }
 
   /* Velden en keuzelijsten in de kleur van het blad, ook 's nachts; anders
-     kiest de browser zijn eigen grijs. Een klasse op het veld zelf wint. */
-  input:not([type='checkbox']):not([type='radio']),
-  select,
-  textarea {
+     kiest de browser zijn eigen grijs. In :where(), dus zonder gewicht: een
+     klasse op het veld zelf wint altijd. Zonder :where() woog
+     `input:not(...)` zwaarder dan een klasse, en werden de donkere velden op
+     het inlogscherm wit -- met witte tekst erin. */
+  :where(input:not([type='checkbox']):not([type='radio']), select, textarea) {
     @apply bg-white;
   }
 

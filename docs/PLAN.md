@@ -1903,3 +1903,20 @@ dezelfde bron afgeleid -- lichte vullingen worden donkere tinten van hun eigen
 kleur, donkere tekst wordt licht. Geen enkel scherm hoeft ervan te weten. Een
 nieuwe kleurfamilie in een component moet wel in de lijst in de configuratie,
 anders schakelt ze niet mee.
+
+## §42 — Het PATO-logo in de hele app (15/10/2026)
+
+**Gevraagd:** het vinkje weg, en het logo beter in de site verwerken.
+
+Het PATO-logo (icoon, favicon, woordmerk op het aanmeldscherm) kwam erbij in
+een andere sessie. Hier verder doorgetrokken:
+- **Zijbalk:** het PATO-teken (de Λ met de petrol en de paarse balk) direct
+  op de donkere balk, met "Taskflow" en eronder "PATO Accountancy".
+- **Telefoonbalk:** hetzelfde teken, zonder tegel.
+- **Laadscherm:** het teken op de donkere achtergrond, waarbij de petrol balk
+  als laadbalk heen en weer loopt (alleen bij wie beweging toelaat).
+- Inline (`components/PatoTeken.tsx`), zelfde tekening als `public/logo.svg`.
+
+**Hersteld:** de basisstijl voor velden (sinds §41) woog zwaarder dan een
+klasse op het veld, waardoor de velden op het inlogscherm wit werden met witte
+tekst. Nu in `:where()`, met een test (src/test/basisstijl.test.ts).

@@ -183,11 +183,14 @@ export default {
         draai: { to: { transform: 'rotate(360deg)' } },
         knipper: { '50%': { opacity: '0' } },
         opstart: { from: { opacity: '0', transform: 'translateY(4px)' }, to: { opacity: '1', transform: 'none' } },
+        // Het laadscherm: de petrol balk van het PATO-teken loopt heen en weer.
+        laadbalk: { '0%, 100%': { transform: 'scaleX(0.2)' }, '50%': { transform: 'scaleX(1)' } },
       },
       animation: {
         draai: 'draai 180s linear infinite',
         knipper: 'knipper 1s steps(1) infinite',
         opstart: 'opstart 0.4s ease-out both',
+        laadbalk: 'laadbalk 1.4s ease-in-out infinite',
       },
       // Alle kleuren lopen via CSS-variabelen: één attribuut op <html> zet de
       // hele app in de nachtmodus, zonder dat een component het moet weten.

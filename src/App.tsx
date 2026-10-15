@@ -5,6 +5,7 @@ import { useRoute } from './hooks/useRoute'
 import { AuthPage } from './pages/AuthPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { AppLayout } from './components/AppLayout'
+import { PatoTeken } from './components/PatoTeken'
 import { AccountDeactivatedScreen } from './components/AccountDeactivatedScreen'
 import { SessieBewaker } from './components/SessieBewaker'
 import { SessieProvider } from './hooks/useSessie'
@@ -24,10 +25,15 @@ import { WettelijkeKalenderPage } from './pages/WettelijkeKalenderPage'
 import { MedewerkersPage } from './pages/MedewerkersPage'
 import { magOverzichtZien } from './lib/overzicht'
 
+/** Het PATO-teken als laadteken: de petrol balk loopt heen en weer. Op de
+ *  donkere achtergrond van het inlogscherm, waar je vandaan komt. */
 function LoadingScreen() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
-      <p className="text-sm text-slate-400">Laden…</p>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#070C0B]">
+      <PatoTeken grootte={56} bezig />
+      <p role="status" className="font-mono text-xs uppercase tracking-[0.25em] text-[#86A098]">
+        Laden…
+      </p>
     </div>
   )
 }
