@@ -169,6 +169,20 @@ function Gebruiker({ employee, inBalk = false }: { employee: Employee; inBalk?: 
   )
 }
 
+/** De lijn onder het PATO-woordmerk: een lange petrol balk, een korte paarse
+ *  en een zwakke rest. Als onderrand van de cockpit keert het merk zo terug
+ *  zonder dat het logo er twee keer staat. Decor: geen betekenis voor een
+ *  schermlezer. */
+function MerkLijn() {
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-[-1px] flex h-[2px] gap-1">
+      <span className="w-2/5 bg-[#3EF0D2]/80" />
+      <span className="w-1/6 bg-[#B57BFF]/80" />
+      <span className="w-6 bg-[#2A4943]" />
+    </span>
+  )
+}
+
 /** De uitlezingen uit het inlogscherm, in de cockpit: vandaag, de week, en
  *  hoe ver de volgende btw-kwartaaltermijn nog ligt (de wettelijke datum, zie
  *  lib/inlogscherm). Eén keer per bezoek berekend. */
@@ -215,8 +229,8 @@ export function AppLayout({
   const teFactureren = useTeFactureren(`${activeView}/${activeParam ?? ''}`)
   // Het getal naast een menu-item: hoeveel, wat het betekent voor een
   // schermlezer, en in welke kleur. Amber is de kleur van "wacht op
-  // goedkeuring" in de statusbadge; te factureren is werk dat wacht, geen
-  // alarm, en krijgt daarom grijs.
+  // goedkeuring" in de statusbadge; te factureren is geen alarm maar het
+  // werk van het kantoor zelf, en krijgt het paars van PATO.
   const tellers: Record<string, { aantal: number; zin: string; kleur: string }> = {
     goedkeuring: {
       aantal: teKeuren,
@@ -226,7 +240,7 @@ export function AppLayout({
     facturatie: {
       aantal: teFactureren,
       zin: 'te factureren',
-      kleur: 'border-[#2A4943] bg-[#13221F] text-[#CAD7D3]',
+      kleur: 'border-[#B57BFF]/50 bg-[#B57BFF]/15 text-[#D6B8FF]',
     },
   }
 
@@ -254,6 +268,7 @@ export function AppLayout({
           vast die je anders kwijt bent zodra de zijbalk dichtgaat: waar je
           bent, en hoe je ergens anders komt. */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-[#16302C] bg-[#070C0B] px-4 lg:hidden">
+        <MerkLijn />
         <button
           type="button"
           onClick={() => setMenuOpen((open) => !open)}
@@ -294,7 +309,8 @@ export function AppLayout({
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-[#16302C] px-4">
+        <div className="relative flex h-16 shrink-0 items-center gap-2 border-b border-[#16302C] px-4">
+          <MerkLijn />
           {/* Klein gehouden: in de zijbalk is de navigatie het onderwerp, niet
               het merk. Even hoog als de balk ernaast, zodat de onderlijn
               doorloopt. */}
@@ -333,7 +349,7 @@ export function AppLayout({
                       className={`block w-full rounded-md px-3 py-2 text-left text-sm font-medium transition ${
                         actief
                           ? 'bg-[#3EF0D2]/10 text-[#3EF0D2] shadow-[inset_2px_0_0_#3EF0D2]'
-                          : 'text-[#B3C3BE] hover:bg-[#13221F] hover:text-[#EDF7F4]'
+                          : 'text-[#B3C3BE] hover:bg-[#13221F] hover:text-[#EDF7F4] hover:shadow-[inset_2px_0_0_#B57BFF]'
                       }`}
                     >
                       {teller && teller.aantal > 0 ? (

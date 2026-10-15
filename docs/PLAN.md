@@ -1920,3 +1920,9 @@ een andere sessie. Hier verder doorgetrokken:
 **Hersteld:** de basisstijl voor velden (sinds §41) woog zwaarder dan een
 klasse op het veld, waardoor de velden op het inlogscherm wit werden met witte
 tekst. Nu in `:where()`, met een test (src/test/basisstijl.test.ts).
+
+**Paars als merkaccent (15/10/2026):** het paars uit het PATO-logo (#B57BFF)
+spaarzaam, zodat het geen tweede alarmkleur wordt: de lijn onder het logo
+(petrol, paars, rest) als onderrand van de zijbalkkop en de telefoonbalk; de
+teller bij "Te factureren"; en een paars streepje bij het aanwijzen van een
+menu-item (het actieve item blijft petrol).
