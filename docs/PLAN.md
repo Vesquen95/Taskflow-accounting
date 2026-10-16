@@ -1926,3 +1926,19 @@ spaarzaam, zodat het geen tweede alarmkleur wordt: de lijn onder het logo
 (petrol, paars, rest) als onderrand van de zijbalkkop en de telefoonbalk; de
 teller bij "Te factureren"; en een paars streepje bij het aanwijzen van een
 menu-item (het actieve item blijft petrol).
+
+## §43 — Een uitstel schuift niet op (16/10/2026)
+
+**Gemeld:** de aangifte PB over 2025 stond op maandag 2 november, terwijl het
+uitstel van de FOD 31 oktober zegt -- uitzonderlijk een zaterdag.
+
+**Oorzaak:** de override stond goed (31/10/2026), maar de motor schoof elke
+datum in het weekend naar de volgende werkdag, ook een datum die de FOD zelf
+publiceert.
+
+**Regel nu (0073):** een override in de wettelijke kalender is een vaste
+datum: geen verschuiving, ook niet bij een latere feestdag. De eigen
+berekening (16 oktober, 15 juli, ...) en een gewone campagnedatum schuiven
+zoals voorheen. De richting per taak kreeg daarvoor een derde waarde,
+`geen`. De drie open aangiftes PB 2025 staan nu op 31/10/2026, met een regel
+in hun historiek.

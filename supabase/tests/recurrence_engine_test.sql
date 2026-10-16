@@ -9488,4 +9488,107 @@ begin
   raise notice 'PASS 72.6: de andere klanten blijven onaangeroerd';
 end $$;
 
+-- ============================================================
+-- Section 73: een uitstel schuift niet op (0073)
+-- Een override in de wettelijke kalender is een datum van de FOD: hij blijft
+-- staan, ook op een zaterdag. Gemeld voor de PB over 2025 (31/10/2026).
+-- 73.1 een bestaande open taak springt naar de override, zonder verschuiving
+-- 73.2 een nieuwe taak krijgt de override, zonder verschuiving
+-- 73.3 een latere feestdag vlak ervoor verschuift ze niet alsnog
+-- 73.4 de eigen berekening schuift nog altijd naar de volgende werkdag
+-- 73.5 een medewerker kan de richting niet zelf wijzigen
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid; v_ot uuid; v_k1 uuid; v_k2 uuid; v_k3 uuid;
+  -- Het inkomstenjaar van dit jaar: de aangifte valt volgend jaar.
+  v_jaar int := extract(year from current_date)::int;
+  v_zaterdag date;
+  v_r record;
+begin
+  -- De eerste zaterdag vanaf 24 oktober van volgend jaar.
+  v_zaterdag := make_date(v_jaar + 1, 10, 24);
+  v_zaterdag := v_zaterdag + ((6 - extract(dow from v_zaterdag)::int + 7) % 7);
+
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's73@test.local', now());
+  insert into public.firms (naam) values ('S73 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S73 Beheerder', 's73@test.local', 'kantoorbeheerder', true, true) returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select id into v_ot from public.obligation_types where code = 'aangifte_pb';
+
+  insert into public.clients (firm_id, naam, klantsoort, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S73 Bestaand', 'natuurlijk_persoon', 'Andere', 12, 31, 'geen', true) returning id into v_k1;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_k1, v_ot, true, current_date);
+  perform public.generate_task_instances_intern(v_firm, public.horizon_maanden(), 0, v_k1);
+
+  -- 73.4 eerst: zonder override is het 16 oktober, verschoven naar een werkdag.
+  select due_date, due_date_wettelijk, verschuiving into v_r from public.task_instances
+   where client_id = v_k1 and obligation_type_id = v_ot and periode_label = v_jaar::text;
+  if v_r.due_date_wettelijk <> make_date(v_jaar + 1, 10, 16)
+     or v_r.due_date <> public.next_business_day(make_date(v_jaar + 1, 10, 16))
+     or v_r.verschuiving <> 'vooruit' then
+    raise exception 'FAIL 73.4: de eigen berekening schuift niet meer: % / % / %', v_r.due_date_wettelijk, v_r.due_date, v_r.verschuiving;
+  end if;
+  raise notice 'PASS 73.4: zonder override 16/10, naar de volgende werkdag (%)', v_r.due_date;
+
+  -- 73.1 Het uitstel komt: een override op een zaterdag.
+  insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, bron, aangemaakt_door, gewijzigd_door)
+    values (v_ot, v_jaar, 'vorm_complex', v_zaterdag, true, 'S73 uitstel', v_admin, v_admin);
+  select due_date, due_date_wettelijk, verschuiving into v_r from public.task_instances
+   where client_id = v_k1 and obligation_type_id = v_ot and periode_label = v_jaar::text;
+  if v_r.due_date <> v_zaterdag or v_r.due_date_wettelijk <> v_zaterdag or v_r.verschuiving <> 'geen' then
+    raise exception 'FAIL 73.1: bestaande taak na het uitstel: % / % / % (verwacht % zonder verschuiving)', v_r.due_date, v_r.due_date_wettelijk, v_r.verschuiving, v_zaterdag;
+  end if;
+  raise notice 'PASS 73.1: bestaande taak staat op de zaterdag van het uitstel (%)', v_zaterdag;
+
+  -- 73.2 Een nieuwe klant na het uitstel.
+  insert into public.clients (firm_id, naam, klantsoort, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S73 Nieuw', 'natuurlijk_persoon', 'Andere', 12, 31, 'geen', true) returning id into v_k2;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+    values (v_k2, v_ot, true, current_date);
+  perform public.generate_task_instances_intern(v_firm, public.horizon_maanden(), 0, v_k2);
+  select due_date, verschuiving into v_r from public.task_instances
+   where client_id = v_k2 and obligation_type_id = v_ot and periode_label = v_jaar::text;
+  if v_r.due_date <> v_zaterdag or v_r.verschuiving <> 'geen' then
+    raise exception 'FAIL 73.2: nieuwe taak na het uitstel: % / %', v_r.due_date, v_r.verschuiving;
+  end if;
+  raise notice 'PASS 73.2: een nieuwe taak krijgt de zaterdag, zonder verschuiving';
+
+  -- 73.3 Een feestdag de dag ervoor: de herberekening laat het uitstel staan.
+  insert into public.public_holidays (jaar, datum, omschrijving, aangemaakt_door, gewijzigd_door)
+    values (v_jaar + 1, v_zaterdag - 1, 'S73 feestdag', v_admin, v_admin);
+  select due_date into v_r from public.task_instances
+   where client_id = v_k1 and obligation_type_id = v_ot and periode_label = v_jaar::text;
+  if v_r.due_date <> v_zaterdag then
+    raise exception 'FAIL 73.3: een feestdag verschoof het uitstel naar %', v_r.due_date;
+  end if;
+  raise notice 'PASS 73.3: een latere feestdag laat het uitstel staan';
+
+  -- 73.5 De richting zelf blijft onaanraakbaar voor een medewerker.
+  update public.task_instances set verschuiving = 'vooruit'
+   where client_id = v_k2 and obligation_type_id = v_ot and periode_label = v_jaar::text;
+  select verschuiving into v_r from public.task_instances
+   where client_id = v_k2 and obligation_type_id = v_ot and periode_label = v_jaar::text;
+  if v_r.verschuiving <> 'geen' then
+    raise exception 'FAIL 73.5: een medewerker kon de richting wijzigen (%)', v_r.verschuiving;
+  end if;
+  raise notice 'PASS 73.5: de richting is van de motor, niet van een medewerker';
+
+  -- De eenvoudige aangifte valt niet onder een override voor vorm_complex.
+  insert into public.clients (firm_id, naam, klantsoort, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S73 Eenvoudig', 'natuurlijk_persoon', 'Andere', 12, 31, 'geen', true) returning id into v_k3;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters)
+    values (v_k3, v_ot, true, current_date, '{"aangifte_vorm": "eenvoudig"}');
+  perform public.generate_task_instances_intern(v_firm, public.horizon_maanden(), 0, v_k3);
+  select due_date_wettelijk, verschuiving into v_r from public.task_instances
+   where client_id = v_k3 and obligation_type_id = v_ot and periode_label = v_jaar::text;
+  if v_r.due_date_wettelijk <> make_date(v_jaar + 1, 7, 15) or v_r.verschuiving <> 'vooruit' then
+    raise exception 'FAIL 73.4b: de eenvoudige aangifte werd door het uitstel geraakt: % / %', v_r.due_date_wettelijk, v_r.verschuiving;
+  end if;
+  raise notice 'PASS 73.4b: de eenvoudige aangifte blijft op 15 juli, met verschuiving';
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;
