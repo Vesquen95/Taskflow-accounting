@@ -826,3 +826,71 @@ describe('TaskDetailModal — heropenen (0070)', () => {
   })
 })
 
+
+describe('TaskDetailModal — na het afronden: factureren?', () => {
+  function toonMet(factuurposten: { task_instance_id: string; status: string }[]) {
+    const mock = createSupabaseMock({
+      task_status_log: () => ({ data: [], error: null }),
+      teams: () => ({ data: [], error: null }),
+      employee_teams: () => ({ data: [], error: null }),
+      // De lijstvraag (.in) krijgt de posten; de knop in het venster vraagt
+      // één open post op en krijgt er hier geen.
+      factuurposten: (state) =>
+        state.calls.some((c) => c.method === 'in') ? { data: factuurposten, error: null } : { data: null, error: null },
+    })
+    ;(supabase.from as Mock).mockImplementation(mock.from)
+    const rpc = vi.fn().mockResolvedValue({ data: 'post-1', error: null })
+    ;(supabase.rpc as unknown as Mock).mockImplementation(rpc)
+    mockEmployee.mockReturnValue(employee({ id: 'e2', mag_goedkeuren: true }))
+    render(
+      <TaskDetailModal
+        task={task({ status: 'wacht_op_goedkeuring' })}
+        employees={employees}
+        onClose={onClose}
+        onStatusChange={onStatusChange}
+        onReassign={onReassign}
+        onMarkReviewHandled={onMarkReviewHandled}
+      />,
+    )
+    return { rpc }
+  }
+
+  it('vraagt na het goedkeuren of het gefactureerd moet worden, en zet het met één klik op de lijst', async () => {
+    const user = userEvent.setup()
+    const { rpc } = toonMet([])
+    await user.click(await screen.findByRole('button', { name: 'Goedkeuren' }))
+
+    expect(await screen.findByText('Moet dit gefactureerd worden?')).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Op de lijst te factureren' }))
+    expect(rpc).toHaveBeenCalledWith(
+      'factuurpost_toevoegen',
+      expect.objectContaining({
+        p_task_instance_id: 't1',
+        p_client_id: 'c1',
+        p_omschrijving: 'BTW-aangifte — 2026-Q2',
+      }),
+    )
+    expect(await screen.findByRole('status')).toHaveTextContent('Op de lijst te factureren gezet.')
+  })
+
+  it('sluit zonder iets te doen bij "Niet nu"', async () => {
+    const user = userEvent.setup()
+    const { rpc } = toonMet([])
+    await user.click(await screen.findByRole('button', { name: 'Goedkeuren' }))
+    await user.click(await screen.findByRole('button', { name: 'Niet nu' }))
+
+    expect(onClose).toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalledWith('factuurpost_toevoegen', expect.anything())
+  })
+
+  it('vraagt niets meer als de taak al op de lijst staat', async () => {
+    const user = userEvent.setup()
+    toonMet([{ task_instance_id: 't1', status: 'te_factureren' }])
+    await user.click(await screen.findByRole('button', { name: 'Goedkeuren' }))
+
+    expect(await screen.findByText(/staat al op de lijst te factureren/)).toBeInTheDocument()
+    expect(screen.queryByText('Moet dit gefactureerd worden?')).not.toBeInTheDocument()
+  })
+})

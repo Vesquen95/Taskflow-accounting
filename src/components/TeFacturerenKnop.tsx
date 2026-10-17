@@ -2,10 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { reportError } from '../lib/errorMessage'
 import { formatDate } from '../lib/urgency'
-import { taakRegel } from '../lib/taakLabel'
-import { meldFactuurpostenGewijzigd } from '../lib/facturatie'
+import { zetTaakOpFactuurlijst } from '../lib/factuurlijst'
 import type { TaskInstanceWithRelations } from '../types'
-import { isoDatum } from '../lib/werkstromen'
 
 interface OpenPost {
   id: string
@@ -50,20 +48,14 @@ export function TeFacturerenKnop({ task }: { task: TaskInstanceWithRelations }) 
   async function zetOpLijst() {
     setBezig(true)
     setFout(null)
-    const regel = taakRegel(task)
-    const { error } = await supabase.rpc('factuurpost_toevoegen', {
-      p_client_id: task.client_id,
-      p_omschrijving: regel.periode ? `${regel.naam} — ${regel.periode}` : regel.naam,
-      p_uitgevoerd_op: isoDatum(new Date()),
-      p_task_instance_id: task.id,
-      p_notitie: null,
-    })
-    setBezig(false)
-    if (error) {
+    try {
+      await zetTaakOpFactuurlijst(task)
+    } catch (error) {
       setFout(reportError(error, 'Op de lijst te factureren'))
       return
+    } finally {
+      setBezig(false)
     }
-    meldFactuurpostenGewijzigd()
     await laad()
   }
 

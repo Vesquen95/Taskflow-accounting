@@ -36,12 +36,14 @@ function taak(id: string, over: Record<string, unknown> = {}) {
 
 let gevraagd: ChainState[] = []
 let taken: unknown[] = []
+let posten: { task_instance_id: string; status: string }[] = []
 const rpc = vi.fn()
 
 beforeEach(() => {
   vi.clearAllMocks()
   ingelogd = { id: 'e-p', naam: 'Els', rol: 'medewerker', mag_goedkeuren: true }
   gevraagd = []
+  posten = []
   taken = [
     taak('t1'),
     taak('t2', {
@@ -58,6 +60,7 @@ beforeEach(() => {
       gevraagd.push(state)
       return { data: taken, error: null }
     },
+    factuurposten: () => ({ data: posten, error: null }),
     employees: () => ({ data: [], error: null }),
     teams: () => ({ data: [], error: null }),
     employee_teams: () => ({ data: [], error: null }),
@@ -100,6 +103,37 @@ describe('AfgerondPage', () => {
     const knoppen = within(lijst).getAllByRole('button', { name: /^Heropenen:/ })
     expect(knoppen).toHaveLength(1)
     expect(knoppen[0]).toHaveAccessibleName(/Ilias Thomas/)
+  })
+
+  it('toont per taak of ze op de factuurlijst staat', async () => {
+    posten = [{ task_instance_id: 't1', status: 'gefactureerd' }]
+    render(<AfgerondPage navigate={navigate} />)
+    expect(await screen.findByText('Gefactureerd')).toBeInTheDocument()
+    // De andere taak staat er niet op: daar staat de knop.
+    expect(screen.getByRole('button', { name: 'Te factureren: Ilias Thomas — Bijkomend advies' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Te factureren: PATO/ })).not.toBeInTheDocument()
+  })
+
+  it('zet een vergeten taak met één klik op de lijst te factureren', async () => {
+    const user = userEvent.setup()
+    render(<AfgerondPage navigate={navigate} />)
+    await user.click(await screen.findByRole('button', { name: 'Te factureren: PATO — Aangifte VenB 2025' }))
+    expect(rpc).toHaveBeenCalledWith(
+      'factuurpost_toevoegen',
+      expect.objectContaining({ p_client_id: 'c1', p_task_instance_id: 't1', p_omschrijving: 'Aangifte VenB — 2025' }),
+    )
+    expect(await screen.findByRole('status')).toHaveTextContent('PATO staat op de lijst te factureren')
+    expect(screen.getByText('Op de lijst te factureren')).toBeInTheDocument()
+  })
+
+  it('toont op vraag alleen wat nog niet op de factuurlijst staat', async () => {
+    const user = userEvent.setup()
+    posten = [{ task_instance_id: 't1', status: 'niet_factureren' }]
+    render(<AfgerondPage navigate={navigate} />)
+    await screen.findByText('Niet te factureren')
+    await user.click(screen.getByLabelText('Alleen wat nog niet op de factuurlijst staat'))
+    expect(screen.queryByText(/goedgekeurd door Els/)).not.toBeInTheDocument()
+    expect(screen.getByText('Bijkomend advies', { exact: false })).toBeInTheDocument()
   })
 
   it('kiest de periode', async () => {

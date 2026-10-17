@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { TeFacturerenKnop } from './TeFacturerenKnop'
+import { FacturatieVraag } from './FacturatieVraag'
 import { HeropenFormulier } from './HeropenFormulier'
 import { heropenTaak, magHeropenen } from '../lib/heropenen'
 import { StatusBadge } from './StatusBadge'
@@ -107,6 +108,8 @@ export function TaskDetailModal({
   // Verzetten is een uitzondering, geen dagelijkse handeling: het formulier
   // met zijn waarschuwing staat pas open wanneer iemand erom vraagt.
   const [verzettenOpen, setVerzettenOpen] = useState(false)
+  // Na het afronden: eerst de vraag of het gefactureerd moet worden.
+  const [naAfronden, setNaAfronden] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -153,6 +156,12 @@ export function TaskDetailModal({
       // goedkeuren). Loopt de tweede stap stuk, dan staat de taak op de
       // tussenstatus en zegt de melding dat ook.
       await voerStatusActieUit(task.id, actie, onStatusChange)
+      // Afgerond of goedgekeurd: het werk is klaar, dus nu de vraag of het
+      // gefactureerd moet worden. Daarna is het uit beeld en vergeten.
+      if (actie.doel === 'ingediend_afgerond') {
+        setNaAfronden(true)
+        return
+      }
       onClose()
     } catch (err) {
       setError(statusActieFoutmelding(err))
@@ -204,6 +213,15 @@ export function TaskDetailModal({
   // De vier voorafbetalingen heten in de databank allemaal hetzelfde. Welke
   // van de vier het is staat nu in de titel; wat ze waard is, hieronder.
   const va = leesVoorafbetaling(task.obligation_type?.code, task.periode_label)
+
+  if (naAfronden) {
+    return (
+      <Modal title={regel.naam} onClose={onClose}>
+        <p className="-mt-2 mb-4 text-base font-semibold text-slate-900">{task.client?.naam ?? '—'}</p>
+        <FacturatieVraag task={task} onSluit={onClose} />
+      </Modal>
+    )
+  }
 
   return (
     <Modal title={regel.naam} onClose={onClose}>

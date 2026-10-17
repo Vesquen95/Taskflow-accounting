@@ -1942,3 +1942,25 @@ berekening (16 oktober, 15 juli, ...) en een gewone campagnedatum schuiven
 zoals voorheen. De richting per taak kreeg daarvoor een derde waarde,
 `geen`. De drie open aangiftes PB 2025 staan nu op 31/10/2026, met een regel
 in hun historiek.
+
+## §44 — Niets vergeten te factureren (17/10/2026)
+
+**Gevraagd:** een knop om te factureren op het scherm Afgerond, "want als ik
+dat vergeet, zie ik het niet meer" -- of een vraag bij het goedkeuren.
+
+**Allebei:**
+
+- **Na het afronden of goedkeuren** vraagt het taakvenster: "Moet dit
+  gefactureerd worden?" Eén klik zet de taak op de lijst te factureren;
+  "Niet nu" sluit gewoon. Staat de taak er al op, dan wordt er niets
+  gevraagd. Geen verplichting: een btw-aangifte zit bij de ene klant in een
+  forfait, bij de andere niet.
+- **Op het scherm Afgerond** staat bij elke taak of ze op de lijst staat
+  (op de lijst / gefactureerd / niet te factureren). Zo niet, dan staat er
+  een knop "Te factureren". Een vinkje toont alleen wat er nog niet op staat:
+  de controle aan het eind van de maand.
+
+Eén weg naar de lijst (`lib/factuurlijst.ts`), voor de knop in het venster,
+de vraag en het scherm Afgerond: dezelfde omschrijving overal. Geen migratie:
+`factuurpost_toevoegen` (0069) bestond al en weigert een tweede open regel
+voor dezelfde taak.

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAfgerondeTaken, MAX_AFGEROND, type AfgerondeTaak } from '../hooks/useAfgerondeTaken'
 import { useCurrentEmployee } from '../hooks/useCurrentEmployee'
 import { useEmployees } from '../hooks/useEmployees'
@@ -11,6 +11,9 @@ import { HeropenFormulier } from '../components/HeropenFormulier'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { isoDatum } from '../lib/werkstromen'
+import { factuurstandVoorTaken, zetTaakOpFactuurlijst } from '../lib/factuurlijst'
+import { reportError } from '../lib/errorMessage'
+import type { FactuurpostStatus } from '../types'
 
 /**
  * Afgerond: wat de laatste tijd afgevinkt werd (0070).
@@ -18,7 +21,17 @@ import { isoDatum } from '../lib/werkstromen'
  * Bedoeld om een vergissing terug te draaien. Wie te snel was, vindt de taak
  * hier terug en heropent ze; ze gaat terug naar "in uitvoering", met de reden
  * en zijn naam in de historiek. Geen archief: daarvoor is het klantdossier.
+ *
+ * En om niets te vergeten aan te rekenen: per taak staat erbij of ze op de
+ * lijst te factureren staat. Zo niet, dan kan het hier met één klik, en een
+ * filter toont alleen wat er nog niet op staat.
  */
+
+const FACTUURSTAND: Record<FactuurpostStatus, { label: string; klasse: string }> = {
+  te_factureren: { label: 'Op de lijst te factureren', klasse: 'border-purple-300 bg-purple-50 text-purple-800' },
+  gefactureerd: { label: 'Gefactureerd', klasse: 'border-emerald-300 bg-emerald-50 text-emerald-800' },
+  niet_factureren: { label: 'Niet te factureren', klasse: 'border-slate-300 bg-slate-50 text-slate-600' },
+}
 
 const PERIODES = [
   { dagen: 7, label: 'Laatste 7 dagen' },
@@ -42,17 +55,49 @@ export function AfgerondPage({ navigate }: { navigate: (view: string, param?: st
   const [zoek, setZoek] = useState('')
   const [heropenId, setHeropenId] = useState<string | null>(null)
   const [melding, setMelding] = useState<string | null>(null)
+  const [fout, setFout] = useState<string | null>(null)
+  const [alleenNietGefactureerd, setAlleenNietGefactureerd] = useState(false)
+  const [standen, setStanden] = useState<Map<string, FactuurpostStatus>>(new Map())
+  const [bezigMet, setBezigMet] = useState<string | null>(null)
   const vanaf = useMemo(() => dagenGeleden(dagen), [dagen])
   const { taken, loading, error, reload } = useAfgerondeTaken({ vanaf, team, toegewezenAan: wie })
 
+  // Eén vraag voor de hele lijst: welke taken staan op de factuurlijst?
+  // Lukt dat niet, dan toont de lijst gewoon geen factuurstand.
+  useEffect(() => {
+    let actief = true
+    factuurstandVoorTaken(taken.map((t) => t.id))
+      .then((s) => actief && setStanden(s))
+      .catch(() => actief && setStanden(new Map()))
+    return () => {
+      actief = false
+    }
+  }, [taken])
+
+  async function zetOpLijst(taak: AfgerondeTaak) {
+    setMelding(null)
+    setFout(null)
+    setBezigMet(taak.id)
+    try {
+      await zetTaakOpFactuurlijst(taak)
+      setStanden((s) => new Map(s).set(taak.id, 'te_factureren'))
+      setMelding(`${taak.client.naam} staat op de lijst te factureren.`)
+    } catch (e) {
+      setFout(reportError(e, 'Op de lijst te factureren'))
+    } finally {
+      setBezigMet(null)
+    }
+  }
+
   const zichtbaar = useMemo(() => {
     const term = zoek.trim().toLowerCase()
-    if (!term) return taken
     return taken.filter((t) => {
+      if (alleenNietGefactureerd && standen.has(t.id)) return false
+      if (!term) return true
       const regel = taakRegel(t)
       return [t.client.naam, regel.naam, regel.periode ?? ''].some((s) => s.toLowerCase().includes(term))
     })
-  }, [taken, zoek])
+  }, [taken, zoek, alleenNietGefactureerd, standen])
 
   async function heropen(taak: AfgerondeTaak, reden: string) {
     await heropenTaak(taak.id, reden)
@@ -142,11 +187,25 @@ export function AfgerondPage({ navigate }: { navigate: (view: string, param?: st
             className="rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm"
           />
         </div>
+        <label className="flex items-center gap-2 pb-1.5 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={alleenNietGefactureerd}
+            onChange={(e) => setAlleenNietGefactureerd(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          Alleen wat nog niet op de factuurlijst staat
+        </label>
       </div>
 
       {melding && (
         <p role="status" className="mb-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           {melding}
+        </p>
+      )}
+      {fout && (
+        <p role="alert" className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {fout}
         </p>
       )}
 
@@ -155,7 +214,14 @@ export function AfgerondPage({ navigate }: { navigate: (view: string, param?: st
       ) : loading ? (
         <p className="text-sm text-slate-400">Laden…</p>
       ) : zichtbaar.length === 0 ? (
-        <EmptyState title="Niets afgerond in deze periode" description="Kies een langere periode, of een ander team." />
+        <EmptyState
+          title={alleenNietGefactureerd ? 'Alles staat op de factuurlijst' : 'Niets afgerond in deze periode'}
+          description={
+            alleenNietGefactureerd
+              ? 'Elke afgeronde taak in deze periode staat al op de lijst te factureren, of werd afgehandeld.'
+              : 'Kies een langere periode, of een ander team.'
+          }
+        />
       ) : (
         <>
           <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
@@ -165,12 +231,12 @@ export function AfgerondPage({ navigate }: { navigate: (view: string, param?: st
               return (
                 <li key={taak.id} className="px-4 py-3 text-sm">
                   <div className="flex flex-wrap items-start gap-3">
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-[14rem] flex-1">
                       <p className="text-slate-800">
                         <button
                           type="button"
                           onClick={() => navigate('klanten', taak.client.id)}
-                          className="font-medium hover:underline"
+                          className="text-left font-medium hover:underline"
                         >
                           {taak.client.vertrouwelijk && <span aria-label="Vertrouwelijk">🔒 </span>}
                           {taak.client.naam}
@@ -185,19 +251,38 @@ export function AfgerondPage({ navigate }: { navigate: (view: string, param?: st
                         {taak.goedgekeurd && ` · goedgekeurd door ${taak.goedgekeurd.naam}`}
                       </p>
                     </div>
-                    {mag && heropenId !== taak.id && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMelding(null)
-                          setHeropenId(taak.id)
-                        }}
-                        aria-label={`Heropenen: ${taak.client.naam} — ${regel.naam}${regel.periode ? ` ${regel.periode}` : ''}`}
-                        className="shrink-0 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
-                      >
-                        Heropenen
-                      </button>
-                    )}
+                    <div className="flex shrink-0 items-center gap-2">
+                      {standen.has(taak.id) ? (
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-xs font-medium ${FACTUURSTAND[standen.get(taak.id)!].klasse}`}
+                        >
+                          {FACTUURSTAND[standen.get(taak.id)!].label}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={bezigMet === taak.id}
+                          onClick={() => void zetOpLijst(taak)}
+                          aria-label={`Te factureren: ${taak.client.naam} — ${regel.naam}${regel.periode ? ` ${regel.periode}` : ''}`}
+                          className="rounded-md border border-purple-300 bg-white px-3 py-1.5 text-xs font-medium text-purple-800 hover:bg-purple-50 disabled:opacity-50"
+                        >
+                          {bezigMet === taak.id ? 'Bezig…' : 'Te factureren'}
+                        </button>
+                      )}
+                      {mag && heropenId !== taak.id && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMelding(null)
+                            setHeropenId(taak.id)
+                          }}
+                          aria-label={`Heropenen: ${taak.client.naam} — ${regel.naam}${regel.periode ? ` ${regel.periode}` : ''}`}
+                          className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                        >
+                          Heropenen
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {heropenId === taak.id && (
                     <div className="mt-2">
