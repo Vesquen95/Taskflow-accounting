@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AdhocTaskFormModal } from './AdhocTaskFormModal'
 import type { Employee } from '../types'
+// Vandaag zoals de app het rekent: in Belgische tijd, niet in UTC.
+import { isoDatum } from '../lib/werkstromen'
 
 function employee(overrides: Partial<Employee> = {}): Employee {
   return {
@@ -64,7 +66,7 @@ describe('AdhocTaskFormModal — defaults', () => {
   it('defaults the deadline input to today', () => {
     render(<AdhocTaskFormModal employees={employees} defaultAssigneeId="e1" onClose={onClose} onSubmit={onSubmit} />)
     const dateInput = screen.getByLabelText('Deadline') as HTMLInputElement
-    expect(dateInput.value).toBe(new Date().toISOString().slice(0, 10))
+    expect(dateInput.value).toBe(isoDatum(new Date()))
   })
 
   it('defaults the assignee select to the given defaultAssigneeId', () => {

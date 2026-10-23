@@ -4,6 +4,8 @@ import { supabase } from './supabase'
 import { createSupabaseMock, type ChainState, type SupabaseHandlers } from '../test/supabaseMock'
 import { legeSelecties, loadClientObligations, saveClientObligations } from './clientObligations'
 import type { ObligationType } from '../types'
+// Vandaag zoals de app het rekent: in Belgische tijd, niet in UTC.
+import { isoDatum } from './werkstromen'
 
 vi.mock('./supabase', () => ({
   supabase: { from: vi.fn(), rpc: vi.fn(), auth: {} },
@@ -22,7 +24,7 @@ function install(handlers: SupabaseHandlers) {
   return mock
 }
 
-const vandaag = new Date().toISOString().slice(0, 10)
+const vandaag = isoDatum(new Date())
 
 beforeEach(() => {
   vi.clearAllMocks()

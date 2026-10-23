@@ -5,7 +5,7 @@ import type { Mock } from 'vitest'
 import { supabase } from '../lib/supabase'
 import { createSupabaseMock, type ChainState, type SupabaseHandlers } from '../test/supabaseMock'
 import { TelefoonPage } from './TelefoonPage'
-import { VENSTERS, vensterTot } from '../lib/werkstromen'
+import { VENSTERS, vensterTot, isoDatum } from '../lib/werkstromen'
 import type { TaskInstanceWithRelations } from '../types'
 
 vi.mock('../lib/supabase', () => ({
@@ -110,7 +110,7 @@ function installMetAchterstand(taken: TaskInstanceWithRelations[], achterstand: 
 }
 
 function vandaagIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  return isoDatum(new Date())
 }
 
 describe('TelefoonPage — de achterstand uit het verleden', () => {

@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { daysUntil, dringendsteBand, formatDate, getUrgencyBand, relatieveDag, wachtDuur, wachtTeLang } from './urgency'
+// Vandaag zoals de app het rekent: in Belgische tijd, niet in UTC.
+import { isoDatum } from './werkstromen'
 
 const today = new Date('2026-06-15T12:00:00')
 
 function iso(daysFromToday: number): string {
   const d = new Date(today)
   d.setDate(d.getDate() + daysFromToday)
-  return d.toISOString().slice(0, 10)
+  return isoDatum(d)
 }
 
 describe('getUrgencyBand', () => {

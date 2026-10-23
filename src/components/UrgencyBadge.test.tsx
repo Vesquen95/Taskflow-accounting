@@ -1,11 +1,13 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { UrgencyBadge } from './UrgencyBadge'
+// Vandaag zoals de app het rekent: in Belgische tijd, niet in UTC.
+import { isoDatum } from '../lib/werkstromen'
 
 function iso(daysFromNow: number): string {
   const d = new Date()
   d.setDate(d.getDate() + daysFromNow)
-  return d.toISOString().slice(0, 10)
+  return isoDatum(d)
 }
 
 describe('UrgencyBadge', () => {

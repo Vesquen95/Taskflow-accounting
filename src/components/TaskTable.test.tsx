@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TaskTable } from './TaskTable'
 import type { Employee, TaskInstanceWithRelations } from '../types'
 import { stelSchermIn } from '../test/kleinScherm'
+// Vandaag zoals de app het rekent: in Belgische tijd, niet in UTC.
+import { isoDatum } from '../lib/werkstromen'
 
 function employee(overrides: Partial<Employee> = {}): Employee {
   return {
@@ -331,7 +333,7 @@ describe('TaskTable — urgentiebadge alleen wanneer ze iets meldt', () => {
   function overDagen(dagen: number): string {
     const d = new Date()
     d.setDate(d.getDate() + dagen)
-    return d.toISOString().slice(0, 10)
+    return isoDatum(d)
   }
 
   it('toont geen "Later"-badge op een taak die nog ver weg is', () => {

@@ -4,6 +4,8 @@ import type { Mock } from 'vitest'
 import { supabase } from '../lib/supabase'
 import { createSupabaseMock, type ChainState, type SupabaseHandlers } from '../test/supabaseMock'
 import { useClientDetail } from './useClientDetail'
+// Vandaag zoals de app het rekent: in Belgische tijd, niet in UTC.
+import { isoDatum } from '../lib/werkstromen'
 
 vi.mock('../lib/supabase', () => ({
   supabase: { from: vi.fn(), rpc: vi.fn(), auth: {} },
@@ -113,7 +115,7 @@ describe('useClientDetail — effectief-gedateerd obligation change (§2.6)', ()
     const { result } = renderHook(() => useClientDetail('c1'))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = isoDatum(new Date())
 
     await act(async () => {
       await result.current.updateObligationParameters('co1', 'ot1', { frequentie: 'maand' }, 'e2')
