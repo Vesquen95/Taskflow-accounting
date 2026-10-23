@@ -1964,3 +1964,27 @@ Eén weg naar de lijst (`lib/factuurlijst.ts`), voor de knop in het venster,
 de vraag en het scherm Afgerond: dezelfde omschrijving overal. Geen migratie:
 `factuurpost_toevoegen` (0069) bestond al en weigert een tweede open regel
 voor dezelfde taak.
+
+## §45 — Het inlogscherm als reactor (23/10/2026)
+
+**Gevraagd:** het inlogscherm "zoals Jarvis van Iron Man". Uit drie
+voorstellen: de reactor, met de gesproken begroeting als optie.
+
+- **De reactor** (`components/Reactor.tsx`): ringen die elk op hun eigen
+  tempo draaien, een scanlijn, en in de kern de Λ van PATO. De buitenste ring
+  blijft het jaar met de boog naar de volgende btw-termijn. Bij het aanmelden
+  draait alles op toeren.
+- **De assistent** heet P.A.T.O. -- Persoonlijke Assistent voor Taken en
+  Opvolging. Geen "Jarvis" of Marvel-beeld op de site: dat zijn merken, en de
+  repo is publiek. Zijn regels typen zich uit; alleen wat zonder databank
+  zeker is (datum, week, btw-termijn).
+- **De begroeting** (`components/Begroeting.tsx`): na het inloggen
+  vergrendelt de reactor, "Toegang verleend", en een groet bij voornaam. Twee
+  en een halve seconde; een klik of toets slaat ze over. Alleen na inloggen
+  via het scherm, niet bij het herladen van de pagina (`lib/begroeting.ts`).
+- **De stem**: standaard uit, aan te zetten op het inlogscherm. Via de spraak
+  van de browser zelf, dus geen tekst naar een dienst buiten. Zonder
+  spraakondersteuning geen knop.
+
+Alle beweging staat achter `motion-safe`: wie minder beweging vraagt, krijgt
+een stilstaand scherm.

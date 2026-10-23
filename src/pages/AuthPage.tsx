@@ -4,14 +4,18 @@ import { useAuth } from '../hooks/useAuth'
 import { VERLOOP_UITLEG } from '../lib/sessieduur'
 import { leesVerloopreden, wisVerloopreden } from '../lib/sessieopslag'
 import { dagVanHetJaar, isoWeek, volgendeBtwKwartaal } from '../lib/inlogscherm'
+import { bewaarStem, kanSpreken, leesStem, markeerBegroeting, spreek, wisBegroeting } from '../lib/begroeting'
+import { Reactor } from '../components/Reactor'
 
 /**
- * Het inlogscherm: het jaar als wijzerplaat.
+ * Het inlogscherm: de reactor.
  *
- * Gevraagd (14/10/2026): "mega futuristisch". Gekozen uit drie voorstellen:
- * de chronometer (B) met de opstartreeks en de uitlezingen van de terminal
- * (C). Het idee blijft dat van de app: termijnen komen op je af. De ring is
- * het jaar, de boog loopt van vandaag naar de volgende btw-kwartaaltermijn.
+ * Gevraagd (23/10/2026): "zoals Jarvis van Iron Man". Links praat de
+ * assistent -- P.A.T.O., Persoonlijke Assistent voor Taken en Opvolging --
+ * in het midden draait de reactor (components/Reactor.tsx), rechts het
+ * identificatiepaneel. Bij het aanmelden draait de reactor op toeren; na het
+ * inloggen volgt de begroeting bij naam (components/Begroeting.tsx), als je
+ * wil ook gesproken.
  *
  * Wat bleef zoals het was: het formulier zelf (één knop erin, registreren
  * erbuiten), de foutmeldingen, en de uitleg na een automatische afmelding.
@@ -19,101 +23,56 @@ import { dagVanHetJaar, isoWeek, volgendeBtwKwartaal } from '../lib/inlogscherm'
  * een schermlezer.
  */
 
-const MAANDEN = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
-
-/** Graden op de wijzerplaat: 1 januari bovenaan, met de klok mee. */
-function hoek(dag: number, dagenInJaar: number) {
-  return (dag / dagenInJaar) * 2 * Math.PI - Math.PI / 2
+/** De vier hoeken van een vizier: rond het scherm, of rond een paneel. */
+const HOEKEN = {
+  scherm: [
+    'fixed left-4 top-4 border-l-2 border-t-2',
+    'fixed right-4 top-4 border-r-2 border-t-2',
+    'fixed bottom-4 left-4 border-b-2 border-l-2',
+    'fixed bottom-4 right-4 border-b-2 border-r-2',
+  ],
+  paneel: [
+    'absolute -left-px -top-px border-l-2 border-t-2',
+    'absolute -right-px -top-px border-r-2 border-t-2',
+    'absolute -bottom-px -left-px border-b-2 border-l-2',
+    'absolute -bottom-px -right-px border-b-2 border-r-2',
+  ],
 }
-function punt(a: number, r: number): [number, number] {
-  return [Math.cos(a) * r, Math.sin(a) * r]
-}
-
-function Wijzerplaat({ nu }: { nu: Date }) {
-  const jaar = nu.getFullYear()
-  const dagenInJaar = dagVanHetJaar(new Date(jaar, 11, 31)) + 1
-  const vandaag = dagVanHetJaar(nu)
-  const termijn = volgendeBtwKwartaal(nu)
-  // Een termijn in januari ligt in het volgende jaar: de boog loopt dan door
-  // over de top van de ring.
-  const termijnDag = vandaag + termijn.dagen
-  const [ax, ay] = punt(hoek(vandaag, dagenInJaar), 190)
-  const [bx, by] = punt(hoek(termijnDag, dagenInJaar), 190)
-  const groteBoog = termijn.dagen > dagenInJaar / 2 ? 1 : 0
-
-  return (
-    <svg viewBox="-200 -200 400 400" aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible">
-      <defs>
-        <linearGradient id="tf-boog" x1="0" x2="1">
-          <stop offset="0" stopColor="#3EF0D2" />
-          <stop offset="1" stopColor="#FFB547" />
-        </linearGradient>
-        <filter id="tf-gloed">
-          <feGaussianBlur stdDeviation="3" result="b" />
-          <feMerge>
-            <feMergeNode in="b" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-      <circle r="190" fill="none" stroke="#1B2725" />
-      <circle r="168" fill="none" stroke="#1B2725" />
-      <g className="origin-center motion-safe:animate-draai">
-        <circle r="181" fill="none" stroke="#2A3A37" strokeDasharray="1 5" />
-      </g>
-      {Array.from({ length: 53 }, (_, w) => {
-        const a = hoek(w * 7, dagenInJaar)
-        const [x1, y1] = punt(a, 168)
-        const [x2, y2] = punt(a, w % 4 === 0 ? 177 : 173)
-        return <line key={w} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#3A4D49" />
-      })}
-      {MAANDEN.map((m, i) => {
-        const midden = dagVanHetJaar(new Date(jaar, i, 15))
-        const [x, y] = punt(hoek(midden, dagenInJaar), 152)
-        const huidig = i === nu.getMonth()
-        return (
-          <text
-            key={m}
-            x={x}
-            y={y + 3}
-            textAnchor="middle"
-            fontSize="9"
-            letterSpacing="1.5"
-            className="font-mono uppercase"
-            fill={huidig ? '#E8F5F1' : '#5C7A73'}
-          >
-            {m}
-          </text>
-        )
-      })}
-      <path
-        d={`M${ax} ${ay} A190 190 0 ${groteBoog} 1 ${bx} ${by}`}
-        fill="none"
-        stroke="url(#tf-boog)"
-        strokeWidth="4"
-        strokeLinecap="round"
-        filter="url(#tf-gloed)"
-      />
-      <circle cx={ax} cy={ay} r="5" fill="#3EF0D2" filter="url(#tf-gloed)" />
-      <circle cx={bx} cy={by} r="6" fill="#070C0B" stroke="#FFB547" strokeWidth="2" filter="url(#tf-gloed)" />
-    </svg>
-  )
-}
-
-/** De vier hoeken van het scherm: het kader van een vizier. */
-function Hoeken() {
-  const basis = 'pointer-events-none fixed h-6 w-6 border-[#3EF0D2]/70'
+function Hoeken({ rond }: { rond: keyof typeof HOEKEN }) {
   return (
     <div aria-hidden="true">
-      <span className={`${basis} left-4 top-4 border-l-2 border-t-2`} />
-      <span className={`${basis} right-4 top-4 border-r-2 border-t-2`} />
-      <span className={`${basis} bottom-4 left-4 border-b-2 border-l-2`} />
-      <span className={`${basis} bottom-4 right-4 border-b-2 border-r-2`} />
+      {HOEKEN[rond].map((plaats) => (
+        <span key={plaats} className={`pointer-events-none h-4 w-4 border-[#7FDBFF]/70 ${plaats}`} />
+      ))}
     </div>
   )
 }
 
-const OPSTART = ['taskflow gestart', 'verbinding versleuteld', 'kalender van het jaar klaar']
+/** Eén regel van de assistent, die zich teken per teken uittypt. */
+function Logregel({ tekst, vertraging, ok = false }: { tekst: string; vertraging: number; ok?: boolean }) {
+  return (
+    <p className="whitespace-nowrap">
+      <span className="text-[#4F7682]">&gt; </span>
+      <span
+        className="inline-block overflow-hidden whitespace-nowrap align-bottom motion-safe:animate-typ"
+        style={{
+          width: `${tekst.length}ch`,
+          animationDuration: `${tekst.length * 0.022}s`,
+          animationTimingFunction: `steps(${tekst.length})`,
+          animationDelay: `${vertraging}s`,
+        }}
+      >
+        {tekst}
+      </span>
+      {ok && (
+        <span className="motion-safe:animate-opstart" style={{ animationDelay: `${vertraging + tekst.length * 0.022}s` }}>
+          {' '}
+          <span className="text-[#3EF0D2]">OK</span>
+        </span>
+      )}
+    </p>
+  )
+}
 
 export function AuthPage() {
   const { signIn, signUp } = useAuth()
@@ -123,6 +82,9 @@ export function AuthPage() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // Alleen tonen als de browser kan spreken.
+  const [spraak] = useState(kanSpreken)
+  const [stem, setStem] = useState(leesStem)
   // Wie automatisch afgemeld werd, staat hier zonder te weten waarom. Zonder
   // uitleg leest dat als een storing.
   const [verloopreden] = useState(() => leesVerloopreden())
@@ -142,10 +104,31 @@ export function AuthPage() {
     month: 'long',
   })
 
+  // Wat de assistent zegt: alleen wat zeker is zonder databank.
+  const log = [
+    { tekst: 'verbinding versleuteld', ok: true },
+    { tekst: 'wettelijke kalender geladen', ok: true },
+    { tekst: `week ${isoWeek(nu)}, dag ${dagVanHetJaar(nu) + 1} van ${nu.getFullYear()}` },
+    { tekst: `volgende btw-termijn: ${termijn.kwartaal}, ${termijnDatum}` },
+  ]
+  let vertraging = 0.3
+  const regels = log.map((regel) => {
+    const r = { ...regel, vertraging }
+    vertraging += regel.tekst.length * 0.022 + 0.25
+    return r
+  })
+
   function wisselModus(nieuw: 'signin' | 'signup') {
     setMode(nieuw)
     setError(null)
     setInfo(null)
+  }
+
+  function wisselStem() {
+    const aan = !stem
+    setStem(aan)
+    bewaarStem(aan)
+    if (aan) spreek('Stembegroeting staat aan.')
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -155,8 +138,13 @@ export function AuthPage() {
     setSubmitting(true)
     try {
       if (mode === 'signin') {
+        // Vóór het aanmelden: de app neemt het over zodra de sessie er is.
+        markeerBegroeting()
         const { error: err } = await signIn(email, password)
-        if (err) setError(err)
+        if (err) {
+          wisBegroeting()
+          setError(err)
+        }
       } else {
         const { error: err } = await signUp(email, password)
         if (err) {
@@ -171,136 +159,156 @@ export function AuthPage() {
   }
 
   const veld =
-    'w-full rounded-full border border-[#2A3A37] bg-[#0A1211]/90 px-5 py-2.5 text-center text-[15px] text-[#FFFFFF] placeholder:text-[#5C7A73] focus:border-[#3EF0D2] focus:outline-none focus-visible:shadow-[0_0_18px_rgba(62,240,210,0.35)]'
+    'w-full rounded-sm border border-[#1F3E48] bg-[#060E12]/90 px-4 py-2.5 text-[15px] text-[#FFFFFF] placeholder:text-[#4F7682] focus:border-[#7FDBFF] focus:outline-none focus-visible:shadow-[0_0_18px_rgba(127,219,255,0.3)]'
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden xl:h-screen xl:min-h-[640px] bg-[#070C0B] text-[#C9D6D2] [background-image:radial-gradient(circle_at_50%_45%,#0F1C1A_0%,#070C0B_60%)]">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#070C0B] text-[#C9D6D2] [background-image:radial-gradient(circle_at_50%_45%,#0C1A1F_0%,#070C0B_60%)] xl:h-screen xl:min-h-[680px]">
       {/* Raster en scanlijnen: decor, achter alles. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 opacity-40 [background-image:linear-gradient(#0F2B28_1px,transparent_1px),linear-gradient(90deg,#0F2B28_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(circle_at_50%_45%,transparent_30%,#000_75%)]"
+        className="pointer-events-none fixed inset-0 opacity-40 [background-image:linear-gradient(#0E2A33_1px,transparent_1px),linear-gradient(90deg,#0E2A33_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(circle_at_50%_45%,transparent_30%,#000_75%)]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-20 [background-image:repeating-linear-gradient(to_bottom,rgba(62,240,210,0.03)_0_1px,transparent_1px_3px)]"
+        className="pointer-events-none fixed inset-0 z-20 [background-image:repeating-linear-gradient(to_bottom,rgba(127,219,255,0.03)_0_1px,transparent_1px_3px)]"
       />
-      <Hoeken />
+      <Hoeken rond="scherm" />
 
-      {/* De opstartreeks: één moment bij het laden, dan rust. */}
-      <div aria-hidden="true" className="absolute left-10 top-10 z-10 hidden font-mono text-xs leading-6 text-[#5C7A73] md:block">
-        {OPSTART.map((regel, i) => (
-          <p key={regel} className="motion-safe:animate-opstart" style={{ animationDelay: `${i * 0.35}s` }}>
-            &gt; {regel} <span className="text-[#3EF0D2]">OK</span>
-          </p>
+      {/* De assistent: één keer bij het laden, dan wacht hij. */}
+      <div aria-hidden="true" className="absolute left-12 top-10 z-10 hidden font-mono text-xs leading-6 text-[#86A3AD] xl:block">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-[#4F7682]">Persoonlijke Assistent voor Taken en Opvolging</p>
+        <p className="mb-2 text-2xl font-light tracking-[0.2em] text-[#E9FDFF] motion-safe:animate-opstart">
+          P.A.T.O. <span className="text-xs tracking-[0.2em] text-[#3EF0D2]">online</span>
+        </p>
+        {regels.map((r) => (
+          <Logregel key={r.tekst} tekst={r.tekst} vertraging={r.vertraging} ok={r.ok} />
         ))}
-        <p className="motion-safe:animate-opstart" style={{ animationDelay: `${OPSTART.length * 0.35}s` }}>
-          &gt; wacht op aanmelding{' '}
-          <span className="inline-block h-3.5 w-2 translate-y-0.5 bg-[#3EF0D2] motion-safe:animate-knipper" />
+        <p className="motion-safe:animate-opstart" style={{ animationDelay: `${vertraging}s` }}>
+          <span className="text-[#4F7682]">&gt; </span>
+          {submitting ? 'identificatie loopt' : 'identificatie vereist'}{' '}
+          <span className="inline-block h-3.5 w-2 translate-y-0.5 bg-[#7FDBFF] motion-safe:animate-knipper" />
         </p>
       </div>
 
-      <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-8 md:py-6">
-        <div className="relative aspect-square w-[min(128vw,520px)] shrink-0 md:w-[min(70vh,600px)] xl:w-[min(86vh,680px)]">
-          <Wijzerplaat nu={nu} />
+      <main className="relative z-10 flex flex-1 flex-col items-center justify-center gap-6 px-4 py-8 lg:flex-row lg:gap-16 xl:pl-40">
+        <div className="relative aspect-square w-[min(66vw,280px)] shrink-0 lg:w-[min(64vh,540px)]">
+          <Reactor nu={nu} toerental={submitting ? 'scan' : 'rust'} />
+        </div>
 
-          <div className="absolute inset-x-[17%] inset-y-[14%] flex flex-col items-stretch justify-center text-center md:inset-[23%]">
-            <img
-              src={`${import.meta.env.BASE_URL}pato-logo.svg`}
-              alt="PATO Accountancy"
-              className="mx-auto mb-3 h-12 w-auto md:mb-4 md:h-16"
+        <section className="relative w-full max-w-sm border border-[#7FDBFF]/20 bg-[#071116]/85 px-6 py-6 backdrop-blur-sm">
+          <Hoeken rond="paneel" />
+          <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] text-[#7FDBFF]">
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#3EF0D2] motion-safe:animate-pulseer" />
+            Identificatie
+          </p>
+          <img
+            src={`${import.meta.env.BASE_URL}pato-logo.svg`}
+            alt="PATO Accountancy"
+            className="mb-2 mt-4 h-10 w-auto"
+          />
+          <h1 className="text-4xl font-light tracking-[0.06em] text-[#FFFFFF]">Taskflow</h1>
+          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-[#86A3AD]">
+            {nu.toLocaleDateString('nl-BE', { weekday: 'long' })}{' '}
+            {nu.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')}
+          </p>
+          <p className="mb-5 mt-1 text-sm text-[#FFB547]">
+            Btw {termijn.kwartaal} {termijnTekst}
+          </p>
+
+          {verloopreden && (
+            <p role="status" className="mb-3 rounded-sm border border-[#FFB547]/40 bg-[#FFB547]/10 px-4 py-2 text-sm text-[#FFD9A0]">
+              {VERLOOP_UITLEG[verloopreden]}
+            </p>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-2.5">
+            <label htmlFor="email" className="sr-only">
+              E-mailadres
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="E-mailadres"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={veld}
             />
-            <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-[#8FA39D]">
-              {nu.toLocaleDateString('nl-BE', { weekday: 'long' })}{' '}
-              {nu.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')}
-            </p>
-            <h1 className="mt-1 text-4xl font-light tracking-[0.06em] text-[#FFFFFF] md:text-5xl">Taskflow</h1>
-            <p className="mb-4 mt-1 text-sm text-[#FFB547] md:mb-5">
-              Btw {termijn.kwartaal} {termijnTekst}
-            </p>
+            <label htmlFor="password" className="sr-only">
+              Wachtwoord
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              minLength={8}
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              placeholder="Wachtwoord"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={veld}
+            />
 
-            {verloopreden && (
-              <p role="status" className="mb-3 rounded-2xl border border-[#FFB547]/40 bg-[#FFB547]/10 px-4 py-2 text-sm text-[#FFD9A0]">
-                {VERLOOP_UITLEG[verloopreden]}
+            {error && (
+              <p role="alert" className="rounded-sm border border-[#FF6B5E]/40 bg-[#FF6B5E]/10 px-4 py-2 text-sm text-[#FFB3AA]">
+                {error}
+              </p>
+            )}
+            {info && (
+              <p role="status" className="rounded-sm border border-[#3EF0D2]/40 bg-[#3EF0D2]/10 px-4 py-2 text-sm text-[#B5FFF1]">
+                {info}
               </p>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-2.5">
-              <label htmlFor="email" className="sr-only">
-                E-mailadres
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="E-mailadres"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={veld}
-              />
-              <label htmlFor="password" className="sr-only">
-                Wachtwoord
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                minLength={8}
-                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                placeholder="Wachtwoord"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={veld}
-              />
+            <button
+              type="submit"
+              disabled={submitting}
+              className="mt-2 w-full rounded-sm border border-[#7FDBFF] bg-[#7FDBFF]/10 px-4 py-3 text-sm font-bold tracking-[0.18em] text-[#BFEFFF] shadow-[inset_0_0_24px_rgba(127,219,255,0.2)] transition hover:bg-[#7FDBFF] hover:text-[#04161C] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7FDBFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070C0B] disabled:opacity-60"
+            >
+              {submitting ? 'Bezig…' : mode === 'signin' ? 'Inloggen' : 'Account aanmaken'}
+            </button>
+          </form>
 
-              {error && (
-                <p role="alert" className="rounded-2xl border border-[#FF6B5E]/40 bg-[#FF6B5E]/10 px-4 py-2 text-sm text-[#FFB3AA]">
-                  {error}
-                </p>
-              )}
-              {info && (
-                <p role="status" className="rounded-2xl border border-[#3EF0D2]/40 bg-[#3EF0D2]/10 px-4 py-2 text-sm text-[#B5FFF1]">
-                  {info}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="mt-2 w-full rounded-full border border-[#3EF0D2] bg-[#3EF0D2]/10 px-4 py-3 text-sm font-bold tracking-[0.12em] text-[#3EF0D2] shadow-[inset_0_0_24px_rgba(62,240,210,0.25)] transition hover:bg-[#3EF0D2] hover:text-[#04201C] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3EF0D2] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070C0B] disabled:opacity-60"
-              >
-                {submitting ? 'Bezig…' : mode === 'signin' ? 'Inloggen' : 'Account aanmaken'}
-              </button>
-            </form>
-
-            <p className="mt-3 text-xs text-[#8FA39D]">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[#86A3AD]">
+            <p>
               {mode === 'signin' ? 'Nog geen account?' : 'Al een account?'}{' '}
               <button
                 type="button"
                 onClick={() => wisselModus(mode === 'signin' ? 'signup' : 'signin')}
-                className="font-semibold text-[#E8F5F1] underline underline-offset-2 hover:text-[#3EF0D2]"
+                className="font-semibold text-[#E9FDFF] underline underline-offset-2 hover:text-[#7FDBFF]"
               >
                 {mode === 'signin' ? 'Registreren' : 'Inloggen'}
               </button>
             </p>
+            {spraak && (
+              <button
+                type="button"
+                aria-pressed={stem}
+                onClick={wisselStem}
+                className="font-mono uppercase tracking-[0.15em] hover:text-[#7FDBFF]"
+              >
+                Stem: <span className={stem ? 'text-[#3EF0D2]' : 'text-[#4F7682]'}>{stem ? 'aan' : 'uit'}</span>
+              </button>
+            )}
           </div>
-        </div>
+        </section>
       </main>
 
-      {/* De uitlezingen: wat de wijzerplaat toont, in cijfers. */}
-      <dl className="relative z-10 mx-auto mb-8 grid w-full max-w-md grid-cols-3 gap-2 px-4 font-mono xl:absolute xl:bottom-10 xl:right-10 xl:mb-0 xl:w-52 xl:grid-cols-1 xl:gap-3 xl:px-0">
-        <div className="border border-[#16302C] bg-[#0A1211]/70 px-3 py-2 md:px-4 md:py-3">
-          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#8FA39D]">Vandaag</dt>
+      {/* De uitlezingen: wat de jaarring toont, in cijfers. */}
+      <dl className="relative z-10 mx-auto mb-8 grid w-full max-w-sm grid-cols-3 gap-2 px-4 font-mono xl:absolute xl:bottom-10 xl:left-12 xl:mb-0 xl:w-[26rem] xl:max-w-none xl:px-0">
+        <div className="border border-[#14303A] bg-[#071116]/70 px-3 py-2 md:px-4 md:py-3">
+          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#86A3AD]">Vandaag</dt>
           <dd className="mt-1 text-base text-[#FFFFFF] md:text-xl">
             {nu.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit' }).replace(/\//g, '.')}
           </dd>
         </div>
-        <div className="border border-[#16302C] bg-[#0A1211]/70 px-3 py-2 md:px-4 md:py-3">
-          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#8FA39D]">Week</dt>
+        <div className="border border-[#14303A] bg-[#071116]/70 px-3 py-2 md:px-4 md:py-3">
+          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#86A3AD]">Week</dt>
           <dd className="mt-1 text-base text-[#FFFFFF] md:text-xl">{isoWeek(nu)}</dd>
         </div>
-        <div className="border border-[#16302C] bg-[#0A1211]/70 px-3 py-2 md:px-4 md:py-3">
-          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#8FA39D]">Btw {termijn.kwartaal}</dt>
+        <div className="border border-[#14303A] bg-[#071116]/70 px-3 py-2 md:px-4 md:py-3">
+          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#86A3AD]">Btw {termijn.kwartaal}</dt>
           <dd className="mt-1 text-base text-[#FFB547] md:text-xl" title={`Wettelijke termijn: ${termijnDatum}`}>
             {termijn.dagen === 0 ? 'vandaag' : `${termijn.dagen} d`}
           </dd>

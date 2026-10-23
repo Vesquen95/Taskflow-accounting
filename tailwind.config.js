@@ -185,12 +185,20 @@ export default {
         opstart: { from: { opacity: '0', transform: 'translateY(4px)' }, to: { opacity: '1', transform: 'none' } },
         // Het laadscherm: de petrol balk van het PATO-teken loopt heen en weer.
         laadbalk: { '0%, 100%': { transform: 'scaleX(0.2)' }, '50%': { transform: 'scaleX(1)' } },
+        // De reactor (Reactor.tsx): de kern ademt; bij toegang een golf naar buiten.
+        pulseer: { '0%, 100%': { opacity: '0.6' }, '50%': { opacity: '1' } },
+        golf: { from: { transform: 'scale(0.7)', opacity: '1' }, to: { transform: 'scale(2.1)', opacity: '0' } },
+        // De assistent "typt" zijn regels: de breedte groeit per teken (steps).
+        typ: { from: { width: '0' } },
       },
       animation: {
         draai: 'draai 180s linear infinite',
         knipper: 'knipper 1s steps(1) infinite',
         opstart: 'opstart 0.4s ease-out both',
         laadbalk: 'laadbalk 1.4s ease-in-out infinite',
+        pulseer: 'pulseer 3s ease-in-out infinite',
+        golf: 'golf 1.2s ease-out infinite',
+        typ: 'typ 1s steps(40) both',
       },
       // Alle kleuren lopen via CSS-variabelen: één attribuut op <html> zet de
       // hele app in de nachtmodus, zonder dat een component het moet weten.

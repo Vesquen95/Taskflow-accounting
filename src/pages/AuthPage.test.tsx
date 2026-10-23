@@ -170,7 +170,7 @@ describe('AuthPage: uitleg na een automatische afmelding', () => {
   })
 })
 
-describe('AuthPage: de wijzerplaat', () => {
+describe('AuthPage: de reactor', () => {
   afterEach(() => vi.useRealTimers())
 
   it('toont de volgende btw-kwartaaltermijn, uitgerekend zonder databank', () => {
@@ -188,3 +188,49 @@ describe('AuthPage: de wijzerplaat', () => {
     expect(document.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
   })
 })
+
+describe('AuthPage: de begroeting erna', () => {
+  afterEach(() => {
+    window.sessionStorage.clear()
+    vi.unstubAllGlobals()
+  })
+
+  it('zet de begroeting klaar bij het inloggen, en weer weg als het mislukt', async () => {
+    const user = userEvent.setup()
+    signIn.mockImplementation(async () => {
+      // Op het moment van aanmelden staat de vlag er al: de app neemt over
+      // zodra de sessie er is, en het inlogscherm is dan weg.
+      expect(window.sessionStorage.getItem('taskflow.begroeting')).toBe('1')
+      return { error: 'Ongeldige inloggegevens' }
+    })
+    render(<AuthPage />)
+    await user.type(screen.getByLabelText('E-mailadres'), 'user@example.com')
+    await user.type(screen.getByLabelText('Wachtwoord'), 'wrongpass')
+    await user.click(within(getForm()).getByRole('button', { name: 'Inloggen' }))
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(signIn).toHaveBeenCalled()
+    expect(window.sessionStorage.getItem('taskflow.begroeting')).toBeNull()
+  })
+
+  it('toont geen stemknop als de browser niet kan spreken', () => {
+    render(<AuthPage />)
+    expect(screen.queryByRole('button', { name: /Stem/ })).not.toBeInTheDocument()
+  })
+
+  it('zet de stem aan en onthoudt dat', async () => {
+    const user = userEvent.setup()
+    const speak = vi.fn()
+    vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn(), getVoices: () => [] })
+    vi.stubGlobal('SpeechSynthesisUtterance', class { constructor(public text: string) {} })
+    render(<AuthPage />)
+
+    const knop = screen.getByRole('button', { name: /Stem/ })
+    expect(knop).toHaveAttribute('aria-pressed', 'false')
+    await user.click(knop)
+    expect(knop).toHaveAttribute('aria-pressed', 'true')
+    expect(window.localStorage.getItem('taskflow.weergave.stem')).toBe('aan')
+    expect(speak).toHaveBeenCalled()
+  })
+})
+

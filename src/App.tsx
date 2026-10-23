@@ -6,6 +6,8 @@ import { AuthPage } from './pages/AuthPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { AppLayout } from './components/AppLayout'
 import { PatoTeken } from './components/PatoTeken'
+import { Begroeting } from './components/Begroeting'
+import { moetBegroeten } from './lib/begroeting'
 import { AccountDeactivatedScreen } from './components/AccountDeactivatedScreen'
 import { SessieBewaker } from './components/SessieBewaker'
 import { SessieProvider } from './hooks/useSessie'
@@ -47,6 +49,9 @@ function AuthenticatedApp({ onDeactivated }: { onDeactivated: () => void }) {
   // dat is precies wat op 390 pixels niet leesbaar is. Zie
   // src/pages/TelefoonPage.tsx.
   const kleinScherm = useKleinScherm()
+  // Net aangemeld via het inlogscherm (niet: de pagina herladen)? Dan één
+  // keer de begroeting over de app heen. Zie lib/begroeting.ts.
+  const [begroeten, setBegroeten] = useState(moetBegroeten)
 
   // Security guard (not just a UI nicety): a kantoorbeheerder can
   // deactivate a colleague at any time, but that colleague's existing
@@ -124,9 +129,12 @@ function AuthenticatedApp({ onDeactivated }: { onDeactivated: () => void }) {
   }
 
   return (
-    <AppLayout employee={employee} activeView={zichtbareView} activeParam={route.param} navigate={navigate}>
-      {page}
-    </AppLayout>
+    <>
+      <AppLayout employee={employee} activeView={zichtbareView} activeParam={route.param} navigate={navigate}>
+        {page}
+      </AppLayout>
+      {begroeten && <Begroeting naam={employee.naam} onKlaar={() => setBegroeten(false)} />}
+    </>
   )
 }
 
