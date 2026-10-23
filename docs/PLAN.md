@@ -1988,3 +1988,18 @@ voorstellen: de reactor, met de gesproken begroeting als optie.
 
 Alle beweging staat achter `motion-safe`: wie minder beweging vraagt, krijgt
 een stilstaand scherm.
+
+**Bijgestuurd (23/10/2026):** "meer tot leven bij het laden" en "een Engelse
+stem zoals Jarvis zelf".
+
+- De reactor start op bij het laden: een vonk in de kern, de ringen komen
+  van binnen naar buiten draaiend op toeren, een schokgolf, de weken lopen
+  rond, de Λ tekent zichzelf en als laatste de boog naar de btw-termijn.
+- De begroeting is Engels ("Good afternoon, sir. Welcome back. All systems
+  are online."), met een Britse mannenstem als het toestel er een heeft
+  (Edge: Ryan/Thomas, Windows: George, Chrome: Google UK English Male,
+  Apple: Daniel/Arthur). Anders een andere Britse of Engelse stem.
+- De aanspreking -- voornaam, sir of ma'am -- kies je per browser op het
+  inlogscherm; standaard de voornaam, want Taskflow weet van niemand hoe die
+  aangesproken wil worden.
+

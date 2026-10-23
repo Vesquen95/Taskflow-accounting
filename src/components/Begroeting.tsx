@@ -1,24 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Reactor } from './Reactor'
-import { groet, leesStem, spreek, voornaam, wisBegroeting } from '../lib/begroeting'
+import { begroetingTekst, leesAanspreking, leesStem, spreek, voornaam, wisBegroeting } from '../lib/begroeting'
 
 const DUUR_MS = 2600
 const UITFADEN_MS = 500
 
 /**
  * Het moment na het inloggen: de reactor vergrendelt, "Toegang verleend",
- * en een groet bij naam. Kort -- wie wil werken, klikt of drukt een toets en
+ * en een groet -- "Good afternoon, sir." -- op vraag ook gesproken. Kort -- wie wil werken, klikt of drukt een toets en
  * is er meteen. Zie lib/begroeting.ts voor waarom dit niet op het
  * inlogscherm zelf kan.
  */
 export function Begroeting({ naam, onKlaar }: { naam: string; onKlaar: () => void }) {
   const nu = useMemo(() => new Date(), [])
-  const tekst = `${groet(nu.getHours())}, ${voornaam(naam)}.`
+  const [aanspreking] = useState(leesAanspreking)
+  const tekst = begroetingTekst(nu.getHours(), aanspreking, naam)
   const [weg, setWeg] = useState(false)
 
   useEffect(() => {
     wisBegroeting()
-    if (leesStem()) spreek(`${tekst} Welkom terug in Taskflow.`)
+    if (leesStem()) spreek(`${tekst} Welcome back. All systems are online.`)
     const uit = window.setTimeout(() => setWeg(true), DUUR_MS - UITFADEN_MS)
     const klaar = window.setTimeout(onKlaar, DUUR_MS)
     return () => {
@@ -52,6 +53,12 @@ export function Begroeting({ naam, onKlaar }: { naam: string; onKlaar: () => voi
           style={{ animationDelay: '0.25s' }}
         >
           {tekst}
+        </p>
+        <p
+          className="mt-3 font-mono text-[11px] uppercase tracking-[0.25em] text-[#86A3AD] motion-safe:animate-opstart"
+          style={{ animationDelay: '0.5s' }}
+        >
+          {aanspreking === 'naam' ? 'Welkom terug' : `Welkom terug, ${voornaam(naam)}`} · alle systemen online
         </p>
       </div>
     </div>

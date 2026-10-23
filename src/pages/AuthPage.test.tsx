@@ -221,7 +221,7 @@ describe('AuthPage: de begroeting erna', () => {
   it('zet de stem aan en onthoudt dat', async () => {
     const user = userEvent.setup()
     const speak = vi.fn()
-    vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn(), getVoices: () => [] })
+    vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn(), getVoices: () => [{ name: 'Daniel', lang: 'en-GB' }] })
     vi.stubGlobal('SpeechSynthesisUtterance', class { constructor(public text: string) {} })
     render(<AuthPage />)
 
@@ -230,7 +230,15 @@ describe('AuthPage: de begroeting erna', () => {
     await user.click(knop)
     expect(knop).toHaveAttribute('aria-pressed', 'true')
     expect(window.localStorage.getItem('taskflow.weergave.stem')).toBe('aan')
-    expect(speak).toHaveBeenCalled()
+    expect(speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Voice interface online.' }))
+  })
+
+  it('onthoudt de aanspreking', async () => {
+    const user = userEvent.setup()
+    render(<AuthPage />)
+    expect(screen.getByLabelText('Aanspreking')).toHaveValue('naam')
+    await user.selectOptions(screen.getByLabelText('Aanspreking'), 'sir')
+    expect(window.localStorage.getItem('taskflow.weergave.aanspreking')).toBe('sir')
   })
 })
 

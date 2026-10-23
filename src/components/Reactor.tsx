@@ -15,6 +15,11 @@ import { dagVanHetJaar, volgendeBtwKwartaal } from '../lib/inlogscherm'
  * Drie toerentallen: `rust` (wachten), `scan` (er wordt aangemeld: alles
  * draait sneller) en `vergrendeld` (toegang verleend: de ringen staan stil en
  * een golf loopt naar buiten). Alle beweging staat achter motion-safe.
+ *
+ * Met `opstart` komt de reactor bij het laden tot leven, in ruim twee
+ * seconden: een vonk in de kern, de ringen die van binnen naar buiten op
+ * toeren komen, een schokgolf, de weken van het jaar die rondlopen, de Λ die
+ * zichzelf tekent en als laatste de boog naar de btw-termijn.
  */
 
 export type Toerental = 'rust' | 'scan' | 'vergrendeld'
@@ -66,8 +71,30 @@ function Draaiend({
   )
 }
 
+/** Een ring die bij de opstart van klein en draaiend op zijn plaats komt. */
+function Ontsteek({ aan, na, children }: { aan: boolean; na: number; children: ReactNode }) {
+  if (!aan) return <>{children}</>
+  return (
+    <g className="motion-safe:animate-ontsteek" style={{ transformOrigin: MIDDEN, animationDelay: `${na}s` }}>
+      {children}
+    </g>
+  )
+}
+
+/** Verschijnt bij de opstart na `na` seconden; anders gewoon. */
+function verschijn(aan: boolean, na: number) {
+  return aan ? { className: 'motion-safe:animate-verschijn', style: { animationDelay: `${na}s` } } : {}
+}
+
+/** Een lijn die zichzelf tekent: pathLength 1, het streepje schuift erin. */
+function teken(aan: boolean, na: number) {
+  return aan
+    ? { pathLength: 1, strokeDasharray: 1, className: 'motion-safe:animate-teken', style: { animationDelay: `${na}s` } }
+    : {}
+}
+
 /** De buitenste ring: het jaar, met de boog naar de volgende btw-termijn. */
-function Jaarring({ nu }: { nu: Date }) {
+function Jaarring({ nu, opstart }: { nu: Date; opstart: boolean }) {
   const id = useId()
   const jaar = nu.getFullYear()
   const dagenInJaar = dagVanHetJaar(new Date(jaar, 11, 31)) + 1
@@ -87,12 +114,15 @@ function Jaarring({ nu }: { nu: Date }) {
           <stop offset="1" stopColor={AMBER} />
         </linearGradient>
       </defs>
-      <circle r="190" fill="none" stroke={LIJN} />
+      <circle r="190" fill="none" stroke={LIJN} {...verschijn(opstart, 0.6)} />
+      {/* De weken lopen bij de opstart rond, van januari tot december. */}
       {Array.from({ length: 53 }, (_, w) => {
         const a = hoek(w * 7, dagenInJaar)
         const [x1, y1] = punt(a, 180)
         const [x2, y2] = punt(a, w % 4 === 0 ? 188 : 184)
-        return <line key={w} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#2B4B55" />
+        return (
+          <line key={w} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#2B4B55" {...verschijn(opstart, 0.7 + w * 0.016)} />
+        )
       })}
       {MAANDEN.map((m, i) => {
         const [x, y] = punt(hoek(dagVanHetJaar(new Date(jaar, i, 15)), dagenInJaar), 169)
@@ -104,7 +134,8 @@ function Jaarring({ nu }: { nu: Date }) {
             textAnchor="middle"
             fontSize="8"
             letterSpacing="1.5"
-            className="font-mono uppercase"
+            className={`font-mono uppercase ${opstart ? 'motion-safe:animate-verschijn' : ''}`}
+            style={opstart ? { animationDelay: `${0.75 + i * 0.07}s` } : undefined}
             fill={i === nu.getMonth() ? '#E9FDFF' : '#4F7682'}
           >
             {m}
@@ -118,14 +149,32 @@ function Jaarring({ nu }: { nu: Date }) {
         strokeWidth="4"
         strokeLinecap="round"
         filter="url(#tf-reactor-gloed)"
+        {...teken(opstart, 1.9)}
       />
-      <circle cx={ax} cy={ay} r="5" fill={PETROL} filter="url(#tf-reactor-gloed)" />
-      <circle cx={bx} cy={by} r="6" fill="#070C0B" stroke={AMBER} strokeWidth="2" filter="url(#tf-reactor-gloed)" />
+      <circle cx={ax} cy={ay} r="5" fill={PETROL} filter="url(#tf-reactor-gloed)" {...verschijn(opstart, 1.8)} />
+      <circle
+        cx={bx}
+        cy={by}
+        r="6"
+        fill="#070C0B"
+        stroke={AMBER}
+        strokeWidth="2"
+        filter="url(#tf-reactor-gloed)"
+        {...verschijn(opstart, 2.6)}
+      />
     </g>
   )
 }
 
-export function Reactor({ nu, toerental = 'rust' }: { nu: Date; toerental?: Toerental }) {
+export function Reactor({
+  nu,
+  toerental = 'rust',
+  opstart = false,
+}: {
+  nu: Date
+  toerental?: Toerental
+  opstart?: boolean
+}) {
   const id = useId()
   // De spoelen: tien blokken rond de kern.
   const spoelOmtrek = 2 * Math.PI * 122
@@ -148,47 +197,95 @@ export function Reactor({ nu, toerental = 'rust' }: { nu: Date; toerental?: Toer
         </radialGradient>
       </defs>
 
-      <Jaarring nu={nu} />
+      <Jaarring nu={nu} opstart={opstart} />
 
       {/* De scanlijn: een wig die rondveegt, met een heldere voorkant. */}
-      <Draaiend duur={7} toerental={toerental}>
-        <path d="M0 0 L150 0 A150 150 0 0 0 122.9 -86 Z" fill={IJS} fillOpacity="0.07" />
-        <line x1="0" y1="0" x2="150" y2="0" stroke={IJS} strokeOpacity="0.45" />
-      </Draaiend>
+      <g {...verschijn(opstart, 2.2)}>
+        <Draaiend duur={7} toerental={toerental}>
+          <path d="M0 0 L150 0 A150 150 0 0 0 122.9 -86 Z" fill={IJS} fillOpacity="0.07" />
+          <line x1="0" y1="0" x2="150" y2="0" stroke={IJS} strokeOpacity="0.45" />
+        </Draaiend>
+      </g>
 
-      <Draaiend duur={50} terug toerental={toerental}>
-        <circle r="150" fill="none" stroke={IJS} strokeOpacity="0.6" strokeWidth="2" strokeDasharray="60 14 8 14" />
-      </Draaiend>
-      <Draaiend duur={30} toerental={toerental}>
-        <circle r="138" fill="none" stroke={IJS} strokeOpacity="0.5" strokeDasharray="1 4" />
-      </Draaiend>
-      <Draaiend duur={90} toerental={toerental}>
+      <Ontsteek aan={opstart} na={0.5}>
+        <Draaiend duur={50} terug toerental={toerental}>
+          <circle r="150" fill="none" stroke={IJS} strokeOpacity="0.6" strokeWidth="2" strokeDasharray="60 14 8 14" />
+        </Draaiend>
+      </Ontsteek>
+      <Ontsteek aan={opstart} na={0.35}>
+        <Draaiend duur={30} toerental={toerental}>
+          <circle r="138" fill="none" stroke={IJS} strokeOpacity="0.5" strokeDasharray="1 4" />
+        </Draaiend>
+      </Ontsteek>
+      <Ontsteek aan={opstart} na={0.2}>
+        <Draaiend duur={90} toerental={toerental}>
+          <circle
+            r="122"
+            fill="none"
+            stroke={IJS}
+            strokeOpacity="0.22"
+            strokeWidth="16"
+            strokeDasharray={`${spoel - 14} 14`}
+          />
+          <circle r="131" fill="none" stroke={IJS} strokeOpacity="0.35" strokeDasharray={`${spoel * 1.07 - 4} 4`} />
+        </Draaiend>
+      </Ontsteek>
+
+      {/* De kern: bij de opstart eerst een vonk, dan een schokgolf. */}
+      <Ontsteek aan={opstart} na={0.1}>
+        <circle r="92" fill="none" stroke={IJS} strokeOpacity="0.55" strokeWidth="1.5" />
+      </Ontsteek>
+      <g
+        className={opstart ? 'motion-safe:animate-vonk' : undefined}
+        style={opstart ? { transformOrigin: MIDDEN } : undefined}
+      >
         <circle
-          r="122"
-          fill="none"
-          stroke={IJS}
-          strokeOpacity="0.22"
-          strokeWidth="16"
-          strokeDasharray={`${spoel - 14} 14`}
+          r="84"
+          fill={`url(#${id}kern)`}
+          className="motion-safe:animate-pulseer"
+          style={toerental === 'scan' ? { animationDuration: '0.6s' } : undefined}
         />
-        <circle r="131" fill="none" stroke={IJS} strokeOpacity="0.35" strokeDasharray={`${spoel * 1.07 - 4} 4`} />
-      </Draaiend>
-
-      {/* De kern. */}
-      <circle r="92" fill="none" stroke={IJS} strokeOpacity="0.55" strokeWidth="1.5" />
-      <circle
-        r="84"
-        fill={`url(#${id}kern)`}
-        className="motion-safe:animate-pulseer"
-        style={toerental === 'scan' ? { animationDuration: '0.6s' } : undefined}
-      />
+      </g>
+      {opstart && (
+        <circle
+          r="92"
+          fill="none"
+          stroke={PETROL}
+          strokeWidth="3"
+          className="opacity-0 motion-safe:animate-schok"
+          style={{ transformOrigin: MIDDEN, animationDelay: '0.55s' }}
+        />
+      )}
       {toerental === 'vergrendeld' && (
-        <circle r="92" fill="none" stroke={PETROL} strokeWidth="3" className="motion-safe:animate-golf" style={{ transformOrigin: MIDDEN }} />
+        <circle
+          r="92"
+          fill="none"
+          stroke={PETROL}
+          strokeWidth="3"
+          className="motion-safe:animate-golf"
+          style={{ transformOrigin: MIDDEN }}
+        />
       )}
       <g transform="translate(-63 -64.5) scale(0.75)" filter="url(#tf-reactor-gloed)">
-        <path d="M40 116 L84 36 L128 116" fill="none" stroke="#F2FEFF" strokeWidth="16" />
-        <rect x="40" y="128" width="54" height="8" fill={PETROL} />
-        <rect x="100" y="128" width="28" height="8" fill={PAARS} />
+        <path d="M40 116 L84 36 L128 116" fill="none" stroke="#F2FEFF" strokeWidth="16" {...teken(opstart, 1.0)} />
+        <rect
+          x="40"
+          y="128"
+          width="54"
+          height="8"
+          fill={PETROL}
+          className={opstart ? 'motion-safe:animate-balk' : undefined}
+          style={opstart ? { transformOrigin: '40px 132px', animationDelay: '1.6s' } : undefined}
+        />
+        <rect
+          x="100"
+          y="128"
+          width="28"
+          height="8"
+          fill={PAARS}
+          className={opstart ? 'motion-safe:animate-balk' : undefined}
+          style={opstart ? { transformOrigin: '100px 132px', animationDelay: '1.85s' } : undefined}
+        />
       </g>
     </svg>
   )

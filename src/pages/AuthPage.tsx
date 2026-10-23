@@ -4,7 +4,18 @@ import { useAuth } from '../hooks/useAuth'
 import { VERLOOP_UITLEG } from '../lib/sessieduur'
 import { leesVerloopreden, wisVerloopreden } from '../lib/sessieopslag'
 import { dagVanHetJaar, isoWeek, volgendeBtwKwartaal } from '../lib/inlogscherm'
-import { bewaarStem, kanSpreken, leesStem, markeerBegroeting, spreek, wisBegroeting } from '../lib/begroeting'
+import {
+  AANSPREKINGEN,
+  bewaarAanspreking,
+  bewaarStem,
+  kanSpreken,
+  leesAanspreking,
+  leesStem,
+  markeerBegroeting,
+  spreek,
+  wisBegroeting,
+  type Aanspreking,
+} from '../lib/begroeting'
 import { Reactor } from '../components/Reactor'
 
 /**
@@ -85,6 +96,7 @@ export function AuthPage() {
   // Alleen tonen als de browser kan spreken.
   const [spraak] = useState(kanSpreken)
   const [stem, setStem] = useState(leesStem)
+  const [aanspreking, setAanspreking] = useState(leesAanspreking)
   // Wie automatisch afgemeld werd, staat hier zonder te weten waarom. Zonder
   // uitleg leest dat als een storing.
   const [verloopreden] = useState(() => leesVerloopreden())
@@ -128,7 +140,12 @@ export function AuthPage() {
     const aan = !stem
     setStem(aan)
     bewaarStem(aan)
-    if (aan) spreek('Stembegroeting staat aan.')
+    if (aan) spreek('Voice interface online.')
+  }
+
+  function kiesAanspreking(nieuw: Aanspreking) {
+    setAanspreking(nieuw)
+    bewaarAanspreking(nieuw)
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -192,7 +209,7 @@ export function AuthPage() {
 
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center gap-6 px-4 py-8 lg:flex-row lg:gap-16 xl:pl-40">
         <div className="relative aspect-square w-[min(66vw,280px)] shrink-0 lg:w-[min(64vh,540px)]">
-          <Reactor nu={nu} toerental={submitting ? 'scan' : 'rust'} />
+          <Reactor nu={nu} toerental={submitting ? 'scan' : 'rust'} opstart />
         </div>
 
         <section className="relative w-full max-w-sm border border-[#7FDBFF]/20 bg-[#071116]/85 px-6 py-6 backdrop-blur-sm">
@@ -291,6 +308,21 @@ export function AuthPage() {
                 Stem: <span className={stem ? 'text-[#3EF0D2]' : 'text-[#4F7682]'}>{stem ? 'aan' : 'uit'}</span>
               </button>
             )}
+          </div>
+          <div className="mt-2 flex items-center justify-end gap-2 font-mono text-xs uppercase tracking-[0.15em] text-[#86A3AD]">
+            <label htmlFor="aanspreking">Aanspreking</label>
+            <select
+              id="aanspreking"
+              value={aanspreking}
+              onChange={(e) => kiesAanspreking(e.target.value as Aanspreking)}
+              className="rounded-sm border border-[#1F3E48] bg-[#060E12] px-2 py-1 font-mono text-xs text-[#E9FDFF] focus:border-[#7FDBFF] focus:outline-none"
+            >
+              {AANSPREKINGEN.map((a) => (
+                <option key={a.waarde} value={a.waarde}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
           </div>
         </section>
       </main>

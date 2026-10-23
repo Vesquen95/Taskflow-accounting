@@ -190,6 +190,25 @@ export default {
         golf: { from: { transform: 'scale(0.7)', opacity: '1' }, to: { transform: 'scale(2.1)', opacity: '0' } },
         // De assistent "typt" zijn regels: de breedte groeit per teken (steps).
         typ: { from: { width: '0' } },
+        // De opstart van de reactor: ringen komen draaiend op toeren, de kern
+        // vonkt, een schokgolf, lijnen die zichzelf tekenen.
+        ontsteek: {
+          from: { opacity: '0', transform: 'scale(0.5) rotate(-240deg)' },
+          to: { opacity: '1', transform: 'none' },
+        },
+        vonk: {
+          '0%': { opacity: '0', transform: 'scale(0.1)' },
+          '45%': { opacity: '1', transform: 'scale(1.35)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        schok: {
+          '0%': { opacity: '0', transform: 'scale(0.4)' },
+          '15%': { opacity: '1' },
+          '100%': { opacity: '0', transform: 'scale(2.3)' },
+        },
+        verschijn: { from: { opacity: '0' } },
+        teken: { from: { strokeDashoffset: '1' }, to: { strokeDashoffset: '0' } },
+        balk: { from: { transform: 'scaleX(0)' } },
       },
       animation: {
         draai: 'draai 180s linear infinite',
@@ -199,6 +218,12 @@ export default {
         pulseer: 'pulseer 3s ease-in-out infinite',
         golf: 'golf 1.2s ease-out infinite',
         typ: 'typ 1s steps(40) both',
+        ontsteek: 'ontsteek 1.6s cubic-bezier(0.16, 1, 0.3, 1) both',
+        vonk: 'vonk 0.9s cubic-bezier(0.16, 1, 0.3, 1) both',
+        schok: 'schok 1.1s ease-out both',
+        verschijn: 'verschijn 0.35s ease-out both',
+        teken: 'teken 0.8s ease-in-out both',
+        balk: 'balk 0.45s ease-out both',
       },
       // Alle kleuren lopen via CSS-variabelen: één attribuut op <html> zet de
       // hele app in de nachtmodus, zonder dat een component het moet weten.
