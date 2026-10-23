@@ -17,6 +17,7 @@ import {
   type Aanspreking,
 } from '../lib/begroeting'
 import { Reactor } from '../components/Reactor'
+import { speelIntro } from '../lib/geluid'
 
 /**
  * Het inlogscherm: de reactor.
@@ -140,7 +141,11 @@ export function AuthPage() {
     const aan = !stem
     setStem(aan)
     bewaarStem(aan)
-    if (aan) spreek('Voice interface online.')
+    // Meteen laten horen wat je aanzet: de muziek en de stem.
+    if (aan) {
+      speelIntro()
+      spreek('Voice interface online.')
+    }
   }
 
   function kiesAanspreking(nieuw: Aanspreking) {
@@ -305,7 +310,7 @@ export function AuthPage() {
                 onClick={wisselStem}
                 className="font-mono uppercase tracking-[0.15em] hover:text-[#7FDBFF]"
               >
-                Stem: <span className={stem ? 'text-[#3EF0D2]' : 'text-[#4F7682]'}>{stem ? 'aan' : 'uit'}</span>
+                Geluid: <span className={stem ? 'text-[#3EF0D2]' : 'text-[#4F7682]'}>{stem ? 'aan' : 'uit'}</span>
               </button>
             )}
           </div>

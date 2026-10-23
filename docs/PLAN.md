@@ -2003,3 +2003,20 @@ stem zoals Jarvis zelf".
   inlogscherm; standaard de voornaam, want Taskflow weet van niemand hoe die
   aangesproken wil worden.
 
+**Bijgestuurd (24/10/2026):** "kan je de teksten laten roteren?" en "een
+klein muziekje eronder".
+
+- Onder de groet staat een filmcitaat (`lib/citaten.ts`). Wat bij het moment
+  past, komt in de pot en telt dubbel: "Good morning, Vietnam!" alleen
+  's ochtends, "Fasten your seatbelts" 's avonds, "Houston, we have a
+  problem" als er eigen taken over hun deadline zijn (met het aantal erbij),
+  "You're gonna need a bigger boat" vanaf 10 eigen taken in de komende zeven
+  dagen. Lord of the Rings en Carpe diem kunnen altijd. Nooit twee keer na
+  elkaar hetzelfde. De telling mag 0,7 s duren; daarna kiest het zonder.
+- Het muziekje (`lib/geluid.ts`) wordt in de browser opgewekt (Web Audio):
+  een opbouw, een inslag met een akkoord in D groot, een glinstering met
+  echo. Geen bestand, geen licentie. Het speelt mee met de stem onder één
+  knop, "Geluid", standaard uit.
+- De begroeting duurt nu 5,2 s, genoeg om het citaat te lezen; een klik of
+  toets slaat ze nog altijd over.
+

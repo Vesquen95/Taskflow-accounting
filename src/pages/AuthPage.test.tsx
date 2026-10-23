@@ -213,9 +213,9 @@ describe('AuthPage: de begroeting erna', () => {
     expect(window.sessionStorage.getItem('taskflow.begroeting')).toBeNull()
   })
 
-  it('toont geen stemknop als de browser niet kan spreken', () => {
+  it('toont geen geluidsknop als de browser niet kan spreken', () => {
     render(<AuthPage />)
-    expect(screen.queryByRole('button', { name: /Stem/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Geluid/ })).not.toBeInTheDocument()
   })
 
   it('zet de stem aan en onthoudt dat', async () => {
@@ -225,7 +225,7 @@ describe('AuthPage: de begroeting erna', () => {
     vi.stubGlobal('SpeechSynthesisUtterance', class { constructor(public text: string) {} })
     render(<AuthPage />)
 
-    const knop = screen.getByRole('button', { name: /Stem/ })
+    const knop = screen.getByRole('button', { name: /Geluid/ })
     expect(knop).toHaveAttribute('aria-pressed', 'false')
     await user.click(knop)
     expect(knop).toHaveAttribute('aria-pressed', 'true')
