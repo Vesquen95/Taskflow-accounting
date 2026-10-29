@@ -2020,3 +2020,11 @@ klein muziekje eronder".
 - De begroeting duurt nu 5,2 s, genoeg om het citaat te lezen; een klik of
   toets slaat ze nog altijd over.
 
+**Bijgestuurd (29/10/2026):** een eigen intronummer uit Suno, muziek met de
+Britse stem erin ("System Online — British Voice"). Staat het bestand op
+`public/geluid/intro.mp3`, dan speelt dat bij de begroeting en bij het
+aanzetten van het geluid, in plaats van het opgewekte muziekje en de stem
+van de browser. De begroeting duurt dan zo lang als het nummer (tot 10 s);
+overslaan stopt het nummer met een korte fade. Ontbreekt het bestand, of
+start het niet binnen 1,5 s, dan blijft alles zoals voorheen.
+

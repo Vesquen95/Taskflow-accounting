@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Reactor } from './Reactor'
 import { supabase } from '../lib/supabase'
 import { isoDatum } from '../lib/werkstromen'
-import { speelIntro } from '../lib/geluid'
+import { speelIntro, speelIntroBestand, type Afspelend } from '../lib/geluid'
 import { begroetingTekst, leesAanspreking, leesStem, spreek, voornaam, wisBegroeting } from '../lib/begroeting'
 import {
   bewaarVorigCitaat,
@@ -15,6 +15,8 @@ import {
 } from '../lib/citaten'
 
 const DUUR_MS = 5200
+/** Met het eigen intronummer blijft de begroeting zo lang als het nummer, tot hier. */
+const MAX_DUUR_MS = 10_000
 const UITFADEN_MS = 500
 /** Zo lang wacht het citaat op de telling; daarna kiest het zonder. */
 const WACHT_OP_STAND_MS = 700
@@ -51,8 +53,8 @@ function binnen<T>(belofte: Promise<T>, ms: number): Promise<T | null> {
 /**
  * Het moment na het inloggen: de reactor vergrendelt, "Toegang verleend",
  * een groet -- "Good afternoon, sir." -- en een filmcitaat dat bij het moment
- * past (lib/citaten.ts). Met het geluid aan ook een intromuziekje
- * (lib/geluid.ts) en de stem.
+ * past (lib/citaten.ts). Met het geluid aan het eigen intronummer, of anders
+ * het opgewekte muziekje met de stem van de browser (lib/geluid.ts).
  *
  * Kort: wie wil werken, klikt of drukt een toets en is er meteen. Zie
  * lib/begroeting.ts voor waarom dit niet op het inlogscherm zelf kan.
@@ -71,29 +73,48 @@ export function Begroeting({
   const tekst = begroetingTekst(nu.getHours(), aanspreking, naam)
   const [citaat, setCitaat] = useState<{ citaat: Citaat; stand: Stand | null } | null>(null)
   const [weg, setWeg] = useState(false)
+  const [duur, setDuur] = useState(DUUR_MS)
+  const nummer = useRef<Afspelend | null>(null)
 
   useEffect(() => {
     wisBegroeting()
     const geluid = leesStem()
-    if (geluid) speelIntro()
     let actief = true
-    void binnen(haalStand(medewerkerId), WACHT_OP_STAND_MS).then((stand) => {
+    // Eerst het eigen nummer proberen; lukt dat niet, dan het opgewekte
+    // muziekje en straks de stem van de browser.
+    const intro: Promise<Afspelend | null> = geluid ? speelIntroBestand() : Promise.resolve(null)
+    void intro.then((afspelend) => {
+      if (!actief) return afspelend?.stop()
+      if (afspelend) {
+        nummer.current = afspelend
+        setDuur(Math.min(MAX_DUUR_MS, Math.max(DUUR_MS, afspelend.duur * 1000)))
+      } else if (geluid) speelIntro()
+    })
+    void Promise.all([binnen(haalStand(medewerkerId), WACHT_OP_STAND_MS), intro]).then(([stand, afspelend]) => {
       if (!actief) return
       const gekozen = kiesCitaat(nu.getHours(), stand, leesVorigCitaat(), Math.random())
       bewaarVorigCitaat(gekozen.id)
       setCitaat({ citaat: gekozen, stand })
-      if (geluid) spreek(`${tekst} ${gekozen.tekst}${gesprokenToelichting(gekozen, stand)}`)
+      if (geluid && !afspelend) spreek(`${tekst} ${gekozen.tekst}${gesprokenToelichting(gekozen, stand)}`)
     })
-    const uit = window.setTimeout(() => setWeg(true), DUUR_MS - UITFADEN_MS)
-    const klaar = window.setTimeout(onKlaar, DUUR_MS)
     return () => {
       actief = false
-      window.clearTimeout(uit)
-      window.clearTimeout(klaar)
+      nummer.current?.stop()
     }
     // Eén keer, bij het verschijnen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // De duur kan nog groeien als het nummer langer is dan de begroeting.
+  useEffect(() => {
+    const uit = window.setTimeout(() => setWeg(true), duur - UITFADEN_MS)
+    const klaar = window.setTimeout(onKlaar, duur)
+    return () => {
+      window.clearTimeout(uit)
+      window.clearTimeout(klaar)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duur])
 
   useEffect(() => {
     const sluit = () => onKlaar()

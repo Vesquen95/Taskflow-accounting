@@ -15,7 +15,11 @@ vi.mock('../lib/begroeting', async (orig) => ({
   spreek: (t: string) => spreek(t),
 }))
 const speelIntro = vi.fn()
-vi.mock('../lib/geluid', () => ({ speelIntro: () => speelIntro() }))
+const speelIntroBestand = vi.fn()
+vi.mock('../lib/geluid', () => ({
+  speelIntro: () => speelIntro(),
+  speelIntroBestand: () => speelIntroBestand(),
+}))
 
 let achterstand = 0
 beforeEach(() => {
@@ -23,6 +27,8 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-10-23T14:05:00'))
   spreek.mockReset()
   speelIntro.mockReset()
+  // Standaard: geen eigen intronummer.
+  speelIntroBestand.mockReset().mockResolvedValue(null)
   achterstand = 0
   window.sessionStorage.setItem('taskflow.begroeting', '1')
   const mock = createSupabaseMock({
@@ -99,6 +105,8 @@ describe('Begroeting', () => {
     window.localStorage.setItem('taskflow.weergave.aanspreking', 'sir')
     vi.spyOn(Math, 'random').mockReturnValue(0)
     toon()
+    await telling()
+    expect(speelIntroBestand).toHaveBeenCalled()
     expect(speelIntro).toHaveBeenCalled()
     expect(screen.getByRole('status')).toHaveTextContent('Good afternoon, sir.')
     expect(screen.getByRole('status')).toHaveTextContent('Welkom terug, Wibren')
@@ -107,6 +115,33 @@ describe('Begroeting', () => {
       'Good afternoon, sir. All we have to decide is what to do with the time that is given to us.',
     )
     vi.mocked(Math.random).mockRestore()
+  })
+
+  it('speelt het eigen intronummer in plaats van muziekje en browserstem, zo lang als het duurt', async () => {
+    window.localStorage.setItem('taskflow.weergave.stem', 'aan')
+    const stop = vi.fn()
+    speelIntroBestand.mockResolvedValue({ duur: 9.56, stop })
+    const onKlaar = toon()
+    await telling()
+    expect(speelIntro).not.toHaveBeenCalled()
+    expect(spreek).not.toHaveBeenCalled()
+    // Het citaat staat er wel.
+    expect(screen.getByRole('blockquote')).toBeInTheDocument()
+
+    act(() => vi.advanceTimersByTime(5200))
+    expect(onKlaar).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(4400))
+    expect(onKlaar).toHaveBeenCalled()
+  })
+
+  it('stopt het nummer als je de begroeting overslaat', async () => {
+    window.localStorage.setItem('taskflow.weergave.stem', 'aan')
+    const stop = vi.fn()
+    speelIntroBestand.mockResolvedValue({ duur: 9.56, stop })
+    const { unmount } = render(<Begroeting medewerkerId="e1" naam="Wibren" onKlaar={vi.fn()} />)
+    await telling()
+    unmount()
+    expect(stop).toHaveBeenCalled()
   })
 
   it('gaat meteen weg bij een toets', () => {

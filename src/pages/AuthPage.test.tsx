@@ -6,6 +6,9 @@ import { AuthPage } from './AuthPage'
 const signIn = vi.fn()
 const signUp = vi.fn()
 
+// Geen eigen intronummer in de tests: dan het muziekje en de browserstem.
+vi.mock('../lib/geluid', () => ({ speelIntro: vi.fn(), speelIntroBestand: vi.fn().mockResolvedValue(null) }))
+
 vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({ signIn, signUp, signOut: vi.fn(), session: null, user: null, loading: false }),
 }))
@@ -230,6 +233,7 @@ describe('AuthPage: de begroeting erna', () => {
     await user.click(knop)
     expect(knop).toHaveAttribute('aria-pressed', 'true')
     expect(window.localStorage.getItem('taskflow.weergave.stem')).toBe('aan')
+    await waitFor(() => expect(speak).toHaveBeenCalled())
     expect(speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Voice interface online.' }))
   })
 

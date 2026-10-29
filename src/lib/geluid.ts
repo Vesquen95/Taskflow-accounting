@@ -26,6 +26,63 @@ export function kanGeluid(): boolean {
   return audioKlasse() !== undefined
 }
 
+/**
+ * Het eigen intronummer: muziek met de Britse stem erin, gemaakt in Suno
+ * ("System Online — British Voice", 29/10/2026). Staat het bestand er, dan
+ * speelt dat in plaats van het opgewekte muziekje en de stem van de browser
+ * -- twee stemmen door elkaar zou niets worden. Staat het er niet, of mag de
+ * browser het niet afspelen, dan blijft alles zoals voorheen.
+ */
+export const INTRO_BESTAND = `${import.meta.env.BASE_URL}geluid/intro.mp3`
+
+export interface Afspelend {
+  /** Lengte van het nummer in seconden. */
+  duur: number
+  /** Stopt het nummer, met een korte fade. */
+  stop: () => void
+}
+
+/** Speelt het intronummer af; `null` als dat niet lukt binnen `wachtMs`. */
+export async function speelIntroBestand(wachtMs = 1500): Promise<Afspelend | null> {
+  if (typeof Audio === 'undefined') return null
+  const audio = new Audio(INTRO_BESTAND)
+  audio.volume = 0.9
+  let opgegeven = false
+  let gestart: Promise<boolean>
+  try {
+    // Oudere browsers geven geen belofte terug: dan weten we het niet, en
+    // nemen we het zekere voor het onzekere.
+    const belofte = audio.play() as Promise<void> | undefined
+    gestart = belofte ? belofte.then(() => true, () => false) : Promise.resolve(false)
+  } catch {
+    gestart = Promise.resolve(false)
+  }
+  const opTijd = await Promise.race([gestart, new Promise<false>((klaar) => window.setTimeout(() => klaar(false), wachtMs))])
+  if (!opTijd) {
+    // Te traag of niet gevonden: niet alsnog midden in de rest beginnen.
+    opgegeven = true
+    audio.pause()
+    return null
+  }
+  return {
+    duur: Number.isFinite(audio.duration) ? audio.duration : 0,
+    stop: () => {
+      if (opgegeven) return
+      opgegeven = true
+      const begin = audio.volume
+      let stap = 0
+      const klok = window.setInterval(() => {
+        stap++
+        audio.volume = Math.max(0, begin * (1 - stap / 12))
+        if (stap >= 12) {
+          window.clearInterval(klok)
+          audio.pause()
+        }
+      }, 50)
+    },
+  }
+}
+
 export function speelIntro(): void {
   const Klasse = audioKlasse()
   if (!Klasse) return

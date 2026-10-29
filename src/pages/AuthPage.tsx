@@ -17,7 +17,7 @@ import {
   type Aanspreking,
 } from '../lib/begroeting'
 import { Reactor } from '../components/Reactor'
-import { speelIntro } from '../lib/geluid'
+import { speelIntro, speelIntroBestand } from '../lib/geluid'
 
 /**
  * Het inlogscherm: de reactor.
@@ -143,8 +143,11 @@ export function AuthPage() {
     bewaarStem(aan)
     // Meteen laten horen wat je aanzet: de muziek en de stem.
     if (aan) {
-      speelIntro()
-      spreek('Voice interface online.')
+      void speelIntroBestand().then((afspelend) => {
+        if (afspelend) return
+        speelIntro()
+        spreek('Voice interface online.')
+      })
     }
   }
 
