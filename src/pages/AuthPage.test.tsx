@@ -6,24 +6,11 @@ import { AuthPage } from './AuthPage'
 const signIn = vi.fn()
 const signUp = vi.fn()
 
-// Het intronummer laadt in de tests niet: dan het muziekje.
-const speelIntro = vi.fn()
-const speelIntroBestand = vi.fn()
-const kanGeluid = vi.fn()
-vi.mock('../lib/geluid', () => ({
-  speelIntro: () => speelIntro(),
-  speelIntroBestand: () => speelIntroBestand(),
-  kanGeluid: () => kanGeluid(),
-}))
-
 vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({ signIn, signUp, signOut: vi.fn(), session: null, user: null, loading: false }),
 }))
 
 beforeEach(() => {
-  speelIntro.mockReset()
-  speelIntroBestand.mockReset().mockResolvedValue(null)
-  kanGeluid.mockReset().mockReturnValue(true)
   window.localStorage.clear()
   signIn.mockReset()
   signUp.mockReset()
@@ -226,18 +213,9 @@ describe('AuthPage: de begroeting erna', () => {
     expect(window.sessionStorage.getItem('taskflow.begroeting')).toBeNull()
   })
 
-  it('zet het geluid aan, onthoudt dat en laat het meteen horen', async () => {
-    const user = userEvent.setup()
+  it('heeft geen knop voor geluid meer', () => {
     render(<AuthPage />)
-
-    const knop = screen.getByRole('button', { name: /Geluid/ })
-    expect(knop).toHaveAttribute('aria-pressed', 'false')
-    await user.click(knop)
-    expect(knop).toHaveAttribute('aria-pressed', 'true')
-    expect(window.localStorage.getItem('taskflow.weergave.stem')).toBe('aan')
-    expect(speelIntroBestand).toHaveBeenCalled()
-    // Het nummer laadt hier niet: dan het opgewekte muziekje.
-    await waitFor(() => expect(speelIntro).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: /Geluid/ })).not.toBeInTheDocument()
   })
 
   it('vraagt geen aanspreking meer', () => {
@@ -245,10 +223,5 @@ describe('AuthPage: de begroeting erna', () => {
     expect(screen.queryByLabelText('Aanspreking')).not.toBeInTheDocument()
   })
 
-  it('toont geen geluidsknop als de browser geen geluid kan spelen', () => {
-    kanGeluid.mockReturnValue(false)
-    render(<AuthPage />)
-    expect(screen.queryByRole('button', { name: /Geluid/ })).not.toBeInTheDocument()
-  })
 })
 

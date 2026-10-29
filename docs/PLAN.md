@@ -2087,3 +2087,10 @@ ready to assist you. Systems are now fully operational." Gevraagd: "laat de
 tekst op het scherm overeenstemmen". De begroeting toont nu precies die drie
 zinnen, voor iedereen en ook met het geluid uit (`BEGROETING` in
 `lib/begroeting.ts`). De groet per uur en bij voornaam is weg.
+
+**Bijgestuurd (29/10/2026): "de suno tekst werkt niet. haal alles van het
+geluid en tekst eruit".** Al het geluid is weg: het Suno-nummer, het
+opgewekte muziekje (`lib/geluid.ts` verwijderd) en de knop "Geluid" op het
+inlogscherm. De tekst van het Suno-nummer ("Good day, sir. ...") is weg. Na
+het inloggen blijft: de reactor die vergrendelt, "Toegang verleend" en het
+wisselende filmcitaat.

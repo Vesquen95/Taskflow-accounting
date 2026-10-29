@@ -4,9 +4,8 @@ import { useAuth } from '../hooks/useAuth'
 import { VERLOOP_UITLEG } from '../lib/sessieduur'
 import { leesVerloopreden, wisVerloopreden } from '../lib/sessieopslag'
 import { dagVanHetJaar, isoWeek, volgendeBtwKwartaal } from '../lib/inlogscherm'
-import { bewaarGeluid, leesGeluid, markeerBegroeting, wisBegroeting } from '../lib/begroeting'
+import { markeerBegroeting, wisBegroeting } from '../lib/begroeting'
 import { Reactor } from '../components/Reactor'
-import { kanGeluid, speelIntro, speelIntroBestand } from '../lib/geluid'
 
 /**
  * Het inlogscherm: de reactor.
@@ -15,8 +14,7 @@ import { kanGeluid, speelIntro, speelIntroBestand } from '../lib/geluid'
  * assistent -- P.A.T.O., Persoonlijke Assistent voor Taken en Opvolging --
  * in het midden draait de reactor (components/Reactor.tsx), rechts het
  * identificatiepaneel. Bij het aanmelden draait de reactor op toeren; na het
- * inloggen volgt de begroeting bij naam (components/Begroeting.tsx), als je
- * wil met het intronummer.
+ * inloggen volgt de begroeting (components/Begroeting.tsx).
  *
  * Wat bleef zoals het was: het formulier zelf (één knop erin, registreren
  * erbuiten), de foutmeldingen, en de uitleg na een automatische afmelding.
@@ -84,8 +82,6 @@ export function AuthPage() {
   const [info, setInfo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   // Alleen tonen als de browser kan spreken.
-  const [kanAfspelen] = useState(kanGeluid)
-  const [geluid, setGeluid] = useState(leesGeluid)
   // Wie automatisch afgemeld werd, staat hier zonder te weten waarom. Zonder
   // uitleg leest dat als een storing.
   const [verloopreden] = useState(() => leesVerloopreden())
@@ -123,18 +119,6 @@ export function AuthPage() {
     setMode(nieuw)
     setError(null)
     setInfo(null)
-  }
-
-  function wisselGeluid() {
-    const aan = !geluid
-    setGeluid(aan)
-    bewaarGeluid(aan)
-    // Meteen laten horen wat je aanzet.
-    if (aan) {
-      void speelIntroBestand().then((afspelend) => {
-        if (!afspelend) speelIntro()
-      })
-    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -287,16 +271,6 @@ export function AuthPage() {
                 {mode === 'signin' ? 'Registreren' : 'Inloggen'}
               </button>
             </p>
-            {kanAfspelen && (
-              <button
-                type="button"
-                aria-pressed={geluid}
-                onClick={wisselGeluid}
-                className="font-mono uppercase tracking-[0.15em] hover:text-[#7FDBFF]"
-              >
-                Geluid: <span className={geluid ? 'text-[#3EF0D2]' : 'text-[#4F7682]'}>{geluid ? 'aan' : 'uit'}</span>
-              </button>
-            )}
           </div>
         </section>
       </main>
