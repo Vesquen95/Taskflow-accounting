@@ -9517,6 +9517,11 @@ begin
     values (v_firm, v_uid, 'S73 Beheerder', 's73@test.local', 'kantoorbeheerder', true, true) returning id into v_admin;
   perform set_config('taskflow.test_uid', v_uid::text, true);
   select id into v_ot from public.obligation_types where code = 'aangifte_pb';
+  -- De wettelijke kalender is gedeeld over de hele testdatabank. Sectie 45
+  -- zet een override voor de PB van het lopende inkomstenjaar; vanaf eind
+  -- oktober is dat hetzelfde jaar als hier, en dan meet 73.4 die override in
+  -- plaats van de eigen berekening (gezien 29/10/2026). Dus: schoon beginnen.
+  delete from public.legal_calendar where obligation_type_id = v_ot and jaar = v_jaar;
 
   insert into public.clients (firm_id, naam, klantsoort, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
     values (v_firm, 'S73 Bestaand', 'natuurlijk_persoon', 'Andere', 12, 31, 'geen', true) returning id into v_k1;

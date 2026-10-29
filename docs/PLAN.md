@@ -2028,3 +2028,29 @@ van de browser. De begroeting duurt dan zo lang als het nummer (tot 10 s);
 overslaan stopt het nummer met een korte fade. Ontbreekt het bestand, of
 start het niet binnen 1,5 s, dan blijft alles zoals voorheen.
 
+
+## §46 — Uitstel tot 16 november na de cyberaanval (29/10/2026)
+
+**Gepubliceerd:** na de cyberaanval van 28/10 krijgen alle aangiften die rond
+31 oktober moesten worden ingediend uitstel tot maandag 16 november 2026
+(FOD Financiën, update cyberincident; ITAA-blog 29/10/2026).
+
+**In Taskflow (0074):**
+
+- PB met specifieke inkomsten (aj 2026): nieuwe override 16/11/2026 naast
+  die van 31/10 (de historiek blijft zichtbaar). Eén open taak: Febe
+  Dedoncker, in uitvoering, nu op 16/11 met een regel in de historiek.
+- VenB voor boekjaren die op 31/03/2026 afsluiten: override 16/11/2026. Het
+  kantoor heeft er vandaag geen; de regel staat er voor wie er later een
+  krijgt.
+- Roerende voorheffing, Pillar 2, MDR/CBC, diverse taksen: geen
+  verplichtingen in Taskflow.
+
+**Afwijking van §3 punt 4:** de herberekening bij een nieuwe override laat
+taken die al in behandeling zijn met rust. Voor een uitstel klopt dat niet,
+dus 0074 zette die één keer zelf recht. Of dat de regel moet worden, is een
+vraag aan het kantoor.
+
+**Testharnas:** 73.4 faalde sinds eind oktober omdat sectie 45 een override
+zet voor de PB van het lopende inkomstenjaar, en dat jaar viel nu samen met
+dat van sectie 73. Sectie 73 begint nu met een schone kalender voor dat jaar.
