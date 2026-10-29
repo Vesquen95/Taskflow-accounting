@@ -119,6 +119,7 @@ describe('Begroeting', () => {
 
   it('speelt het eigen intronummer in plaats van muziekje en browserstem, zo lang als het duurt', async () => {
     window.localStorage.setItem('taskflow.weergave.stem', 'aan')
+    window.localStorage.setItem('taskflow.weergave.aanspreking', 'sir')
     const stop = vi.fn()
     speelIntroBestand.mockResolvedValue({ duur: 9.56, stop })
     const onKlaar = toon()
@@ -134,8 +135,19 @@ describe('Begroeting', () => {
     expect(onKlaar).toHaveBeenCalled()
   })
 
+  it('speelt het nummer niet bij een andere aanspreking: het zegt "sir"', async () => {
+    window.localStorage.setItem('taskflow.weergave.stem', 'aan')
+    speelIntroBestand.mockResolvedValue({ duur: 10.4, stop: vi.fn() })
+    toon()
+    await telling()
+    expect(speelIntroBestand).not.toHaveBeenCalled()
+    expect(speelIntro).toHaveBeenCalled()
+    expect(spreek).toHaveBeenCalled()
+  })
+
   it('stopt het nummer als je de begroeting overslaat', async () => {
     window.localStorage.setItem('taskflow.weergave.stem', 'aan')
+    window.localStorage.setItem('taskflow.weergave.aanspreking', 'sir')
     const stop = vi.fn()
     speelIntroBestand.mockResolvedValue({ duur: 9.56, stop })
     const { unmount } = render(<Begroeting medewerkerId="e1" naam="Wibren" onKlaar={vi.fn()} />)

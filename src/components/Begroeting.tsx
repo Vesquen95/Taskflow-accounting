@@ -16,7 +16,7 @@ import {
 
 const DUUR_MS = 5200
 /** Met het eigen intronummer blijft de begroeting zo lang als het nummer, tot hier. */
-const MAX_DUUR_MS = 10_000
+const MAX_DUUR_MS = 11_000
 const UITFADEN_MS = 500
 /** Zo lang wacht het citaat op de telling; daarna kiest het zonder. */
 const WACHT_OP_STAND_MS = 700
@@ -82,7 +82,9 @@ export function Begroeting({
     let actief = true
     // Eerst het eigen nummer proberen; lukt dat niet, dan het opgewekte
     // muziekje en straks de stem van de browser.
-    const intro: Promise<Afspelend | null> = geluid ? speelIntroBestand() : Promise.resolve(null)
+    // Het nummer zegt "sir": alleen bij die aanspreking.
+    const intro: Promise<Afspelend | null> =
+      geluid && aanspreking === 'sir' ? speelIntroBestand() : Promise.resolve(null)
     void intro.then((afspelend) => {
       if (!actief) return afspelend?.stop()
       if (afspelend) {

@@ -2060,3 +2060,13 @@ open, in uitvoering, wacht op klant, wacht op goedkeuring. Een met de hand
 afgesproken deadline blijft staan, met een signaal (M-1). Afgesloten taken
 (ingediend/afgerond, geannuleerd) blijven onaangeroerd. Getest in sectie 75.
 
+
+**Bijgestuurd (29/10/2026), het intronummer:** "Good Day, Sir" uit Suno
+(publiek, 10,4 s): opstartgeluid met een Britse vrouwenstem, "Good day,
+sir. Systems are ready. How can I make your day better?" Het speelt bij de
+begroeting en bij het aanzetten van het geluid, rechtstreeks van Suno's
+server (het bestand staat niet in de publieke repo). Alleen bij de
+aanspreking "Sir", want het zegt sir; bij een andere aanspreking blijven het
+opgewekte muziekje en de browserstem. Laadt het niet binnen 2,5 s, of haalt
+Suno het weg, dan ook. Kanttekening: wie het geluid aanzet, laat de browser
+bij het inloggen Suno contacteren.

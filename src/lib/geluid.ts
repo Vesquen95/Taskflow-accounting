@@ -27,13 +27,19 @@ export function kanGeluid(): boolean {
 }
 
 /**
- * Het eigen intronummer: muziek met de Britse stem erin, gemaakt in Suno
- * ("System Online — British Voice", 29/10/2026). Staat het bestand er, dan
- * speelt dat in plaats van het opgewekte muziekje en de stem van de browser
- * -- twee stemmen door elkaar zou niets worden. Staat het er niet, of mag de
- * browser het niet afspelen, dan blijft alles zoals voorheen.
+ * Het eigen intronummer: "Good Day, Sir", gemaakt in Suno (29/10/2026) --
+ * opstartgeluid met een Britse vrouwenstem: "Good day, sir. Systems are
+ * ready. How can I make your day better?" Het speelt in plaats van het
+ * opgewekte muziekje en de stem van de browser; twee stemmen door elkaar zou
+ * niets worden. Omdat het "sir" zegt, alleen bij die aanspreking.
+ *
+ * Rechtstreeks van Suno, waar het nummer publiek staat: zo hoeft het niet in
+ * de (publieke) repo. Dat betekent wel dat de browser van wie het geluid
+ * aanzet bij het inloggen Suno contacteert -- alleen dan, het geluid staat
+ * standaard uit. Haalt Suno het weg, of laadt het niet op tijd, dan blijft
+ * alles zoals voorheen.
  */
-export const INTRO_BESTAND = `${import.meta.env.BASE_URL}geluid/intro.mp3`
+export const INTRO_BESTAND = 'https://cdn1.suno.ai/1616a5a2-29d9-464c-b5da-43b0c29ab27f.mp3'
 
 export interface Afspelend {
   /** Lengte van het nummer in seconden. */
@@ -43,7 +49,7 @@ export interface Afspelend {
 }
 
 /** Speelt het intronummer af; `null` als dat niet lukt binnen `wachtMs`. */
-export async function speelIntroBestand(wachtMs = 1500): Promise<Afspelend | null> {
+export async function speelIntroBestand(wachtMs = 2500): Promise<Afspelend | null> {
   if (typeof Audio === 'undefined') return null
   const audio = new Audio(INTRO_BESTAND)
   audio.volume = 0.9

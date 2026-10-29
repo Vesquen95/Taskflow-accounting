@@ -143,7 +143,9 @@ export function AuthPage() {
     bewaarStem(aan)
     // Meteen laten horen wat je aanzet: de muziek en de stem.
     if (aan) {
-      void speelIntroBestand().then((afspelend) => {
+      // Het eigen nummer zegt "sir": alleen bij die aanspreking.
+      const nummer = aanspreking === 'sir' ? speelIntroBestand() : Promise.resolve(null)
+      void nummer.then((afspelend) => {
         if (afspelend) return
         speelIntro()
         spreek('Voice interface online.')
