@@ -206,9 +206,8 @@ niet-toegewezen taak voor een vertrouwelijke klant ontstaat.
    verdween met de werklijst (§4). Bij afhandeling: reset naar `false` +
    `review_afgehandeld` gelogd.
 4. **Kalendercorrectie**: nieuwe `legal_calendar`/`public_holidays`-rij met
-   `is_override=true` herberekent `due_date` op alle instanties met
-   `status='open'` die ernaar verwijzen (niet instanties die al in
-   behandeling zijn). Elke herberekening gelogd (`due_date_herberekend`,
+   `is_override=true` herberekent `due_date` op alle instanties die nog
+   niet afgesloten zijn (sinds 0075 ook wat al in behandeling is; zie §46). Elke herberekening gelogd (`due_date_herberekend`,
    traceerbare actor).
 5. **AV → neerlegging**: bij afronding van de AV-taak (effectieve datum)
    herberekent de gekoppelde neerlegging-instantie haar `due_date` (+30
@@ -2048,9 +2047,16 @@ start het niet binnen 1,5 s, dan blijft alles zoals voorheen.
 
 **Afwijking van §3 punt 4:** de herberekening bij een nieuwe override laat
 taken die al in behandeling zijn met rust. Voor een uitstel klopt dat niet,
-dus 0074 zette die één keer zelf recht. Of dat de regel moet worden, is een
-vraag aan het kantoor.
+dus 0074 zette die één keer zelf recht. Het kantoor besliste dat het de
+regel wordt: zie hieronder (0075).
 
 **Testharnas:** 73.4 faalde sinds eind oktober omdat sectie 45 een override
 zet voor de PB van het lopende inkomstenjaar, en dat jaar viel nu samen met
 dat van sectie 73. Sectie 73 begint nu met een schone kalender voor dat jaar.
+
+**Beslist (29/10/2026, "ja schuif de taken door") -- 0075:** een nieuwe
+override of feestdag verzet voortaan elke taak die nog niet afgesloten is:
+open, in uitvoering, wacht op klant, wacht op goedkeuring. Een met de hand
+afgesproken deadline blijft staan, met een signaal (M-1). Afgesloten taken
+(ingediend/afgerond, geannuleerd) blijven onaangeroerd. Getest in sectie 75.
+

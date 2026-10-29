@@ -9596,4 +9596,111 @@ begin
   raise notice 'PASS 73.4b: de eenvoudige aangifte blijft op 15 juli, met verschuiving';
 end $$;
 
+-- ============================================================
+-- Section 75: een nieuwe kalenderdatum verzet ook lopende taken (0075)
+-- 75.1 een override verzet open, in uitvoering, wacht op klant en wacht op
+--      goedkeuring
+-- 75.2 een afgesloten taak blijft staan
+-- 75.3 een met de hand afgesproken deadline blijft staan, met een signaal
+-- 75.4 een nieuwe feestdag verzet ook een taak in uitvoering
+-- ============================================================
+do $$
+declare
+  v_uid uuid := gen_random_uuid();
+  v_firm uuid; v_admin uuid; v_ot uuid; v_k uuid; v_t uuid;
+  v_jaar int := extract(year from current_date)::int;
+  v_uitstel date;
+  v_taak uuid[] := '{}';
+  v_status text[] := array['open', 'in_uitvoering', 'wacht_op_klant', 'wacht_op_goedkeuring', 'geannuleerd', 'handmatig'];
+  i int;
+  v_r record;
+  v_feest date;
+begin
+  insert into auth.users (id, email, email_confirmed_at) values (v_uid, 's75@test.local', now());
+  insert into public.firms (naam) values ('S75 Kantoor') returning id into v_firm;
+  insert into public.employees (firm_id, auth_user_id, naam, email, rol, mag_goedkeuren, actief)
+    values (v_firm, v_uid, 'S75 Beheerder', 's75@test.local', 'kantoorbeheerder', true, true) returning id into v_admin;
+  perform set_config('taskflow.test_uid', v_uid::text, true);
+  select id into v_ot from public.obligation_types where code = 'aangifte_pb';
+
+  -- Zes dossiers, elk met een aangifte PB in een andere toestand.
+  for i in 1 .. array_length(v_status, 1) loop
+    insert into public.clients (firm_id, naam, klantsoort, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+      values (v_firm, 'S75 ' || v_status[i], 'natuurlijk_persoon', 'Andere', 12, 31, 'geen', true) returning id into v_k;
+    insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf)
+      values (v_k, v_ot, true, current_date);
+    perform public.generate_task_instances_intern(v_firm, public.horizon_maanden(), 0, v_k);
+    select id into v_t from public.task_instances
+     where client_id = v_k and obligation_type_id = v_ot and periode_label = v_jaar::text;
+    if v_t is null then
+      raise exception 'FAIL 75: geen aangifte PB % gegenereerd voor %', v_jaar, v_status[i];
+    end if;
+    v_taak := v_taak || v_t;
+  end loop;
+  update public.task_instances set toegewezen_medewerker_id = v_admin where id = any(v_taak);
+  update public.task_instances set status = 'in_uitvoering' where id in (v_taak[2], v_taak[3], v_taak[4]);
+  update public.task_instances set status = 'wacht_op_klant' where id = v_taak[3];
+  update public.task_instances set status = 'wacht_op_goedkeuring' where id = v_taak[4];
+  update public.task_instances set status = 'geannuleerd' where id = v_taak[5];
+  update public.task_instances set due_date = make_date(v_jaar + 1, 9, 30), due_date_handmatig_op = now()
+   where id = v_taak[6];
+  for i in 1 .. 5 loop
+    select status into v_r from public.task_instances where id = v_taak[i];
+    if v_r.status::text <> v_status[i] then
+      raise exception 'FAIL 75: opzet, taak % staat op % in plaats van %', i, v_r.status, v_status[i];
+    end if;
+  end loop;
+
+  -- Het uitstel: een datum die geen enkele andere sectie gebruikt.
+  v_uitstel := make_date(v_jaar + 1, 11, 16);
+  insert into public.legal_calendar (obligation_type_id, jaar, scope, deadline_datum, is_override, bron, aangemaakt_door, gewijzigd_door)
+    values (v_ot, v_jaar, 'vorm_complex', v_uitstel, true, 'S75 uitstel', v_admin, v_admin);
+
+  -- 75.1
+  for i in 1 .. 4 loop
+    select due_date, due_date_wettelijk into v_r from public.task_instances where id = v_taak[i];
+    if v_r.due_date <> v_uitstel or v_r.due_date_wettelijk <> v_uitstel then
+      raise exception 'FAIL 75.1: taak met status % staat op % / % in plaats van %', v_status[i], v_r.due_date, v_r.due_date_wettelijk, v_uitstel;
+    end if;
+    if not exists (select 1 from public.task_status_log where task_instance_id = v_taak[i]
+                   and event_type = 'due_date_herberekend' and nieuwe_due_date = v_uitstel) then
+      raise exception 'FAIL 75.1: geen regel in de historiek voor de taak met status %', v_status[i];
+    end if;
+  end loop;
+  raise notice 'PASS 75.1: open, in uitvoering, wacht op klant en wacht op goedkeuring schuiven mee naar %', v_uitstel;
+
+  -- 75.2
+  select due_date into v_r from public.task_instances where id = v_taak[5];
+  if v_r.due_date = v_uitstel then
+    raise exception 'FAIL 75.2: een geannuleerde taak schoof mee';
+  end if;
+  raise notice 'PASS 75.2: een afgesloten taak blijft staan';
+
+  -- 75.3
+  select due_date, due_date_wettelijk, review_vereist into v_r from public.task_instances where id = v_taak[6];
+  if v_r.due_date <> make_date(v_jaar + 1, 9, 30) or v_r.due_date_wettelijk <> v_uitstel or not v_r.review_vereist then
+    raise exception 'FAIL 75.3: handmatige afspraak: % / % / review %', v_r.due_date, v_r.due_date_wettelijk, v_r.review_vereist;
+  end if;
+  raise notice 'PASS 75.3: de afgesproken deadline blijft staan, met een signaal';
+
+  -- 75.4 Een feestdag op de eigen berekening van een taak in uitvoering.
+  -- De eenvoudige aangifte valt niet onder het uitstel en schuift vooruit.
+  insert into public.clients (firm_id, naam, klantsoort, rechtsvorm, boekjaar_einde_maand, boekjaar_einde_dag, btw_regime, actief)
+    values (v_firm, 'S75 Feestdag', 'natuurlijk_persoon', 'Andere', 12, 31, 'geen', true) returning id into v_k;
+  insert into public.client_obligations (client_id, obligation_type_id, actief, geldig_vanaf, parameters)
+    values (v_k, v_ot, true, current_date, '{"aangifte_vorm": "eenvoudig"}');
+  perform public.generate_task_instances_intern(v_firm, public.horizon_maanden(), 0, v_k);
+  select id, due_date into v_r from public.task_instances
+   where client_id = v_k and obligation_type_id = v_ot and periode_label = v_jaar::text;
+  update public.task_instances set toegewezen_medewerker_id = v_admin, status = 'in_uitvoering' where id = v_r.id;
+  v_feest := v_r.due_date;
+  insert into public.public_holidays (jaar, datum, omschrijving, aangemaakt_door, gewijzigd_door)
+    values (extract(year from v_feest)::int, v_feest, 'S75 feestdag', v_admin, v_admin);
+  select due_date into v_r from public.task_instances where id = v_r.id;
+  if v_r.due_date <= v_feest then
+    raise exception 'FAIL 75.4: de taak in uitvoering bleef op de feestdag % staan', v_feest;
+  end if;
+  raise notice 'PASS 75.4: een feestdag verzet ook een taak in uitvoering (% -> %)', v_feest, v_r.due_date;
+end $$;
+
 select '=== ALL RECURRENCE ENGINE TESTS PASSED ===' as result;

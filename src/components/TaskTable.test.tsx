@@ -597,6 +597,14 @@ describe('TaskTable op een telefoon', () => {
 })
 
 describe('TaskTable — hoelang een dossier al op de klant wacht', () => {
+  /** Zoveel kalenderdagen geleden, zoals de app telt. Niet `dagen × 24 uur`:
+   *  rond de overgang naar zomer- of wintertijd valt dat op een andere dag. */
+  function dagenGeleden(dagen: number): string {
+    const d = new Date()
+    d.setDate(d.getDate() - dagen)
+    return d.toISOString()
+  }
+
   function toon(t: TaskInstanceWithRelations) {
     return render(
       <TaskTable tasks={[t]} employees={employees} onOpenTask={vi.fn()} currentEmployee={null} />
@@ -604,8 +612,7 @@ describe('TaskTable — hoelang een dossier al op de klant wacht', () => {
   }
 
   it('toont de wachttijd naast de status', () => {
-    const sinds = new Date(Date.now() - 5 * 86400000).toISOString()
-    toon(task({ status: 'wacht_op_klant', wacht_op_klant_sinds: sinds }))
+    toon(task({ status: 'wacht_op_klant', wacht_op_klant_sinds: dagenGeleden(5) }))
     expect(screen.getByText(/wacht 5 dagen/i)).toBeInTheDocument()
   })
 
@@ -619,8 +626,8 @@ describe('TaskTable — hoelang een dossier al op de klant wacht', () => {
   it('zegt met een woord, niet alleen met een kleur, dat het lang duurt', () => {
     // Kleur mag nooit de enige drager van betekenis zijn: wie de amber tint
     // niet ziet, hoort het verschil toch te lezen.
-    const kort = new Date(Date.now() - 5 * 86400000).toISOString()
-    const lang = new Date(Date.now() - 40 * 86400000).toISOString()
+    const kort = dagenGeleden(5)
+    const lang = dagenGeleden(40)
 
     const { unmount } = toon(task({ status: 'wacht_op_klant', wacht_op_klant_sinds: kort }))
     expect(screen.getByText(/^wacht 5 dagen$/i)).toBeInTheDocument()

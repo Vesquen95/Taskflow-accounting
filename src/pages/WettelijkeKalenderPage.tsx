@@ -423,7 +423,7 @@ export function WettelijkeKalenderPage() {
             <form onSubmit={handleRetract} className="space-y-3 text-sm">
               <p className="text-slate-600">
                 {retractTarget.omschrijving} wordt ingetrokken en telt niet langer mee bij het doorschuiven van
-                deadlines. Alle open taken worden meteen herberekend en elke verschuiving wordt gelogd. De rij blijft
+                deadlines. Alle lopende taken worden meteen herberekend en elke verschuiving wordt gelogd. De rij blijft
                 zichtbaar in de historiek.
               </p>
               <div>
