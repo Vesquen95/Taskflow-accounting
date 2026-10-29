@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CITATEN, gesprokenToelichting, kiesCitaat, toelichting, VOLLE_WEEK } from './citaten'
+import { CITATEN, kiesCitaat, toelichting, VOLLE_WEEK } from './citaten'
 
 const rustig = { achterstand: 0, dezeWeek: 3 }
 
@@ -49,7 +49,6 @@ describe('citaten', () => {
     expect(toelichting(houston, { achterstand: 1, dezeWeek: 0 })).toBe('1 taak staat over haar deadline.')
     expect(toelichting(houston, { achterstand: 3, dezeWeek: 0 })).toBe('3 taken staan over hun deadline.')
     expect(toelichting(boot, { achterstand: 0, dezeWeek: 14 })).toBe('14 taken deze week.')
-    expect(gesprokenToelichting(houston, { achterstand: 3, dezeWeek: 0 })).toBe(' 3 tasks are overdue.')
     expect(toelichting(CITATEN[1], rustig)).toBeNull()
   })
 })

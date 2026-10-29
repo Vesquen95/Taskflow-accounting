@@ -2070,3 +2070,13 @@ aanspreking "Sir", want het zegt sir; bij een andere aanspreking blijven het
 opgewekte muziekje en de browserstem. Laadt het niet binnen 2,5 s, of haalt
 Suno het weg, dan ook. Kanttekening: wie het geluid aanzet, laat de browser
 bij het inloggen Suno contacteren.
+
+**Bijgestuurd (29/10/2026): "verwijder alle andere stemmen en commando's.
+doe de aanspreking ook weg".** De stem van de browser is weg, en daarmee ook
+de gesproken zinnen ("Voice interface online.", de groet en het citaat
+voorgelezen). De keuze voor de aanspreking is weg; de groet op het scherm is
+"Good afternoon, Wibren." Met het geluid aan speelt alleen het intronummer
+"Good Day, Sir", voor iedereen. Laadt dat niet, dan het opgewekte muziekje,
+zonder stem. De knop "Geluid" onthoudt de keuze onder dezelfde sleutel als
+vroeger, zodat wie het aanzette het aan houdt.
+

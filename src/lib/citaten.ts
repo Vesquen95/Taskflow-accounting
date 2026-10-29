@@ -85,16 +85,6 @@ export function toelichting(c: Citaat, stand: Stand | null): string | null {
   return null
 }
 
-/** En wat de stem erachter zegt. */
-export function gesprokenToelichting(c: Citaat, stand: Stand | null): string {
-  if (!stand) return ''
-  if (c.wanneer === 'achterstand') {
-    return stand.achterstand === 1 ? ' One task is overdue.' : ` ${stand.achterstand} tasks are overdue.`
-  }
-  if (c.wanneer === 'vol') return ` ${stand.dezeWeek} tasks this week.`
-  return ''
-}
-
 const VORIG_CITAAT = 'taskflow.begroeting.citaat'
 
 export function leesVorigCitaat(): string | null {

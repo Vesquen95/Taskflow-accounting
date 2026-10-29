@@ -6,14 +6,24 @@ import { AuthPage } from './AuthPage'
 const signIn = vi.fn()
 const signUp = vi.fn()
 
-// Geen eigen intronummer in de tests: dan het muziekje en de browserstem.
-vi.mock('../lib/geluid', () => ({ speelIntro: vi.fn(), speelIntroBestand: vi.fn().mockResolvedValue(null) }))
+// Het intronummer laadt in de tests niet: dan het muziekje.
+const speelIntro = vi.fn()
+const speelIntroBestand = vi.fn()
+const kanGeluid = vi.fn()
+vi.mock('../lib/geluid', () => ({
+  speelIntro: () => speelIntro(),
+  speelIntroBestand: () => speelIntroBestand(),
+  kanGeluid: () => kanGeluid(),
+}))
 
 vi.mock('../hooks/useAuth', () => ({
   useAuth: () => ({ signIn, signUp, signOut: vi.fn(), session: null, user: null, loading: false }),
 }))
 
 beforeEach(() => {
+  speelIntro.mockReset()
+  speelIntroBestand.mockReset().mockResolvedValue(null)
+  kanGeluid.mockReset().mockReturnValue(true)
   window.localStorage.clear()
   signIn.mockReset()
   signUp.mockReset()
@@ -216,16 +226,8 @@ describe('AuthPage: de begroeting erna', () => {
     expect(window.sessionStorage.getItem('taskflow.begroeting')).toBeNull()
   })
 
-  it('toont geen geluidsknop als de browser niet kan spreken', () => {
-    render(<AuthPage />)
-    expect(screen.queryByRole('button', { name: /Geluid/ })).not.toBeInTheDocument()
-  })
-
-  it('zet de stem aan en onthoudt dat', async () => {
+  it('zet het geluid aan, onthoudt dat en laat het meteen horen', async () => {
     const user = userEvent.setup()
-    const speak = vi.fn()
-    vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn(), getVoices: () => [{ name: 'Daniel', lang: 'en-GB' }] })
-    vi.stubGlobal('SpeechSynthesisUtterance', class { constructor(public text: string) {} })
     render(<AuthPage />)
 
     const knop = screen.getByRole('button', { name: /Geluid/ })
@@ -233,16 +235,20 @@ describe('AuthPage: de begroeting erna', () => {
     await user.click(knop)
     expect(knop).toHaveAttribute('aria-pressed', 'true')
     expect(window.localStorage.getItem('taskflow.weergave.stem')).toBe('aan')
-    await waitFor(() => expect(speak).toHaveBeenCalled())
-    expect(speak).toHaveBeenCalledWith(expect.objectContaining({ text: 'Voice interface online.' }))
+    expect(speelIntroBestand).toHaveBeenCalled()
+    // Het nummer laadt hier niet: dan het opgewekte muziekje.
+    await waitFor(() => expect(speelIntro).toHaveBeenCalled())
   })
 
-  it('onthoudt de aanspreking', async () => {
-    const user = userEvent.setup()
+  it('vraagt geen aanspreking meer', () => {
     render(<AuthPage />)
-    expect(screen.getByLabelText('Aanspreking')).toHaveValue('naam')
-    await user.selectOptions(screen.getByLabelText('Aanspreking'), 'sir')
-    expect(window.localStorage.getItem('taskflow.weergave.aanspreking')).toBe('sir')
+    expect(screen.queryByLabelText('Aanspreking')).not.toBeInTheDocument()
+  })
+
+  it('toont geen geluidsknop als de browser geen geluid kan spelen', () => {
+    kanGeluid.mockReturnValue(false)
+    render(<AuthPage />)
+    expect(screen.queryByRole('button', { name: /Geluid/ })).not.toBeInTheDocument()
   })
 })
 

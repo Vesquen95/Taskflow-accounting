@@ -9,11 +9,6 @@ vi.mock('../lib/supabase', () => ({
   supabase: { from: vi.fn(), rpc: vi.fn(), auth: {} },
 }))
 
-const spreek = vi.fn()
-vi.mock('../lib/begroeting', async (orig) => ({
-  ...(await orig<typeof import('../lib/begroeting')>()),
-  spreek: (t: string) => spreek(t),
-}))
 const speelIntro = vi.fn()
 const speelIntroBestand = vi.fn()
 vi.mock('../lib/geluid', () => ({
@@ -25,7 +20,6 @@ let achterstand = 0
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-23T14:05:00'))
-  spreek.mockReset()
   speelIntro.mockReset()
   // Standaard: geen eigen intronummer.
   speelIntroBestand.mockReset().mockResolvedValue(null)
@@ -65,7 +59,7 @@ describe('Begroeting', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Good afternoon, Wibren.')
     expect(window.sessionStorage.getItem('taskflow.begroeting')).toBeNull()
     await telling()
-    expect(spreek).not.toHaveBeenCalled()
+    expect(speelIntroBestand).not.toHaveBeenCalled()
     expect(speelIntro).not.toHaveBeenCalled()
 
     act(() => vi.advanceTimersByTime(5200))
@@ -100,32 +94,23 @@ describe('Begroeting', () => {
     expect(['tijd', 'carpe']).toContain(window.localStorage.getItem('taskflow.begroeting.citaat'))
   })
 
-  it('speelt muziek en spreekt groet en citaat als het geluid aan staat', async () => {
+  it('valt terug op het muziekje als het intronummer niet laadt', async () => {
     window.localStorage.setItem('taskflow.weergave.stem', 'aan')
-    window.localStorage.setItem('taskflow.weergave.aanspreking', 'sir')
-    vi.spyOn(Math, 'random').mockReturnValue(0)
     toon()
     await telling()
     expect(speelIntroBestand).toHaveBeenCalled()
     expect(speelIntro).toHaveBeenCalled()
-    expect(screen.getByRole('status')).toHaveTextContent('Good afternoon, sir.')
-    expect(screen.getByRole('status')).toHaveTextContent('Welkom terug, Wibren')
-    await telling()
-    expect(spreek).toHaveBeenCalledWith(
-      'Good afternoon, sir. All we have to decide is what to do with the time that is given to us.',
-    )
-    vi.mocked(Math.random).mockRestore()
+    expect(screen.getByRole('status')).toHaveTextContent('Good afternoon, Wibren.')
+    expect(screen.getByRole('status')).toHaveTextContent('Welkom terug · alle systemen online')
   })
 
-  it('speelt het eigen intronummer in plaats van muziekje en browserstem, zo lang als het duurt', async () => {
+  it('speelt het intronummer in plaats van het muziekje, zo lang als het duurt', async () => {
     window.localStorage.setItem('taskflow.weergave.stem', 'aan')
-    window.localStorage.setItem('taskflow.weergave.aanspreking', 'sir')
     const stop = vi.fn()
     speelIntroBestand.mockResolvedValue({ duur: 9.56, stop })
     const onKlaar = toon()
     await telling()
     expect(speelIntro).not.toHaveBeenCalled()
-    expect(spreek).not.toHaveBeenCalled()
     // Het citaat staat er wel.
     expect(screen.getByRole('blockquote')).toBeInTheDocument()
 
@@ -135,19 +120,8 @@ describe('Begroeting', () => {
     expect(onKlaar).toHaveBeenCalled()
   })
 
-  it('speelt het nummer niet bij een andere aanspreking: het zegt "sir"', async () => {
-    window.localStorage.setItem('taskflow.weergave.stem', 'aan')
-    speelIntroBestand.mockResolvedValue({ duur: 10.4, stop: vi.fn() })
-    toon()
-    await telling()
-    expect(speelIntroBestand).not.toHaveBeenCalled()
-    expect(speelIntro).toHaveBeenCalled()
-    expect(spreek).toHaveBeenCalled()
-  })
-
   it('stopt het nummer als je de begroeting overslaat', async () => {
     window.localStorage.setItem('taskflow.weergave.stem', 'aan')
-    window.localStorage.setItem('taskflow.weergave.aanspreking', 'sir')
     const stop = vi.fn()
     speelIntroBestand.mockResolvedValue({ duur: 9.56, stop })
     const { unmount } = render(<Begroeting medewerkerId="e1" naam="Wibren" onKlaar={vi.fn()} />)

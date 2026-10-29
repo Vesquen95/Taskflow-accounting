@@ -3,10 +3,9 @@ import { Reactor } from './Reactor'
 import { supabase } from '../lib/supabase'
 import { isoDatum } from '../lib/werkstromen'
 import { speelIntro, speelIntroBestand, type Afspelend } from '../lib/geluid'
-import { begroetingTekst, leesAanspreking, leesStem, spreek, voornaam, wisBegroeting } from '../lib/begroeting'
+import { begroetingTekst, leesGeluid, wisBegroeting } from '../lib/begroeting'
 import {
   bewaarVorigCitaat,
-  gesprokenToelichting,
   kiesCitaat,
   leesVorigCitaat,
   toelichting,
@@ -52,9 +51,9 @@ function binnen<T>(belofte: Promise<T>, ms: number): Promise<T | null> {
 
 /**
  * Het moment na het inloggen: de reactor vergrendelt, "Toegang verleend",
- * een groet -- "Good afternoon, sir." -- en een filmcitaat dat bij het moment
- * past (lib/citaten.ts). Met het geluid aan het eigen intronummer, of anders
- * het opgewekte muziekje met de stem van de browser (lib/geluid.ts).
+ * een groet -- "Good afternoon, Wibren." -- en een filmcitaat dat bij het
+ * moment past (lib/citaten.ts). Met het geluid aan het intronummer uit Suno,
+ * of als dat niet laadt het opgewekte muziekje (lib/geluid.ts).
  *
  * Kort: wie wil werken, klikt of drukt een toets en is er meteen. Zie
  * lib/begroeting.ts voor waarom dit niet op het inlogscherm zelf kan.
@@ -69,8 +68,7 @@ export function Begroeting({
   onKlaar: () => void
 }) {
   const nu = useMemo(() => new Date(), [])
-  const [aanspreking] = useState(leesAanspreking)
-  const tekst = begroetingTekst(nu.getHours(), aanspreking, naam)
+  const tekst = begroetingTekst(nu.getHours(), naam)
   const [citaat, setCitaat] = useState<{ citaat: Citaat; stand: Stand | null } | null>(null)
   const [weg, setWeg] = useState(false)
   const [duur, setDuur] = useState(DUUR_MS)
@@ -78,13 +76,10 @@ export function Begroeting({
 
   useEffect(() => {
     wisBegroeting()
-    const geluid = leesStem()
+    const geluid = leesGeluid()
     let actief = true
-    // Eerst het eigen nummer proberen; lukt dat niet, dan het opgewekte
-    // muziekje en straks de stem van de browser.
-    // Het nummer zegt "sir": alleen bij die aanspreking.
-    const intro: Promise<Afspelend | null> =
-      geluid && aanspreking === 'sir' ? speelIntroBestand() : Promise.resolve(null)
+    // Het intronummer; lukt dat niet, dan het opgewekte muziekje.
+    const intro: Promise<Afspelend | null> = geluid ? speelIntroBestand() : Promise.resolve(null)
     void intro.then((afspelend) => {
       if (!actief) return afspelend?.stop()
       if (afspelend) {
@@ -92,12 +87,11 @@ export function Begroeting({
         setDuur(Math.min(MAX_DUUR_MS, Math.max(DUUR_MS, afspelend.duur * 1000)))
       } else if (geluid) speelIntro()
     })
-    void Promise.all([binnen(haalStand(medewerkerId), WACHT_OP_STAND_MS), intro]).then(([stand, afspelend]) => {
+    void binnen(haalStand(medewerkerId), WACHT_OP_STAND_MS).then((stand) => {
       if (!actief) return
       const gekozen = kiesCitaat(nu.getHours(), stand, leesVorigCitaat(), Math.random())
       bewaarVorigCitaat(gekozen.id)
       setCitaat({ citaat: gekozen, stand })
-      if (geluid && !afspelend) spreek(`${tekst} ${gekozen.tekst}${gesprokenToelichting(gekozen, stand)}`)
     })
     return () => {
       actief = false
@@ -148,7 +142,7 @@ export function Begroeting({
           className="mt-3 font-mono text-[11px] uppercase tracking-[0.25em] text-[#86A3AD] motion-safe:animate-opstart"
           style={{ animationDelay: '0.5s' }}
         >
-          {aanspreking === 'naam' ? 'Welkom terug' : `Welkom terug, ${voornaam(naam)}`} · alle systemen online
+          Welkom terug · alle systemen online
         </p>
         {citaat && (
           <figure className="mx-auto mt-8 max-w-xl border-t border-[#7FDBFF]/20 pt-6 motion-safe:animate-opstart">

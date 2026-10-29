@@ -4,20 +4,9 @@ import { useAuth } from '../hooks/useAuth'
 import { VERLOOP_UITLEG } from '../lib/sessieduur'
 import { leesVerloopreden, wisVerloopreden } from '../lib/sessieopslag'
 import { dagVanHetJaar, isoWeek, volgendeBtwKwartaal } from '../lib/inlogscherm'
-import {
-  AANSPREKINGEN,
-  bewaarAanspreking,
-  bewaarStem,
-  kanSpreken,
-  leesAanspreking,
-  leesStem,
-  markeerBegroeting,
-  spreek,
-  wisBegroeting,
-  type Aanspreking,
-} from '../lib/begroeting'
+import { bewaarGeluid, leesGeluid, markeerBegroeting, wisBegroeting } from '../lib/begroeting'
 import { Reactor } from '../components/Reactor'
-import { speelIntro, speelIntroBestand } from '../lib/geluid'
+import { kanGeluid, speelIntro, speelIntroBestand } from '../lib/geluid'
 
 /**
  * Het inlogscherm: de reactor.
@@ -27,7 +16,7 @@ import { speelIntro, speelIntroBestand } from '../lib/geluid'
  * in het midden draait de reactor (components/Reactor.tsx), rechts het
  * identificatiepaneel. Bij het aanmelden draait de reactor op toeren; na het
  * inloggen volgt de begroeting bij naam (components/Begroeting.tsx), als je
- * wil ook gesproken.
+ * wil met het intronummer.
  *
  * Wat bleef zoals het was: het formulier zelf (één knop erin, registreren
  * erbuiten), de foutmeldingen, en de uitleg na een automatische afmelding.
@@ -95,9 +84,8 @@ export function AuthPage() {
   const [info, setInfo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   // Alleen tonen als de browser kan spreken.
-  const [spraak] = useState(kanSpreken)
-  const [stem, setStem] = useState(leesStem)
-  const [aanspreking, setAanspreking] = useState(leesAanspreking)
+  const [kanAfspelen] = useState(kanGeluid)
+  const [geluid, setGeluid] = useState(leesGeluid)
   // Wie automatisch afgemeld werd, staat hier zonder te weten waarom. Zonder
   // uitleg leest dat als een storing.
   const [verloopreden] = useState(() => leesVerloopreden())
@@ -137,25 +125,16 @@ export function AuthPage() {
     setInfo(null)
   }
 
-  function wisselStem() {
-    const aan = !stem
-    setStem(aan)
-    bewaarStem(aan)
-    // Meteen laten horen wat je aanzet: de muziek en de stem.
+  function wisselGeluid() {
+    const aan = !geluid
+    setGeluid(aan)
+    bewaarGeluid(aan)
+    // Meteen laten horen wat je aanzet.
     if (aan) {
-      // Het eigen nummer zegt "sir": alleen bij die aanspreking.
-      const nummer = aanspreking === 'sir' ? speelIntroBestand() : Promise.resolve(null)
-      void nummer.then((afspelend) => {
-        if (afspelend) return
-        speelIntro()
-        spreek('Voice interface online.')
+      void speelIntroBestand().then((afspelend) => {
+        if (!afspelend) speelIntro()
       })
     }
-  }
-
-  function kiesAanspreking(nieuw: Aanspreking) {
-    setAanspreking(nieuw)
-    bewaarAanspreking(nieuw)
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -308,31 +287,16 @@ export function AuthPage() {
                 {mode === 'signin' ? 'Registreren' : 'Inloggen'}
               </button>
             </p>
-            {spraak && (
+            {kanAfspelen && (
               <button
                 type="button"
-                aria-pressed={stem}
-                onClick={wisselStem}
+                aria-pressed={geluid}
+                onClick={wisselGeluid}
                 className="font-mono uppercase tracking-[0.15em] hover:text-[#7FDBFF]"
               >
-                Geluid: <span className={stem ? 'text-[#3EF0D2]' : 'text-[#4F7682]'}>{stem ? 'aan' : 'uit'}</span>
+                Geluid: <span className={geluid ? 'text-[#3EF0D2]' : 'text-[#4F7682]'}>{geluid ? 'aan' : 'uit'}</span>
               </button>
             )}
-          </div>
-          <div className="mt-2 flex items-center justify-end gap-2 font-mono text-xs uppercase tracking-[0.15em] text-[#86A3AD]">
-            <label htmlFor="aanspreking">Aanspreking</label>
-            <select
-              id="aanspreking"
-              value={aanspreking}
-              onChange={(e) => kiesAanspreking(e.target.value as Aanspreking)}
-              className="rounded-sm border border-[#1F3E48] bg-[#060E12] px-2 py-1 font-mono text-xs text-[#E9FDFF] focus:border-[#7FDBFF] focus:outline-none"
-            >
-              {AANSPREKINGEN.map((a) => (
-                <option key={a.waarde} value={a.waarde}>
-                  {a.label}
-                </option>
-              ))}
-            </select>
           </div>
         </section>
       </main>

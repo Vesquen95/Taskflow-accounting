@@ -9,8 +9,9 @@
  *      (vanaf 0,8 s), dat langzaam uitsterft;
  *   3. een glinstering: vier hoge noten met een echo (vanaf 1,1 s).
  *
- * Zacht: het hoort onder de stem te liggen, niet erover. Een browser speelt
- * alleen geluid na een klik op de pagina; die klik is het inloggen zelf.
+ * Sinds het intronummer uit Suno er is (hieronder), speelt dit alleen nog als
+ * dat niet laadt. Een browser speelt alleen geluid na een klik op de pagina;
+ * die klik is het inloggen zelf.
  */
 
 const VOLUME = 0.22
@@ -29,9 +30,9 @@ export function kanGeluid(): boolean {
 /**
  * Het eigen intronummer: "Good Day, Sir", gemaakt in Suno (29/10/2026) --
  * opstartgeluid met een Britse vrouwenstem: "Good day, sir. Systems are
- * ready. How can I make your day better?" Het speelt in plaats van het
- * opgewekte muziekje en de stem van de browser; twee stemmen door elkaar zou
- * niets worden. Omdat het "sir" zegt, alleen bij die aanspreking.
+ * ready. How can I make your day better?" Het is het enige geluid met een
+ * stem (29/10/2026: "verwijder alle andere stemmen"); het opgewekte muziekje
+ * hieronder speelt alleen nog als het nummer niet laadt.
  *
  * Rechtstreeks van Suno, waar het nummer publiek staat: zo hoeft het niet in
  * de (publieke) repo. Dat betekent wel dat de browser van wie het geluid
