@@ -133,7 +133,7 @@ function AuthenticatedApp({ onDeactivated }: { onDeactivated: () => void }) {
       <AppLayout employee={employee} activeView={zichtbareView} activeParam={route.param} navigate={navigate}>
         {page}
       </AppLayout>
-      {begroeten && <Begroeting medewerkerId={employee.id} naam={employee.naam} onKlaar={() => setBegroeten(false)} />}
+      {begroeten && <Begroeting medewerkerId={employee.id} onKlaar={() => setBegroeten(false)} />}
     </>
   )
 }

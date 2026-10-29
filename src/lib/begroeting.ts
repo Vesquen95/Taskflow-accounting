@@ -1,5 +1,5 @@
 /**
- * De begroeting na het inloggen: "Toegang verleend. Good afternoon, Wibren."
+ * De begroeting na het inloggen: "Toegang verleend. Good day, sir."
  *
  * Het inlogscherm kent je naam nog niet (vóór het inloggen leest het niets
  * uit de databank), en het verdwijnt zodra de sessie er is. Daarom zet het
@@ -43,22 +43,15 @@ export function moetBegroeten(): boolean {
   }
 }
 
-/** "Good morning" tot 12 uur, "good afternoon" tot 18 uur, daarna "good evening". */
-export function groet(uur: number): string {
-  if (uur >= 5 && uur < 12) return 'Good morning'
-  if (uur >= 12 && uur < 18) return 'Good afternoon'
-  return 'Good evening'
-}
-
-/** De voornaam: het eerste woord van de naam zoals die in Taskflow staat. */
-export function voornaam(naam: string): string {
-  return naam.trim().split(/\s+/)[0] ?? ''
-}
-
-/** "Good afternoon, Wibren." */
-export function begroetingTekst(uur: number, naam: string): string {
-  return `${groet(uur)}, ${voornaam(naam)}.`
-}
+/**
+ * Wat de stem in het intronummer zegt ("Systems Operational", Suno), en dus
+ * ook wat er op het scherm staat: tekst en stem horen hetzelfde te zeggen.
+ * Wie het nummer vervangt, past dit mee aan.
+ */
+export const BEGROETING = {
+  groet: 'Good day, sir.',
+  regels: ['I am ready to assist you.', 'Systems are now fully operational.'],
+} as const
 
 export function leesGeluid(): boolean {
   try {

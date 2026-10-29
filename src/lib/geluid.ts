@@ -28,9 +28,10 @@ export function kanGeluid(): boolean {
 }
 
 /**
- * Het eigen intronummer: "Good Day, Sir", gemaakt in Suno (29/10/2026) --
- * opstartgeluid met een Britse vrouwenstem: "Good day, sir. Systems are
- * ready. How can I make your day better?" Het is het enige geluid met een
+ * Het eigen intronummer: "Systems Operational", gemaakt in Suno (29/10/2026)
+ * -- opstartgeluid met een Britse mannenstem: "Good day, sir. I am ready to
+ * assist you. Systems are now fully operational." Dezelfde woorden staan op
+ * het scherm (BEGROETING in lib/begroeting.ts). Het is het enige geluid met een
  * stem (29/10/2026: "verwijder alle andere stemmen"); het opgewekte muziekje
  * hieronder speelt alleen nog als het nummer niet laadt.
  *
@@ -40,7 +41,7 @@ export function kanGeluid(): boolean {
  * standaard uit. Haalt Suno het weg, of laadt het niet op tijd, dan blijft
  * alles zoals voorheen.
  */
-export const INTRO_BESTAND = 'https://cdn1.suno.ai/1616a5a2-29d9-464c-b5da-43b0c29ab27f.mp3'
+export const INTRO_BESTAND = 'https://cdn1.suno.ai/22c27736-6c75-465f-8c7e-b5e92db7a766.mp3'
 
 export interface Afspelend {
   /** Lengte van het nummer in seconden. */

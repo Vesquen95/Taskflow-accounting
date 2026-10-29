@@ -41,7 +41,7 @@ afterEach(() => {
 })
 
 function toon(onKlaar = vi.fn()) {
-  render(<Begroeting medewerkerId="e1" naam="Wibren Patteaux" onKlaar={onKlaar} />)
+  render(<Begroeting medewerkerId="e1" onKlaar={onKlaar} />)
   return onKlaar
 }
 
@@ -53,10 +53,13 @@ async function telling() {
 }
 
 describe('Begroeting', () => {
-  it('begroet bij voornaam, wist de vlag en verdwijnt vanzelf', async () => {
+  it('zegt op het scherm wat de stem zegt, wist de vlag en verdwijnt vanzelf', async () => {
     const onKlaar = toon()
     expect(screen.getByRole('status')).toHaveTextContent('Toegang verleend')
-    expect(screen.getByRole('status')).toHaveTextContent('Good afternoon, Wibren.')
+    // Woord voor woord wat de stem in het intronummer zegt.
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Good day, sir.I am ready to assist you.Systems are now fully operational.',
+    )
     expect(window.sessionStorage.getItem('taskflow.begroeting')).toBeNull()
     await telling()
     expect(speelIntroBestand).not.toHaveBeenCalled()
@@ -100,8 +103,6 @@ describe('Begroeting', () => {
     await telling()
     expect(speelIntroBestand).toHaveBeenCalled()
     expect(speelIntro).toHaveBeenCalled()
-    expect(screen.getByRole('status')).toHaveTextContent('Good afternoon, Wibren.')
-    expect(screen.getByRole('status')).toHaveTextContent('Welkom terug · alle systemen online')
   })
 
   it('speelt het intronummer in plaats van het muziekje, zo lang als het duurt', async () => {
@@ -124,7 +125,7 @@ describe('Begroeting', () => {
     window.localStorage.setItem('taskflow.weergave.stem', 'aan')
     const stop = vi.fn()
     speelIntroBestand.mockResolvedValue({ duur: 9.56, stop })
-    const { unmount } = render(<Begroeting medewerkerId="e1" naam="Wibren" onKlaar={vi.fn()} />)
+    const { unmount } = render(<Begroeting medewerkerId="e1" onKlaar={vi.fn()} />)
     await telling()
     unmount()
     expect(stop).toHaveBeenCalled()

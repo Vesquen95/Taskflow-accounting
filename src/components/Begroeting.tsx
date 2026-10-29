@@ -3,7 +3,7 @@ import { Reactor } from './Reactor'
 import { supabase } from '../lib/supabase'
 import { isoDatum } from '../lib/werkstromen'
 import { speelIntro, speelIntroBestand, type Afspelend } from '../lib/geluid'
-import { begroetingTekst, leesGeluid, wisBegroeting } from '../lib/begroeting'
+import { BEGROETING, leesGeluid, wisBegroeting } from '../lib/begroeting'
 import {
   bewaarVorigCitaat,
   kiesCitaat,
@@ -51,24 +51,16 @@ function binnen<T>(belofte: Promise<T>, ms: number): Promise<T | null> {
 
 /**
  * Het moment na het inloggen: de reactor vergrendelt, "Toegang verleend",
- * een groet -- "Good afternoon, Wibren." -- en een filmcitaat dat bij het
- * moment past (lib/citaten.ts). Met het geluid aan het intronummer uit Suno,
+ * dezelfde woorden als de stem in het intronummer -- "Good day, sir. I am
+ * ready to assist you. Systems are now fully operational." -- en een
+ * filmcitaat dat bij het moment past (lib/citaten.ts). Met het geluid aan het intronummer uit Suno,
  * of als dat niet laadt het opgewekte muziekje (lib/geluid.ts).
  *
  * Kort: wie wil werken, klikt of drukt een toets en is er meteen. Zie
  * lib/begroeting.ts voor waarom dit niet op het inlogscherm zelf kan.
  */
-export function Begroeting({
-  medewerkerId,
-  naam,
-  onKlaar,
-}: {
-  medewerkerId: string
-  naam: string
-  onKlaar: () => void
-}) {
+export function Begroeting({ medewerkerId, onKlaar }: { medewerkerId: string; onKlaar: () => void }) {
   const nu = useMemo(() => new Date(), [])
-  const tekst = begroetingTekst(nu.getHours(), naam)
   const [citaat, setCitaat] = useState<{ citaat: Citaat; stand: Stand | null } | null>(null)
   const [weg, setWeg] = useState(false)
   const [duur, setDuur] = useState(DUUR_MS)
@@ -136,14 +128,17 @@ export function Begroeting({
           className="mt-2 text-3xl font-light tracking-[0.04em] text-[#FFFFFF] motion-safe:animate-opstart md:text-4xl"
           style={{ animationDelay: '0.25s' }}
         >
-          {tekst}
+          {BEGROETING.groet}
         </p>
-        <p
-          className="mt-3 font-mono text-[11px] uppercase tracking-[0.25em] text-[#86A3AD] motion-safe:animate-opstart"
-          style={{ animationDelay: '0.5s' }}
-        >
-          Welkom terug · alle systemen online
-        </p>
+        {BEGROETING.regels.map((regel, i) => (
+          <p
+            key={regel}
+            className="mt-2 text-base text-[#BFEFFF] motion-safe:animate-opstart md:text-lg"
+            style={{ animationDelay: `${0.9 + i * 0.7}s` }}
+          >
+            {regel}
+          </p>
+        ))}
         {citaat && (
           <figure className="mx-auto mt-8 max-w-xl border-t border-[#7FDBFF]/20 pt-6 motion-safe:animate-opstart">
             <blockquote className="text-xl font-light italic leading-snug text-[#BFEFFF] md:text-2xl">

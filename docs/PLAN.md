@@ -2080,3 +2080,10 @@ voorgelezen). De keuze voor de aanspreking is weg; de groet op het scherm is
 zonder stem. De knop "Geluid" onthoudt de keuze onder dezelfde sleutel als
 vroeger, zodat wie het aanzette het aan houdt.
 
+
+**Bijgestuurd (29/10/2026), een nieuw intronummer:** "Systems Operational"
+uit Suno (publiek, 10,4 s), met een Britse mannenstem: "Good day, sir. I am
+ready to assist you. Systems are now fully operational." Gevraagd: "laat de
+tekst op het scherm overeenstemmen". De begroeting toont nu precies die drie
+zinnen, voor iedereen en ook met het geluid uit (`BEGROETING` in
+`lib/begroeting.ts`). De groet per uur en bij voornaam is weg.
