@@ -18,7 +18,9 @@ export default defineConfig(({ mode }) => ({
     // e2e/ draait op Playwright tegen een echte browser en een echte site;
     // vitest zou die bestanden anders proberen te draaien en falen op de
     // Playwright-imports.
-    exclude: ['node_modules', 'dist', 'e2e/**'],
+    // .claude/ bevat skills met eigen tests voor Node's testrunner (node --test),
+    // niet voor vitest.
+    exclude: ['node_modules', 'dist', 'e2e/**', '.claude/**'],
     css: false,
     // De tests rekenen in de tijdzone van het kantoor. In UTC, de standaard
     // op een server, bleef een datumfout van een dag onzichtbaar (zie
