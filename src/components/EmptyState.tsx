@@ -13,7 +13,7 @@ export function EmptyState({ title, description, action }: EmptyStateProps) {
         <button
           type="button"
           onClick={action.onClick}
-          className="mt-1 text-xs font-medium text-brand-600 hover:text-brand-700 focus:outline-none focus-visible:underline"
+          className="mt-1 text-xs font-medium text-brand-700 hover:text-brand-800 focus:outline-none focus-visible:underline"
         >
           {action.label}
         </button>

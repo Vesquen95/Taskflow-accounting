@@ -31,9 +31,9 @@ import { magOverzichtZien } from './lib/overzicht'
  *  donkere achtergrond van het inlogscherm, waar je vandaan komt. */
 function LoadingScreen() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#070C0B]">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#2A2A2F]">
       <PatoTeken grootte={56} bezig />
-      <p role="status" className="font-mono text-xs uppercase tracking-[0.25em] text-[#86A098]">
+      <p role="status" className="font-mono text-xs uppercase tracking-[0.25em] text-[#B9A8AC]">
         Laden…
       </p>
     </div>

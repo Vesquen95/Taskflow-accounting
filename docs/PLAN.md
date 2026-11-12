@@ -2094,3 +2094,21 @@ opgewekte muziekje (`lib/geluid.ts` verwijderd) en de knop "Geluid" op het
 inlogscherm. De tekst van het Suno-nummer ("Good day, sir. ...") is weg. Na
 het inloggen blijft: de reactor die vergrendelt, "Toegang verleend" en het
 wisselende filmcitaat.
+
+## §47 — Nieuwe kleuren: 60-30-10 (12/11/2026)
+
+**Gevraagd:** "iets fancy" met 60% roze (243/195/200), 30% antraciet
+(42/42/47) en 10% mint (34/227/162).
+
+- **Roze, 60%:** de pagina, de vullingen en de lijnen (de lichte kant van
+  het neutrale palet in tailwind.config.js).
+- **Antraciet, 30%:** de cockpit (zijbalk en bovenbalk), de tekst, en het
+  inlogscherm.
+- **Mint, 10%:** knoppen, de actieve menu-ingang, de kern en de jaarboog van
+  de reactor, het PATO-teken. Mint draagt geen witte tekst (1,7:1), dus een
+  mintknop heeft antraciet tekst via een nieuw token `text-opaccent`; links
+  en tekst in de accentkleur gebruiken een diepere mint (brand-700, 5,7:1 op
+  wit).
+- Getoetst op WCAG AA: gedempte tekst haalt 4,8:1 op de roze pagina en 7,5:1
+  op wit. De nachtmodus volgt dezelfde familie (antraciet met mint). De
+  statuskleuren (rood, amber, blauw, paars) bleven: die dragen betekenis.

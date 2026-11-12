@@ -45,5 +45,5 @@
   inset: 0;
   pointer-events: none;
   z-index: 60;
-  background: repeating-linear-gradient(to bottom, rgb(62 240 210 / 0.02) 0 1px, transparent 1px 3px);
+  background: repeating-linear-gradient(to bottom, rgb(34 227 162 / 0.02) 0 1px, transparent 1px 3px);
 }

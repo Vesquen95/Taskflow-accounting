@@ -123,8 +123,8 @@ function Gebruiker({ employee, inBalk = false }: { employee: Employee; inBalk?: 
   return (
     <div className={inBalk ? 'flex min-w-0 items-center gap-5' : ''}>
       <div className={inBalk ? 'min-w-0 text-right' : ''}>
-        <p className="truncate text-sm font-medium text-[#EDF7F4]">{employee.naam}</p>
-        <p className="truncate text-xs text-[#9DB0AA]">
+        <p className="truncate text-sm font-medium text-[#FBEFF0]">{employee.naam}</p>
+        <p className="truncate text-xs text-[#C7B6BA]">
           {employee.rol === 'kantoorbeheerder' ? 'Kantoorbeheerder' : 'Medewerker'}
           {employee.mag_goedkeuren ? ' · mag goedkeuren' : ''}
         </p>
@@ -139,7 +139,7 @@ function Gebruiker({ employee, inBalk = false }: { employee: Employee; inBalk?: 
         onClick={() => zetLangeSessie(!langeSessie)}
         aria-pressed={langeSessie}
         className={`${inBalk ? 'shrink-0' : 'mt-2'} ${knop} ${
-          langeSessie ? 'text-[#FFC56B] hover:text-[#FFE0A8]' : 'text-[#9DB0AA] hover:text-[#EDF7F4]'
+          langeSessie ? 'text-[#FFC56B] hover:text-[#FFE0A8]' : 'text-[#C7B6BA] hover:text-[#FBEFF0]'
         }`}
       >
         {langeSessie
@@ -153,7 +153,7 @@ function Gebruiker({ employee, inBalk = false }: { employee: Employee; inBalk?: 
         onClick={() => zetNacht(!nacht)}
         aria-pressed={nacht}
         className={`${inBalk ? 'shrink-0' : 'mt-2'} ${knop} ${
-          nacht ? 'text-[#3EF0D2] hover:text-[#9EF8E8]' : 'text-[#9DB0AA] hover:text-[#EDF7F4]'
+          nacht ? 'text-[#22E3A2] hover:text-[#93F0CF]' : 'text-[#C7B6BA] hover:text-[#FBEFF0]'
         }`}
       >
         Nachtmodus
@@ -161,7 +161,7 @@ function Gebruiker({ employee, inBalk = false }: { employee: Employee; inBalk?: 
       <button
         type="button"
         onClick={() => void signOut()}
-        className={`${inBalk ? 'shrink-0' : 'mt-2'} ${knop} text-[#9DB0AA] hover:text-[#EDF7F4]`}
+        className={`${inBalk ? 'shrink-0' : 'mt-2'} ${knop} text-[#C7B6BA] hover:text-[#FBEFF0]`}
       >
         Uitloggen
       </button>
@@ -176,9 +176,9 @@ function Gebruiker({ employee, inBalk = false }: { employee: Employee; inBalk?: 
 function MerkLijn() {
   return (
     <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-[-1px] flex h-[2px] gap-1">
-      <span className="w-2/5 bg-[#3EF0D2]/80" />
-      <span className="w-1/6 bg-[#B57BFF]/80" />
-      <span className="w-6 bg-[#2A4943]" />
+      <span className="w-2/5 bg-[#22E3A2]/80" />
+      <span className="w-1/6 bg-[#F3C3C8]/80" />
+      <span className="w-6 bg-[#4A4950]" />
     </span>
   )
 }
@@ -191,8 +191,8 @@ function Uitlezingen() {
   const termijn = useMemo(() => volgendeBtwKwartaal(nu), [nu])
   const lezing = (label: string, waarde: string, accent = false) => (
     <div className="flex flex-col leading-tight">
-      <dt className="text-[9px] uppercase tracking-[0.2em] text-[#86A098]">{label}</dt>
-      <dd className={`text-[15px] ${accent ? 'text-[#FFB547]' : 'text-[#EDF7F4]'}`}>{waarde}</dd>
+      <dt className="text-[9px] uppercase tracking-[0.2em] text-[#B9A8AC]">{label}</dt>
+      <dd className={`text-[15px] ${accent ? 'text-[#FFB547]' : 'text-[#FBEFF0]'}`}>{waarde}</dd>
     </div>
   )
   return (
@@ -240,7 +240,7 @@ export function AppLayout({
     facturatie: {
       aantal: teFactureren,
       zin: 'te factureren',
-      kleur: 'border-[#B57BFF]/50 bg-[#B57BFF]/15 text-[#D6B8FF]',
+      kleur: 'border-[#F3C3C8]/50 bg-[#F3C3C8]/15 text-[#F7D9DC]',
     },
   }
 
@@ -267,14 +267,14 @@ export function AppLayout({
       {/* De bovenbalk bestaat alleen op een klein scherm. Ze houdt twee dingen
           vast die je anders kwijt bent zodra de zijbalk dichtgaat: waar je
           bent, en hoe je ergens anders komt. */}
-      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-[#16302C] bg-[#070C0B] px-4 lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center gap-3 border-b border-[#3A3A41] bg-[#2A2A2F] px-4 lg:hidden">
         <MerkLijn />
         <button
           type="button"
           onClick={() => setMenuOpen((open) => !open)}
           aria-expanded={menuOpen}
           aria-controls="hoofdnavigatie"
-          className="-ml-2 rounded-md p-2 text-[#9DB0AA] hover:bg-[#13221F] hover:text-[#EDF7F4]"
+          className="-ml-2 rounded-md p-2 text-[#C7B6BA] hover:bg-[#232327] hover:text-[#FBEFF0]"
         >
           <span className="sr-only">{menuOpen ? 'Menu sluiten' : 'Menu openen'}</span>
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-5 w-5" aria-hidden="true">
@@ -285,7 +285,7 @@ export function AppLayout({
             )}
           </svg>
         </button>
-        <span className="truncate text-sm font-semibold text-[#EDF7F4]">
+        <span className="truncate text-sm font-semibold text-[#FBEFF0]">
           {huidigeTitel(activeView, activeParam, kleinScherm)}
         </span>
         <PatoTeken grootte={26} className="ml-auto" />
@@ -305,19 +305,19 @@ export function AppLayout({
 
       <aside
         id="hoofdnavigatie"
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-[#16302C] bg-[#070C0B] transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 lg:transition-none ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col border-r border-[#3A3A41] bg-[#2A2A2F] transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 lg:transition-none ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="relative flex h-16 shrink-0 items-center gap-2 border-b border-[#16302C] px-4">
+        <div className="relative flex h-16 shrink-0 items-center gap-2 border-b border-[#3A3A41] px-4">
           <MerkLijn />
           {/* Klein gehouden: in de zijbalk is de navigatie het onderwerp, niet
               het merk. Even hoog als de balk ernaast, zodat de onderlijn
               doorloopt. */}
           <PatoTeken grootte={30} />
           <span className="flex flex-col leading-tight">
-            <span className="text-base font-light tracking-[0.08em] text-[#EDF7F4]">Taskflow</span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.25em] text-[#86A098]">PATO Accountancy</span>
+            <span className="text-base font-light tracking-[0.08em] text-[#FBEFF0]">Taskflow</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.25em] text-[#B9A8AC]">PATO Accountancy</span>
           </span>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
@@ -327,7 +327,7 @@ export function AppLayout({
             return (
               <div key={groep.id} className="space-y-0.5">
                 {groep.titel && (
-                  <p className="px-3 pb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-[#86A098]">
+                  <p className="px-3 pb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-[#B9A8AC]">
                     {groep.titel}
                   </p>
                 )}
@@ -348,8 +348,8 @@ export function AppLayout({
                       }
                       className={`block w-full rounded-md px-3 py-2 text-left text-sm font-medium transition ${
                         actief
-                          ? 'bg-[#3EF0D2]/10 text-[#3EF0D2] shadow-[inset_2px_0_0_#3EF0D2]'
-                          : 'text-[#B3C3BE] hover:bg-[#13221F] hover:text-[#EDF7F4] hover:shadow-[inset_2px_0_0_#B57BFF]'
+                          ? 'bg-[#22E3A2]/10 text-[#22E3A2] shadow-[inset_2px_0_0_#22E3A2]'
+                          : 'text-[#CDBFC2] hover:bg-[#232327] hover:text-[#FBEFF0] hover:shadow-[inset_2px_0_0_#F3C3C8]'
                       }`}
                     >
                       {teller && teller.aantal > 0 ? (
@@ -375,7 +375,7 @@ export function AppLayout({
         {/* Op een telefoon is er geen ruimte voor een tweede balk; daar staat
             wie je bent onderaan het uitschuifmenu. */}
         {kleinScherm && (
-          <div className="border-t border-[#16302C] p-3">
+          <div className="border-t border-[#3A3A41] p-3">
             <Gebruiker employee={employee} />
           </div>
         )}
@@ -384,7 +384,7 @@ export function AppLayout({
         {/* Op een computer: een eigen balk bovenaan voor wie er aangemeld is.
             Ze scrolt niet mee; alleen de inhoud eronder doet dat. */}
         {!kleinScherm && (
-          <div className="flex h-16 shrink-0 items-center justify-between gap-6 border-b border-[#16302C] bg-[#070C0B] px-6">
+          <div className="flex h-16 shrink-0 items-center justify-between gap-6 border-b border-[#3A3A41] bg-[#2A2A2F] px-6">
             <Uitlezingen />
             <Gebruiker employee={employee} inBalk />
           </div>

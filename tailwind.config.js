@@ -5,39 +5,43 @@ import standaard from 'tailwindcss/colors'
 // Het palet, overdag
 // ------------------------------------------------------------
 
-// Het neutraal van Taskflow: grijs met een zweem groen, de kleur van
-// gelinieerd kasboekpapier. Overschrijft Tailwinds slate, zodat elk scherm in
-// één keer meeschuift. Getoetst tegen WCAG AA (4,5:1 voor tekst): 400 is de
-// lichtste tekstkleur en haalt dat op wit (5,2:1) én op de pagina (4,8:1).
+// Het palet: 60-30-10 (gevraagd 12/11/2026). 60% blush roze (243/195/200),
+// 30% antraciet (42/42/47), 10% mint (34/227/162).
+//
+// Het neutraal draagt de eerste twee: de lichte kant is roze (de pagina,
+// vullingen, lijnen), de donkere kant is antraciet (tekst, inkt). Getoetst
+// tegen WCAG AA (4,5:1 voor tekst): 400 is de lichtste tekstkleur en haalt
+// dat op wit (7,5:1) en op de roze pagina (4,8:1).
 const slate = {
-  50: '#F3F6F4', // de pagina
-  100: '#E7ECE9',
-  200: '#D5DDD9', // lijnen
-  300: '#BAC5C0',
-  400: '#647069', // gedempte tekst, nog leesbaar
-  500: '#58655F', // 6,1:1
-  600: '#45514C',
-  700: '#333E3A',
-  800: '#252F2C',
-  900: '#18211E', // inkt: 16,5:1
-  950: '#0E1513',
+  50: '#F3C3C8', // de pagina: het roze, 60%
+  100: '#F8DDE0',
+  200: '#EBB9BF', // lijnen
+  300: '#BE7F87', // randen van velden (3:1 op wit)
+  400: '#57535C', // gedempte tekst, nog leesbaar
+  500: '#4F4B54',
+  600: '#45424A',
+  700: '#38363D',
+  800: '#303035',
+  900: '#2A2A2F', // inkt: het antraciet, 30%
+  950: '#1F1F23',
 }
 
-// De accentkleur: petrol, het groen van de kasboeken en de ordners. 500 voor
-// randen en focusringen (3:1 volstaat daar); 600 en 700 dragen witte tekst
-// (AA vraagt 4,5:1).
+// De accentkleur: mint, 10%. Mint draagt geen witte tekst (1,7:1), dus een
+// knop in mint krijgt antraciet tekst (`text-opaccent`, 8,6:1). 600 is de
+// mint zelf; 500 is de hover, iets dieper (antraciet erop: 6,8:1); 700 en
+// hoger zijn tekst op wit (700: 5,7:1).
 const brand = {
-  50: '#EAF4F1', // zachte vulling, o.a. de actieve menu-ingang
-  100: '#CFE8E1',
-  200: '#A9D8CC',
-  300: '#7FC2B3',
-  400: '#4FA898',
-  500: '#1E8F80', // 4,0:1 op wit
-  600: '#0E6E64', // wit erop: 6,1:1
-  700: '#0B574F', // wit erop: 8,4:1; ook als tekst op brand-50
-  800: '#084540',
-  900: '#063530',
-  950: '#04241F',
+  50: '#E6FCF4', // zachte vulling, o.a. de actieve menu-ingang
+  100: '#C4F7E4',
+  200: '#93F0CF',
+  300: '#5FE8B9',
+  400: '#3BE5AC',
+  500: '#1CCB90', // hover van een knop, focusring
+  600: '#22E3A2', // de mint: knoppen
+  700: '#077552', // tekst en links op wit
+  800: '#065C41',
+  900: '#054532',
+  950: '#032B1F',
 }
 
 // De kleurfamilies die de schermen gebruiken. Een nieuwe familie in een
@@ -64,36 +68,34 @@ const families = {
 // gezet: die dragen het hele scherm.
 // ------------------------------------------------------------
 
-const NACHT_ACHTERGROND = '#070C0B'
+const NACHT_ACHTERGROND = '#1C1C20'
 
 const nachtSlate = {
-  50: '#070C0B', // de pagina
-  100: '#13221F',
-  200: '#1A332F', // lijnen
-  300: '#2A4943',
-  400: '#86A098', // gedempte tekst
-  500: '#9DB0AA',
-  600: '#B3C3BE',
-  700: '#CAD7D3',
-  800: '#DDE8E4',
-  900: '#EDF7F4', // tekst
-  950: '#F7FCFA',
+  50: '#1C1C20', // de pagina
+  100: '#26262B',
+  200: '#34343A', // lijnen
+  300: '#46454C',
+  400: '#A99A9E', // gedempte tekst
+  500: '#B9A8AC',
+  600: '#CDBFC2',
+  700: '#DDD1D3',
+  800: '#ECE2E4',
+  900: '#FBEFF0', // tekst: een zweem roze
+  950: '#FFF7F8',
 }
-
 const nachtBrand = {
-  50: '#0D2622',
-  100: '#123630',
-  200: '#1A4A42',
-  300: '#23675C',
-  400: '#2EB8A3',
-  500: '#33D6BD',
-  600: '#3EF0D2', // knoppen: gloeiend, met donkere tekst erop
-  700: '#6FF5DE',
-  800: '#9EF8E8',
-  900: '#CCFBF2',
-  950: '#E9FDF9',
+  50: '#12352A',
+  100: '#164536',
+  200: '#1C5C47',
+  300: '#22785B',
+  400: '#1CCB90',
+  500: '#1FD497',
+  600: '#22E3A2', // knoppen: de mint, met donkere tekst erop
+  700: '#5FE8B9',
+  800: '#93F0CF',
+  900: '#C4F7E4',
+  950: '#E6FCF4',
 }
-
 function rgb(hex) {
   const h = hex.replace('#', '')
   return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
@@ -123,7 +125,9 @@ function nachtVan(familie) {
   }
 }
 
-const dag = { ...families, white: '#FFFFFF' }
+// `opaccent`: tekst op een vlak in de accentkleur. Mint is licht, dus dag
+// en nacht antraciet.
+const dag = { ...families, white: '#FFFFFF', opaccent: '#2A2A2F' }
 const nacht = {
   ...Object.fromEntries(Object.entries(families).map(([naam, f]) => [naam, nachtVan(f)])),
   slate: nachtSlate,
@@ -131,7 +135,8 @@ const nacht = {
   // "Wit" is overal de kleur van een blad: kaarten, vensters, invoervelden.
   // 's Nachts is dat blad donker. Witte tekst op een knop wordt zo donkere
   // tekst op een gloeiende knop -- precies wat het moet zijn.
-  white: '#0B1513',
+  white: '#2A2A2F',
+  opaccent: '#1C1C20',
 }
 
 /** "#0E6E64" -> "14 110 100", zodat Tailwinds /50-opaciteit blijft werken. */

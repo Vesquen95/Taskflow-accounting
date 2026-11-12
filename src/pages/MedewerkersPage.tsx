@@ -123,7 +123,7 @@ export function MedewerkersPage() {
           <input type="checkbox" checked={magGoedkeuren} onChange={(e) => setMagGoedkeuren(e.target.checked)} />
           Mag goedkeuren
         </label>
-        <button type="submit" disabled={submitting} className="rounded-md bg-brand-600 px-4 py-1.5 font-medium text-white hover:bg-brand-700 disabled:opacity-60">
+        <button type="submit" disabled={submitting} className="rounded-md bg-brand-600 px-4 py-1.5 font-medium text-opaccent hover:bg-brand-500 disabled:opacity-60">
           {submitting ? 'Bezig…' : 'Uitnodigen'}
         </button>
       </form>
@@ -192,7 +192,7 @@ export function MedewerkersPage() {
                             onClick={() => wisselTeam(emp.id, team.id, isLid)}
                             className={`rounded border px-1.5 py-0.5 text-xs font-medium transition ${
                               isLid
-                                ? 'border-brand-600 bg-brand-600 text-white'
+                                ? 'border-brand-600 bg-brand-600 text-opaccent'
                                 : 'border-slate-300 bg-white text-slate-400 hover:text-slate-700'
                             }`}
                           >
@@ -215,7 +215,7 @@ export function MedewerkersPage() {
                         <span className="text-slate-400"> — volgt het niveau</span>
                       </span>
                     ) : (
-                      <button type="button" onClick={() => toggleMagGoedkeuren(emp.id, emp.mag_goedkeuren)} className="text-xs font-medium text-brand-600 hover:text-brand-700">
+                      <button type="button" onClick={() => toggleMagGoedkeuren(emp.id, emp.mag_goedkeuren)} className="text-xs font-medium text-brand-700 hover:text-brand-800">
                         {emp.mag_goedkeuren ? 'Ja — intrekken' : 'Nee — toekennen'}
                       </button>
                     )}

@@ -177,7 +177,7 @@ export function TelefoonPage() {
   const knopKlasse = (actief: boolean) =>
     `rounded-full border px-3 py-1.5 text-sm font-medium transition ${
       actief
-        ? 'border-brand-600 bg-brand-600 text-white'
+        ? 'border-brand-600 bg-brand-600 text-opaccent'
         : 'border-slate-300 bg-white text-slate-700'
     }`
 

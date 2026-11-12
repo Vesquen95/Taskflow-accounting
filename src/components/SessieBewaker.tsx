@@ -38,7 +38,7 @@ export function SessieBewaker() {
           <button
             type="button"
             onClick={blijfAangemeld}
-            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-opaccent transition hover:bg-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
           >
             Ik ben er nog
           </button>

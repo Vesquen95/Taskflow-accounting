@@ -105,7 +105,7 @@ export function TaskStatusControl({ task, currentEmployee, onStatusChange, onErr
                   type="button"
                   disabled={busy}
                   onClick={() => void voerUit()}
-                  className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                  className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-opaccent hover:bg-brand-500 disabled:opacity-50"
                 >
                   {actie.label}
                 </button>

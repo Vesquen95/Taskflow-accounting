@@ -91,21 +91,21 @@ export function Begroeting({ medewerkerId, onKlaar }: { medewerkerId: string; on
   return (
     <div
       onClick={onKlaar}
-      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-[#070C0B]/95 px-4 text-center backdrop-blur-sm transition-opacity duration-500 ${weg ? 'opacity-0' : 'opacity-100'}`}
+      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-[#2A2A2F]/95 px-4 text-center backdrop-blur-sm transition-opacity duration-500 ${weg ? 'opacity-0' : 'opacity-100'}`}
     >
       <div className="relative aspect-square w-[min(56vw,240px)]">
         <Reactor nu={nu} toerental="vergrendeld" />
       </div>
       <div role="status" className="max-w-2xl">
-        <p className="font-mono text-sm uppercase tracking-[0.35em] text-[#3EF0D2] motion-safe:animate-opstart">
+        <p className="font-mono text-sm uppercase tracking-[0.35em] text-[#22E3A2] motion-safe:animate-opstart">
           Toegang verleend
         </p>
         {citaat && (
-          <figure className="mx-auto mt-6 max-w-xl border-t border-[#7FDBFF]/20 pt-6 motion-safe:animate-opstart">
-            <blockquote className="text-xl font-light italic leading-snug text-[#BFEFFF] md:text-2xl">
+          <figure className="mx-auto mt-6 max-w-xl border-t border-[#F3C3C8]/20 pt-6 motion-safe:animate-opstart">
+            <blockquote className="text-xl font-light italic leading-snug text-[#F7D9DC] md:text-2xl">
               “{citaat.citaat.tekst}”
             </blockquote>
-            <figcaption className="mt-2 font-mono text-[11px] uppercase tracking-[0.25em] text-[#4F7682]">
+            <figcaption className="mt-2 font-mono text-[11px] uppercase tracking-[0.25em] text-[#9A8C90]">
               {citaat.citaat.bron}
             </figcaption>
             {uitleg && <p className="mt-3 text-sm text-[#FFB547]">{uitleg}</p>}

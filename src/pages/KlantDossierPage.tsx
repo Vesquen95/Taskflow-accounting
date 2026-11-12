@@ -309,7 +309,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
       <section className="mb-6">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">Verplichtingen</h2>
-          <button type="button" onClick={() => setShowAddObligation(true)} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+          <button type="button" onClick={() => setShowAddObligation(true)} className="text-sm font-medium text-brand-700 hover:text-brand-800">
             + Verplichting toevoegen
           </button>
         </div>
@@ -375,7 +375,7 @@ export function KlantDossierPage({ clientId, navigate }: { clientId: string; nav
       <section className="mb-6">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">Openstaande taken</h2>
-          <button type="button" onClick={() => setShowAdhoc(true)} className="text-sm font-medium text-brand-600 hover:text-brand-700">
+          <button type="button" onClick={() => setShowAdhoc(true)} className="text-sm font-medium text-brand-700 hover:text-brand-800">
             + Ad-hoc taak
           </button>
         </div>

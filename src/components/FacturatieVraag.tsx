@@ -62,7 +62,7 @@ export function FacturatieVraag({ task, onSluit }: { task: TaskInstanceWithRelat
               type="button"
               disabled={bezig}
               onClick={() => void zetOpLijst()}
-              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-opaccent hover:bg-brand-500 disabled:opacity-50"
             >
               {bezig ? 'Bezig…' : 'Op de lijst te factureren'}
             </button>

@@ -164,7 +164,7 @@ export function KlantenlijstPage({ navigate }: { navigate: (view: string, param?
           <button
             type="button"
             onClick={() => setShowCreate(true)}
-            className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-opaccent hover:bg-brand-500"
           >
             Nieuwe klant
           </button>

@@ -98,7 +98,7 @@ export function FactuurpostenBlok({
                 setReferentie('')
               })
             }
-            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-opaccent hover:bg-brand-500"
           >
             {gekozen.size > 0
               ? `${gekozen.size} geselecteerd als gefactureerd`
@@ -168,7 +168,7 @@ function PostRegel({
             type="button"
             disabled={!omschrijving.trim() || !datum}
             onClick={() => void onWijzigen(post.id, omschrijving, datum, notitie || null).then(() => setBewerken(false))}
-            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-opaccent hover:bg-brand-500 disabled:opacity-50"
           >
             Bewaren
           </button>
@@ -320,7 +320,7 @@ export function NieuwePostFormulier({
         <button
           type="submit"
           disabled={bezig || !clientId || !omschrijving.trim()}
-          className="rounded-md bg-brand-600 px-3 py-1.5 font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          className="rounded-md bg-brand-600 px-3 py-1.5 font-medium text-opaccent hover:bg-brand-500 disabled:opacity-50"
         >
           {bezig ? 'Bezig…' : 'Op de lijst zetten'}
         </button>

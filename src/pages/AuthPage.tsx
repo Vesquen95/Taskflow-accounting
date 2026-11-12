@@ -41,7 +41,7 @@ function Hoeken({ rond }: { rond: keyof typeof HOEKEN }) {
   return (
     <div aria-hidden="true">
       {HOEKEN[rond].map((plaats) => (
-        <span key={plaats} className={`pointer-events-none h-4 w-4 border-[#7FDBFF]/70 ${plaats}`} />
+        <span key={plaats} className={`pointer-events-none h-4 w-4 border-[#F3C3C8]/70 ${plaats}`} />
       ))}
     </div>
   )
@@ -51,7 +51,7 @@ function Hoeken({ rond }: { rond: keyof typeof HOEKEN }) {
 function Logregel({ tekst, vertraging, ok = false }: { tekst: string; vertraging: number; ok?: boolean }) {
   return (
     <p className="whitespace-nowrap">
-      <span className="text-[#4F7682]">&gt; </span>
+      <span className="text-[#9A8C90]">&gt; </span>
       <span
         className="inline-block overflow-hidden whitespace-nowrap align-bottom motion-safe:animate-typ"
         style={{
@@ -66,7 +66,7 @@ function Logregel({ tekst, vertraging, ok = false }: { tekst: string; vertraging
       {ok && (
         <span className="motion-safe:animate-opstart" style={{ animationDelay: `${vertraging + tekst.length * 0.022}s` }}>
           {' '}
-          <span className="text-[#3EF0D2]">OK</span>
+          <span className="text-[#22E3A2]">OK</span>
         </span>
       )}
     </p>
@@ -149,34 +149,34 @@ export function AuthPage() {
   }
 
   const veld =
-    'w-full rounded-sm border border-[#1F3E48] bg-[#060E12]/90 px-4 py-2.5 text-[15px] text-[#FFFFFF] placeholder:text-[#4F7682] focus:border-[#7FDBFF] focus:outline-none focus-visible:shadow-[0_0_18px_rgba(127,219,255,0.3)]'
+    'w-full rounded-sm border border-[#4A4950] bg-[#1F1F23]/90 px-4 py-2.5 text-[15px] text-[#FFFFFF] placeholder:text-[#9A8C90] focus:border-[#F3C3C8] focus:outline-none focus-visible:shadow-[0_0_18px_rgba(243,195,200,0.3)]'
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#070C0B] text-[#C9D6D2] [background-image:radial-gradient(circle_at_50%_45%,#0C1A1F_0%,#070C0B_60%)] xl:h-screen xl:min-h-[680px]">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-[#2A2A2F] text-[#E8D8DB] [background-image:radial-gradient(circle_at_50%_45%,#34343A_0%,#2A2A2F_60%)] xl:h-screen xl:min-h-[680px]">
       {/* Raster en scanlijnen: decor, achter alles. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 opacity-40 [background-image:linear-gradient(#0E2A33_1px,transparent_1px),linear-gradient(90deg,#0E2A33_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(circle_at_50%_45%,transparent_30%,#000_75%)]"
+        className="pointer-events-none fixed inset-0 opacity-40 [background-image:linear-gradient(#38363D_1px,transparent_1px),linear-gradient(90deg,#38363D_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(circle_at_50%_45%,transparent_30%,#000_75%)]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-20 [background-image:repeating-linear-gradient(to_bottom,rgba(127,219,255,0.03)_0_1px,transparent_1px_3px)]"
+        className="pointer-events-none fixed inset-0 z-20 [background-image:repeating-linear-gradient(to_bottom,rgba(243,195,200,0.03)_0_1px,transparent_1px_3px)]"
       />
       <Hoeken rond="scherm" />
 
       {/* De assistent: één keer bij het laden, dan wacht hij. */}
-      <div aria-hidden="true" className="absolute left-12 top-10 z-10 hidden font-mono text-xs leading-6 text-[#86A3AD] xl:block">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-[#4F7682]">Persoonlijke Assistent voor Taken en Opvolging</p>
-        <p className="mb-2 text-2xl font-light tracking-[0.2em] text-[#E9FDFF] motion-safe:animate-opstart">
-          P.A.T.O. <span className="text-xs tracking-[0.2em] text-[#3EF0D2]">online</span>
+      <div aria-hidden="true" className="absolute left-12 top-10 z-10 hidden font-mono text-xs leading-6 text-[#B9A8AC] xl:block">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-[#9A8C90]">Persoonlijke Assistent voor Taken en Opvolging</p>
+        <p className="mb-2 text-2xl font-light tracking-[0.2em] text-[#FBEFF0] motion-safe:animate-opstart">
+          P.A.T.O. <span className="text-xs tracking-[0.2em] text-[#22E3A2]">online</span>
         </p>
         {regels.map((r) => (
           <Logregel key={r.tekst} tekst={r.tekst} vertraging={r.vertraging} ok={r.ok} />
         ))}
         <p className="motion-safe:animate-opstart" style={{ animationDelay: `${vertraging}s` }}>
-          <span className="text-[#4F7682]">&gt; </span>
+          <span className="text-[#9A8C90]">&gt; </span>
           {submitting ? 'identificatie loopt' : 'identificatie vereist'}{' '}
-          <span className="inline-block h-3.5 w-2 translate-y-0.5 bg-[#7FDBFF] motion-safe:animate-knipper" />
+          <span className="inline-block h-3.5 w-2 translate-y-0.5 bg-[#F3C3C8] motion-safe:animate-knipper" />
         </p>
       </div>
 
@@ -185,10 +185,10 @@ export function AuthPage() {
           <Reactor nu={nu} toerental={submitting ? 'scan' : 'rust'} opstart />
         </div>
 
-        <section className="relative w-full max-w-sm border border-[#7FDBFF]/20 bg-[#071116]/85 px-6 py-6 backdrop-blur-sm">
+        <section className="relative w-full max-w-sm border border-[#F3C3C8]/20 bg-[#232327]/85 px-6 py-6 backdrop-blur-sm">
           <Hoeken rond="paneel" />
-          <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] text-[#7FDBFF]">
-            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#3EF0D2] motion-safe:animate-pulseer" />
+          <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] text-[#F3C3C8]">
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#22E3A2] motion-safe:animate-pulseer" />
             Identificatie
           </p>
           <img
@@ -197,7 +197,7 @@ export function AuthPage() {
             className="mb-2 mt-4 h-10 w-auto"
           />
           <h1 className="text-4xl font-light tracking-[0.06em] text-[#FFFFFF]">Taskflow</h1>
-          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-[#86A3AD]">
+          <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.2em] text-[#B9A8AC]">
             {nu.toLocaleDateString('nl-BE', { weekday: 'long' })}{' '}
             {nu.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.')}
           </p>
@@ -246,7 +246,7 @@ export function AuthPage() {
               </p>
             )}
             {info && (
-              <p role="status" className="rounded-sm border border-[#3EF0D2]/40 bg-[#3EF0D2]/10 px-4 py-2 text-sm text-[#B5FFF1]">
+              <p role="status" className="rounded-sm border border-[#22E3A2]/40 bg-[#22E3A2]/10 px-4 py-2 text-sm text-[#C4F7E4]">
                 {info}
               </p>
             )}
@@ -254,19 +254,19 @@ export function AuthPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-2 w-full rounded-sm border border-[#7FDBFF] bg-[#7FDBFF]/10 px-4 py-3 text-sm font-bold tracking-[0.18em] text-[#BFEFFF] shadow-[inset_0_0_24px_rgba(127,219,255,0.2)] transition hover:bg-[#7FDBFF] hover:text-[#04161C] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#7FDBFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#070C0B] disabled:opacity-60"
+              className="mt-2 w-full rounded-sm border border-[#22E3A2] bg-[#22E3A2] px-4 py-3 text-sm font-bold tracking-[0.18em] text-[#2A2A2F] shadow-[0_0_24px_rgba(34,227,162,0.25)] transition hover:bg-[#1CCB90] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#22E3A2] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2A2A2F] disabled:opacity-60"
             >
               {submitting ? 'Bezig…' : mode === 'signin' ? 'Inloggen' : 'Account aanmaken'}
             </button>
           </form>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[#86A3AD]">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-[#B9A8AC]">
             <p>
               {mode === 'signin' ? 'Nog geen account?' : 'Al een account?'}{' '}
               <button
                 type="button"
                 onClick={() => wisselModus(mode === 'signin' ? 'signup' : 'signin')}
-                className="font-semibold text-[#E9FDFF] underline underline-offset-2 hover:text-[#7FDBFF]"
+                className="font-semibold text-[#FBEFF0] underline underline-offset-2 hover:text-[#F3C3C8]"
               >
                 {mode === 'signin' ? 'Registreren' : 'Inloggen'}
               </button>
@@ -277,18 +277,18 @@ export function AuthPage() {
 
       {/* De uitlezingen: wat de jaarring toont, in cijfers. */}
       <dl className="relative z-10 mx-auto mb-8 grid w-full max-w-sm grid-cols-3 gap-2 px-4 font-mono xl:absolute xl:bottom-10 xl:left-12 xl:mb-0 xl:w-[26rem] xl:max-w-none xl:px-0">
-        <div className="border border-[#14303A] bg-[#071116]/70 px-3 py-2 md:px-4 md:py-3">
-          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#86A3AD]">Vandaag</dt>
+        <div className="border border-[#3A3A41] bg-[#232327]/70 px-3 py-2 md:px-4 md:py-3">
+          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#B9A8AC]">Vandaag</dt>
           <dd className="mt-1 text-base text-[#FFFFFF] md:text-xl">
             {nu.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit' }).replace(/\//g, '.')}
           </dd>
         </div>
-        <div className="border border-[#14303A] bg-[#071116]/70 px-3 py-2 md:px-4 md:py-3">
-          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#86A3AD]">Week</dt>
+        <div className="border border-[#3A3A41] bg-[#232327]/70 px-3 py-2 md:px-4 md:py-3">
+          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#B9A8AC]">Week</dt>
           <dd className="mt-1 text-base text-[#FFFFFF] md:text-xl">{isoWeek(nu)}</dd>
         </div>
-        <div className="border border-[#14303A] bg-[#071116]/70 px-3 py-2 md:px-4 md:py-3">
-          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#86A3AD]">Btw {termijn.kwartaal}</dt>
+        <div className="border border-[#3A3A41] bg-[#232327]/70 px-3 py-2 md:px-4 md:py-3">
+          <dt className="text-[10px] uppercase tracking-[0.2em] text-[#B9A8AC]">Btw {termijn.kwartaal}</dt>
           <dd className="mt-1 text-base text-[#FFB547] md:text-xl" title={`Wettelijke termijn: ${termijnDatum}`}>
             {termijn.dagen === 0 ? 'vandaag' : `${termijn.dagen} d`}
           </dd>

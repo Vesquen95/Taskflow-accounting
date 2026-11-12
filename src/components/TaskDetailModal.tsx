@@ -320,7 +320,7 @@ export function TaskDetailModal({
               type="button"
               disabled={busy}
               onClick={() => handleReassign(employee.id)}
-              className="w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              className="w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-opaccent hover:bg-brand-500 disabled:opacity-50"
             >
               Ik neem dit op
             </button>
@@ -443,7 +443,7 @@ export function TaskDetailModal({
                   onClick={() => handleStatusActie(actie)}
                   className={
                     actie.doel === 'ingediend_afgerond'
-                      ? 'rounded-md border border-brand-600 bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50'
+                      ? 'rounded-md border border-brand-600 bg-brand-600 px-3 py-1.5 text-sm font-medium text-opaccent hover:bg-brand-500 disabled:opacity-50'
                       : 'rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50'
                   }
                 >

@@ -24,11 +24,11 @@ import { dagVanHetJaar, volgendeBtwKwartaal } from '../lib/inlogscherm'
 
 export type Toerental = 'rust' | 'scan' | 'vergrendeld'
 
-const IJS = '#7FDBFF'
-const PETROL = '#3EF0D2'
-const PAARS = '#B57BFF'
+const IJS = '#F3C3C8'
+const PETROL = '#22E3A2'
+const PAARS = '#F3C3C8'
 const AMBER = '#FFB547'
-const LIJN = '#16323A'
+const LIJN = '#3A3A41'
 
 // Een SVG-element draait standaard rond de oorsprong van het assenstelsel van
 // de viewBox, niet rond zijn eigen middelpunt. Hier ligt (0, 0) in het
@@ -121,7 +121,7 @@ function Jaarring({ nu, opstart }: { nu: Date; opstart: boolean }) {
         const [x1, y1] = punt(a, 180)
         const [x2, y2] = punt(a, w % 4 === 0 ? 188 : 184)
         return (
-          <line key={w} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#2B4B55" {...verschijn(opstart, 0.7 + w * 0.016)} />
+          <line key={w} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#5A5860" {...verschijn(opstart, 0.7 + w * 0.016)} />
         )
       })}
       {MAANDEN.map((m, i) => {
@@ -136,7 +136,7 @@ function Jaarring({ nu, opstart }: { nu: Date; opstart: boolean }) {
             letterSpacing="1.5"
             className={`font-mono uppercase ${opstart ? 'motion-safe:animate-verschijn' : ''}`}
             style={opstart ? { animationDelay: `${0.75 + i * 0.07}s` } : undefined}
-            fill={i === nu.getMonth() ? '#E9FDFF' : '#4F7682'}
+            fill={i === nu.getMonth() ? '#FBEFF0' : '#9A8C90'}
           >
             {m}
           </text>
@@ -156,7 +156,7 @@ function Jaarring({ nu, opstart }: { nu: Date; opstart: boolean }) {
         cx={bx}
         cy={by}
         r="6"
-        fill="#070C0B"
+        fill="#2A2A2F"
         stroke={AMBER}
         strokeWidth="2"
         filter="url(#tf-reactor-gloed)"
@@ -191,7 +191,7 @@ export function Reactor({
           </feMerge>
         </filter>
         <radialGradient id={`${id}kern`}>
-          <stop offset="0" stopColor="#BFF7FF" stopOpacity="0.4" />
+          <stop offset="0" stopColor="#F7D9DC" stopOpacity="0.4" />
           <stop offset="0.5" stopColor={PETROL} stopOpacity="0.18" />
           <stop offset="1" stopColor={PETROL} stopOpacity="0" />
         </radialGradient>
@@ -267,7 +267,7 @@ export function Reactor({
         />
       )}
       <g transform="translate(-63 -64.5) scale(0.75)" filter="url(#tf-reactor-gloed)">
-        <path d="M40 116 L84 36 L128 116" fill="none" stroke="#F2FEFF" strokeWidth="16" {...teken(opstart, 1.0)} />
+        <path d="M40 116 L84 36 L128 116" fill="none" stroke="#FBEFF0" strokeWidth="16" {...teken(opstart, 1.0)} />
         <rect
           x="40"
           y="128"

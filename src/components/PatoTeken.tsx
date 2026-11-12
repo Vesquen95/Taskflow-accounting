@@ -17,16 +17,16 @@ export function PatoTeken({
 }) {
   return (
     <svg width={grootte} height={grootte} viewBox="24 18 120 128" aria-hidden="true" className={`shrink-0 ${className}`}>
-      <path d="M40 116 L84 36 L128 116" fill="none" stroke="#3EF0D2" strokeWidth="16" />
+      <path d="M40 116 L84 36 L128 116" fill="none" stroke="#22E3A2" strokeWidth="16" />
       <rect
         x="40"
         y="128"
         width="54"
         height="8"
-        fill="#3EF0D2"
+        fill="#22E3A2"
         className={bezig ? 'origin-[40px_132px] motion-safe:animate-laadbalk' : ''}
       />
-      <rect x="100" y="128" width="28" height="8" fill="#B57BFF" />
+      <rect x="100" y="128" width="28" height="8" fill="#F3C3C8" />
     </svg>
   )
 }

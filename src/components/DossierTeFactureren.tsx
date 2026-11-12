@@ -56,7 +56,7 @@ export function DossierTeFactureren({
             type="button"
             onClick={() => setToevoegenOpen((open) => !open)}
             aria-expanded={toevoegenOpen}
-            className="text-sm font-medium text-brand-600 hover:text-brand-700"
+            className="text-sm font-medium text-brand-700 hover:text-brand-800"
           >
             + Post toevoegen
           </button>
